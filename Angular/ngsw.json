@@ -1,0 +1,101 @@
+{
+  "configVersion": 1,
+  "timestamp": 1738931909224,
+  "index": "/index.html",
+  "assetGroups": [
+    {
+      "name": "app",
+      "installMode": "prefetch",
+      "updateMode": "prefetch",
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "urls": [
+        "/chunk-TATMZN75.js",
+        "/chunk-YQ63T4BJ.js",
+        "/favicon.ico",
+        "/index.html",
+        "/main-2GYEIKQP.css",
+        "/main-UJ34H2SA.js",
+        "/manifest.webmanifest",
+        "/polyfills-EJ46DL77.js",
+        "/styles-LK3RGGIR.css"
+      ],
+      "patterns": []
+    },
+    {
+      "name": "assets",
+      "installMode": "lazy",
+      "updateMode": "prefetch",
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "urls": [
+        "/assets/fonts/Poppins-Regular.ttf",
+        "/assets/icons/icon-128x128.png",
+        "/assets/icons/icon-144x144.png",
+        "/assets/icons/icon-152x152.png",
+        "/assets/icons/icon-192x192.png",
+        "/assets/icons/icon-384x384.png",
+        "/assets/icons/icon-512x512.png",
+        "/assets/icons/icon-72x72.png",
+        "/assets/icons/icon-96x96.png",
+        "/assets/images/login-bg.png",
+        "/assets/images/pngimg.com - world_map_PNG28.png",
+        "/assets/images/pngimg.com - world_map_PNG28@2x.png",
+        "/assets/logo/logo.svg",
+        "/media/Poppins-Regular-JNHL4IDV.ttf",
+        "/media/login-bg-XAJJVL22.png",
+        "/media/pngimg.com - world_map_PNG28@2x-TGQJZF3O.png"
+      ],
+      "patterns": []
+    }
+  ],
+  "dataGroups": [],
+  "hashTable": {
+    "/assets/fonts/Poppins-Regular.ttf": "fdd3002e7d814ee47c1c1b8487c72c6bbb3a2d00",
+    "/assets/icons/icon-128x128.png": "f912963bdc6d5a38d8f1dd0afbaab2ce8d657acb",
+    "/assets/icons/icon-144x144.png": "b155fd5f2fd5d2ea7760721063003c4cd95fd783",
+    "/assets/icons/icon-152x152.png": "eae6e0f0c8afb8aaae339e2a569b43e9238e5e6c",
+    "/assets/icons/icon-192x192.png": "15c4180454633880d98674aa7394656196c91584",
+    "/assets/icons/icon-384x384.png": "94a915751ef6c9282df9aea405ad679230631814",
+    "/assets/icons/icon-512x512.png": "1de182f76f7329dfa8f9fcdd1fdcdd695bea6a99",
+    "/assets/icons/icon-72x72.png": "aa88a6096bd973be7f6d7a5489bfa6bc2463f8c4",
+    "/assets/icons/icon-96x96.png": "7fb8f59c30ce2ff12c700321a0b39e14b3dc8f95",
+    "/assets/images/login-bg.png": "80bb9a8ac20138c3245deff9f1588a60ab5abeca",
+    "/assets/images/pngimg.com - world_map_PNG28.png": "16c702b03144a13cad3d1e596fc5457eb10d56e0",
+    "/assets/images/pngimg.com - world_map_PNG28@2x.png": "99877aad722f4f11e545071ac1ec32b48cd2f1ee",
+    "/assets/logo/logo.svg": "9fe8e4fe5261b239a333f73275eb0b6d649e6ef3",
+    "/chunk-TATMZN75.js": "0274a5ae85270d85648fdc191c8551c1181e8b74",
+    "/chunk-YQ63T4BJ.js": "34531af06c19eb2ddf1cbe4eae9a22ce42707ae4",
+    "/favicon.ico": "9c39f434fe1261f68c5e3eefdf734630d99c5670",
+    "/index.html": "992ca0d8232aa310edce4a76a43725b33b6b21e7",
+    "/main-2GYEIKQP.css": "c493e0026cd8d5da33caf70fcc6ba96e7da53056",
+    "/main-UJ34H2SA.js": "d234174094240e2151f28bfb37ab6dba2ab7d49b",
+    "/manifest.webmanifest": "4a778d9d462942d0d53e28b6058e15202bb9f0d6",
+    "/media/Poppins-Regular-JNHL4IDV.ttf": "fdd3002e7d814ee47c1c1b8487c72c6bbb3a2d00",
+    "/media/login-bg-XAJJVL22.png": "80bb9a8ac20138c3245deff9f1588a60ab5abeca",
+    "/media/pngimg.com - world_map_PNG28@2x-TGQJZF3O.png": "99877aad722f4f11e545071ac1ec32b48cd2f1ee",
+    "/polyfills-EJ46DL77.js": "01500e27968fb09f51100a67f46a69297cc263de",
+    "/styles-LK3RGGIR.css": "b959708b90cd58eeb05fc1dfb4f2134bf3f05636"
+  },
+  "navigationUrls": [
+    {
+      "positive": true,
+      "regex": "^\\/.*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*\\.[^/]*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*__[^/]*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*__[^/]*\\/.*$"
+    }
+  ],
+  "navigationRequestStrategy": "performance"
+}

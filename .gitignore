@@ -1,0 +1,38 @@
+# Node fragments
+node_modules/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+# .env
+# .env.local
+# .env.development.local
+# .env.test.local
+# .env.production.local
+# *.env
+# kardex-node/config/config.env
+
+# Angular
+.angular/
+.cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Misc
+uploads/
+/tmp/
