@@ -1,7 +1,7 @@
 const asyncHandler = require('express-async-handler');
 const db = require('../models');
 const bcrypt = require('bcryptjs');
-const { where } = require('sequelize');
+const { Op, where } = require('sequelize');
 
 
 exports.createUser = asyncHandler(async (req, res) => {
@@ -42,6 +42,11 @@ exports.getAll = asyncHandler(async (req, res) => {
             sort = ['id', 'DESC'],
             ...filters
         } = req.query;
+
+        const dialect = db.sequelize.getDialect();
+        const uTable = dialect === 'postgres' ? '"user"' : 'user';
+        const castText = dialect === 'postgres' ? '::TEXT' : '';
+
         // Build filtering conditions
         const whereConditions = {};
         Object.keys(filters).forEach((key) => {
@@ -73,33 +78,33 @@ exports.getAll = asyncHandler(async (req, res) => {
 
         // Perform the query
         const { rows, count } = await db.user.findAndCountAll({
-            attributes: { exclude: ['password'] },
-            where: whereConditions,
-            order: [[db.sequelize.literal(sort[0]), sort[1]]],
-            limit,
-            offset,
             attributes: {
+                exclude: ['password'],
                 include: [
                     [
                         db.sequelize.literal(
-                            `(SELECT first_name FROM user WHERE user.id = user.created_by)`
+                            `(SELECT first_name FROM ${uTable} AS creator WHERE creator.id${castText} = ${uTable}.created_by)`
                         ),
                         'created_user_first_name',
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT last_name FROM user WHERE user.id = user.created_by)`
+                            `(SELECT last_name FROM ${uTable} AS creator WHERE creator.id${castText} = ${uTable}.created_by)`
                         ),
                         'created_user_last_name',
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT user_id FROM user WHERE user.id = user.created_by)`
+                            `(SELECT user_id FROM ${uTable} AS creator WHERE creator.id${castText} = ${uTable}.created_by)`
                         ),
                         'created_user_id',
                     ],
                 ],
-            }
+            },
+            where: whereConditions,
+            order: [[db.sequelize.literal(sort[0]), sort[1]]],
+            limit,
+            offset,
         });
 
         // Return paginated results

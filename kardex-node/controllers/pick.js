@@ -27,7 +27,16 @@ exports.createPick = asyncHandler(async (req, res) => {
             return res.end();
         }
 
-        let dataFromDb = await db.put.findAll({ where: { model_number: modelNumber, pick_id: null }, order: [['birth_date', 'ASC']] }) || [];
+        let dataFromDb = await db.put.findAll({
+            where: {
+                [Op.or]: [
+                    { model_number: modelNumber },
+                    { serial_number: modelNumber }
+                ],
+                pick_id: null
+            },
+            order: [['birth_date', 'ASC']]
+        }) || [];
 
         if (dataFromDb?.length < quantity) {
             logs.push(await createAndSendLog({
@@ -166,22 +175,31 @@ exports.createPick = asyncHandler(async (req, res) => {
         }
 
         const genFileName = `kardex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.txt`;
-        const filePath = `${process.env.Pick_Text_File_Path}\\${genFileName}`;
+        const filePath = path.join(process.env.Pick_Text_File_Path, genFileName);
 
-        const contentArray = await Promise.all(
-            updatedEntries.map(async (putEntry) => {
-                await putEntry.update({ pick_status: 'PICKED', process_status: 'KANBAN_OUT' });
-                return `Pick_Order${(putEntry?.id || 0) + 1}|${putEntry?.serial_number}|${putEntry?.model_number}|1`;
-            })
-        );
+        // Ensure directories exist
+        if (!fs.existsSync(process.env.Pick_Text_File_Path)) {
+            fs.mkdirSync(process.env.Pick_Text_File_Path, { recursive: true });
+        }
 
+        for (const putEntry of updatedEntries) {
+            await putEntry.update({ pick_status: 'PICKED', process_status: 'KANBAN_OUT' });
+        }
 
-        const content = contentArray.join('\n');
+        const lastPick = await db.pick.findOne({ order: [['id', 'DESC']] });
+        const nextId = (lastPick?.id || 0) + 1;
 
+        const content = updatedEntries.map((pt, i) => (
+            `Pick_Order${nextId + i}|${pt?.serial_number}|${pt?.model_number}|1`
+        )).join('\r\n');
 
-        fs.writeFileSync(filePath, content);
-        const uploadFilePath = path.resolve('uploads', 'files', 'pick', genFileName);
-        fs.writeFileSync(uploadFilePath, content);
+        fs.writeFileSync(filePath, content, 'ascii');
+        const uploadDir = path.join('uploads', 'files', 'pick');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        const uploadFilePath = path.join(uploadDir, genFileName);
+        fs.writeFileSync(uploadFilePath, content, 'ascii');
         const fileStats = fs.statSync(uploadFilePath);
 
         const newFile = await db.files.create({
@@ -377,7 +395,7 @@ exports.getUndownloadedPicks = asyncHandler(async (req, res) => {
             return res.status(404).json({ message: 'No files found to download.' });
         }
 
-        const content = puts.map((pt) => (`Pick_Order${pt.id}|${pt?.serial_number}|${pt?.model_number}|1`))?.join('\n');
+        const content = `${puts.map((pt) => (`Pick_Order${pt.pick_id}|${pt?.serial_number}|${pt?.model_number}|1`))?.join('\r\n')}`;
 
         res.setHeader('Content-Disposition', 'attachment; filename="orders.txt"');
         res.setHeader('Content-Type', 'text/plain');
@@ -385,7 +403,7 @@ exports.getUndownloadedPicks = asyncHandler(async (req, res) => {
         for (const pt of puts) {
             await pt.update({ pick_file_downloaded: true });
         }
-        
+
         const pickIds = new Set(puts.map((pt) => (pt?.pick_id)));
         for (const pickId of pickIds) {
             await db.pick.update({ text_file_downloaded: true }, { where: { id: pickId } })

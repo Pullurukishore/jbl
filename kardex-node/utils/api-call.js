@@ -36,6 +36,10 @@ async function getSoapClient() {
 }
 
 exports.getPVStatusCheck = async (serialNumber, processName) => {
+    if (process.env.IS_OFFLINE === 'true') {
+        return 'PASS';
+    }
+
     const clientTest = await getSoapClient();
     if (!clientTest) {
         return { isError: true, error: { message: 'Cannot connect to soap client.' } }
@@ -50,7 +54,6 @@ exports.getPVStatusCheck = async (serialNumber, processName) => {
     };
 
     return new Promise(async (resolve, reject) => {
-        //return resolve('PASS');
         clientTest.OKToTestAsync(bodyObject).then((response) => {
             resolve(response[0]?.OKToTestResult);
         })
@@ -61,6 +64,10 @@ exports.getPVStatusCheck = async (serialNumber, processName) => {
 }
 
 exports.updateBoardHistory = async (data) => {
+    if (process.env.IS_OFFLINE === 'true') {
+        return 'Pass';
+    }
+
     const clientTest = await getSoapClient();
     if (!clientTest) {
         return { isError: true, error: { message: 'Cannot connect to soap client.' } }
@@ -80,7 +87,6 @@ exports.updateBoardHistory = async (data) => {
         DataFormat: 'Generic',
     }
     return new Promise(async (resolve, reject) => {
-        //return resolve('Pass');
         clientTest.ProcessTestDataAsync(bodyObject).then((response) => {
             resolve(response[0]?.ProcessTestDataResult);
         })
@@ -91,6 +97,53 @@ exports.updateBoardHistory = async (data) => {
 }
 
 exports.getBoardHistory = async (serialNumber) => {
+    if (process.env.IS_OFFLINE === 'true') {
+        // DYNAMIC MOCK FOR REAL-TIME TEST FEEL
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const poDir = path.join(__dirname, '..', 'uploads', 'files', 'source-po');
+            const files = fs.readdirSync(poDir)
+                .filter(f => f.endsWith('.txt'))
+                .map(file => ({
+                    file,
+                    time: fs.statSync(path.join(poDir, file)).mtime
+                }));
+
+            if (files.length > 0) {
+                const latestFileObj = files.reduce((latest, current) =>
+                    current.time > latest.time ? current : latest
+                );
+                const latestPO = path.join(poDir, latestFileObj.file);
+                const content = fs.readFileSync(latestPO, 'utf8');
+                const lines = content.split('\n');
+                if (lines.length > 1) {
+                const firstRow = lines[1].split('\t');
+                const partNumber = (firstRow[0] || '').trim(); // Column 1 is 'Short text' in PO_MOCK.txt
+                if (partNumber) {
+                    return {
+                        data: [{
+                            Test_Process: 'BIRTH / BIRTH',
+                            Number: partNumber,
+                            StartDateTime: new Date().toISOString(),
+                            SerialNumber: serialNumber
+                        }]
+                    };
+                }
+                }
+            }
+        } catch (e) { }
+
+        return {
+            data: [{
+                Test_Process: 'BIRTH / BIRTH',
+                Number: 'SA005157',
+                StartDateTime: new Date().toISOString(),
+                SerialNumber: serialNumber
+            }]
+        };
+    }
+
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
     return new Promise(async (resolve, reject) => {
         axios.post(process.env.BoardHistroyApiUrl,
@@ -104,13 +157,20 @@ exports.getBoardHistory = async (serialNumber) => {
             resolve(response);
         })
             .catch((error) => {
-                //return resolve({ data: [{ SerialNumber: '1234', Test_Process: 'BIRTH / BIRTH', StartDateTime: new Date(), Number: 'test' }] });
                 resolve({ isError: true, error })
             })
     })
 }
 
 exports.getWipBySerialNumber = async (serialNumber) => {
+    if (process.env.IS_OFFLINE === 'true') {
+        return {
+            data: {
+                CurrentlyOnHold: false
+            }
+        };
+    }
+
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
     return new Promise(async (resolve, reject) => {
         axios.post(process.env.GetBySerialApiUrl,
@@ -125,7 +185,6 @@ exports.getWipBySerialNumber = async (serialNumber) => {
                 resolve(response);
             })
             .catch((error) => {
-                //return resolve({ data: { SerialNumber: '1234', StartDateTime: new Date(), Number: 'test' } });
                 resolve({ isError: true, error })
             })
     })

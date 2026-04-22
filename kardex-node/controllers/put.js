@@ -317,7 +317,9 @@ exports.createPut = asyncHandler(async (req, res) => {
             Number(prt['Open GR']) > 0
         );
 
-        if (!partFrmCsv) {
+        if (process.env.IS_OFFLINE === 'true') {
+            console.log('Offline Mode: Bypassing model availability check.');
+        } else if (!partFrmCsv) {
             logs.push(await createAndSendLog({
                 entity_number: serialNumber,
                 activity: 'FIND_MODEL',
@@ -349,7 +351,7 @@ exports.createPut = asyncHandler(async (req, res) => {
                 entity_number: serialNumber,
                 activity: 'CHECKING_AVAILABILITY',
                 status: 'FAILED',
-                message: 'Model number available in PO File.',
+                message: 'Model number NOT available in PO File.',
                 logged_by: req.user?.id,
                 log_type: 'PUT_PROCESS',
                 user_first_name: req.user?.first_name,
@@ -456,14 +458,25 @@ exports.createPut = asyncHandler(async (req, res) => {
         /**Latest Source CSV File upload */
 
         const genFileName = `kardex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.txt`;
-        const filePath = `${process.env.Put_Text_File_Path}\\${genFileName}`;
+        const filePath = path.join(process.env.Put_Text_File_Path, genFileName);
+
+        // Ensure directories exist
+        if (!fs.existsSync(process.env.Put_Text_File_Path)) {
+            fs.mkdirSync(process.env.Put_Text_File_Path, { recursive: true });
+        }
+
         const lastEntry = await db.put.findOne({
             order: [['id', 'DESC']], // Order by date_of_upload in descending order
         });
-        const content = `Put_Order${(lastEntry?.id || 0) + 1}|${birthProcess?.SerialNumber}|${birthProcess?.Number}|${moment(birthProcess?.StartDateTime).format('DD.MM.YYYY HH:mm:ss')}|1`;
-        fs.writeFileSync(filePath, content);
-        const uploadFilePath = path.join('uploads', 'files', 'put', genFileName);
-        fs.writeFileSync(uploadFilePath, content);
+        const formattedDate = moment().format('DD.MM.YYYY HH:mm:ss');
+        const content = `Put_Order${(lastEntry?.id || 0) + 1}|${birthProcess?.SerialNumber}|${birthProcess?.Number}|${formattedDate}|1`;
+        fs.writeFileSync(filePath, content, 'ascii');
+        const uploadDir = path.join('uploads', 'files', 'put');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        const uploadFilePath = path.join(uploadDir, genFileName);
+        fs.writeFileSync(uploadFilePath, content, 'ascii');
         const fileStats = fs.statSync(uploadFilePath);
 
         const newFile = await db.files.create({
@@ -608,7 +621,13 @@ exports.findByModelAndQty = asyncHandler(async (req, res) => {
             quantity = 0, // Limit on the maximum number of entries
         } = req.body;
 
-        const where = { model_number: partNumber, pick_id: null };
+        const where = {
+            [db.Sequelize.Op.or]: [
+                { model_number: partNumber },
+                { serial_number: partNumber }
+            ],
+            pick_id: null
+        };
         // Ensure `size` does not exceed `maxLimit`
         const limit = Math.min(size, quantity);
         const offset = (page - 1) * limit;
@@ -866,7 +885,7 @@ exports.getUndownloadedPuts = asyncHandler(async (req, res) => {
             return res.status(404).json({ message: 'No files found to download.' });
         }
 
-        const content = puts.map((pt) => (`Put_Order${pt.id}|${pt?.serial_number}|${pt?.model_number}|${moment(pt?.birth_date).format('DD.MM.YYYY HH:mm:ss')}|1`))?.join('\n');
+        const content = `${puts.map((pt) => (`Put_Order${pt.id}|${pt?.serial_number}|${pt?.model_number}|1`))?.join('\n')}`;
 
         res.setHeader('Content-Disposition', 'attachment; filename="orders.txt"');
         res.setHeader('Content-Type', 'text/plain');

@@ -24,12 +24,20 @@ exports.parseTextFile = async (fullPath) => {
 
 
 exports.mountNetworkDrive = async () => {
-    const networkPath = '\\\\rjnfile01\\NVD_B2B\\PRD\\Nvidia_to_Jabil\\ZPBR_SUBCON_RAW_DATE_FEED';
-    const driveLetter = 'Z:';
-    const username = 'svcrjn_app@jabil';
-    const password = 'J@bilindiapvt.ltd.';
+    if (process.env.IS_OFFLINE === 'true') {
+        console.log('Skipping network drive mount in offline mode');
+        return;
+    }
+    const networkPath = process.env.NetworkDirectoryPath;
+    const driveLetter = process.env.NetworkDriveLetter + ':';
+    const username = process.env.NetworkDriveUsername;
+    const password = process.env.NetworkDrivePassword;
 
     return new Promise(async (resolve) => {
+        // Skip mounting if path doesn't look like a network share (e.g. for local testing)
+        if (!networkPath || !networkPath.startsWith('\\\\')) {
+            return resolve();
+        }
         try {
             // Get the list of current network mappings
             const mappedDrives = await execSync(`net use`, { encoding: 'utf8' });
@@ -56,7 +64,7 @@ exports.mountNetworkDrive = async () => {
 
 
 exports.getLatestTxtFromNetworkDrive = async () => {
-    const directoryPath = '\\\\rjnfile01\\NVD_B2B\\PRD\\Nvidia_to_Jabil\\ZPBR_SUBCON_RAW_DATE_FEED';
+    const directoryPath = process.env.NetworkDirectoryPath;
     try {
         const files = fs.readdirSync(directoryPath)
             .filter(file => file.endsWith('.txt'))

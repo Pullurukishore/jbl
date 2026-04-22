@@ -13,6 +13,10 @@ exports.createLog = asyncHandler(async (req, res) => {
 });
 
 exports.getByPutId = asyncHandler(async (req, res) => {
+    const dialect = db.sequelize.getDialect();
+    const uTable = dialect === 'postgres' ? '"user"' : 'user';
+    const castText = dialect === 'postgres' ? '::TEXT' : '';
+
     const { putId } = req.body;
     const logs = await db.log.findAll({
         where: { put_id: putId, log_type: 'PUT_PROCESS' }, order: [['id', 'ASC']],
@@ -20,19 +24,19 @@ exports.getByPutId = asyncHandler(async (req, res) => {
             include: [
                 [
                     db.sequelize.literal(
-                        `(SELECT first_name FROM user WHERE user.id = log.logged_by)`
+                        `(SELECT first_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
                     ),
                     'user_first_name',
                 ],
                 [
                     db.sequelize.literal(
-                        `(SELECT last_name FROM user WHERE user.id = log.logged_by)`
+                        `(SELECT last_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
                     ),
                     'user_last_name',
                 ],
                 [
                     db.sequelize.literal(
-                        `(SELECT user_id FROM user WHERE user.id = log.logged_by)`
+                        `(SELECT user_id FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
                     ),
                     'user_id',
                 ],
@@ -43,6 +47,10 @@ exports.getByPutId = asyncHandler(async (req, res) => {
 });
 
 exports.getByPickId = asyncHandler(async (req, res) => {
+    const dialect = db.sequelize.getDialect();
+    const uTable = dialect === 'postgres' ? '"user"' : 'user';
+    const castText = dialect === 'postgres' ? '::TEXT' : '';
+
     const { pickId } = req.body;
     const logs = await db.log.findAll({
         where: { pick_id: pickId, log_type: 'PICK_PROCESS' }, order: [['id', 'ASC']],
@@ -50,19 +58,19 @@ exports.getByPickId = asyncHandler(async (req, res) => {
             include: [
                 [
                     db.sequelize.literal(
-                        `(SELECT first_name FROM user WHERE user.id = log.logged_by)`
+                        `(SELECT first_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
                     ),
                     'user_first_name',
                 ],
                 [
                     db.sequelize.literal(
-                        `(SELECT last_name FROM user WHERE user.id = log.logged_by)`
+                        `(SELECT last_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
                     ),
                     'user_last_name',
                 ],
                 [
                     db.sequelize.literal(
-                        `(SELECT user_id FROM user WHERE user.id = log.logged_by)`
+                        `(SELECT user_id FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
                     ),
                     'user_id',
                 ],
@@ -117,6 +125,10 @@ exports.getLogsByForPart = asyncHandler(async (req, res) => {
             modelNumber,
         } = req.body;
 
+        const dialect = db.sequelize.getDialect();
+        const uTable = dialect === 'postgres' ? '"user"' : 'user';
+        const castText = dialect === 'postgres' ? '::TEXT' : '';
+
         // Calculate pagination values
         const offset = (page - 1) * size;
         const limit = parseInt(size, 10);
@@ -139,19 +151,19 @@ exports.getLogsByForPart = asyncHandler(async (req, res) => {
                 include: [
                     [
                         db.sequelize.literal(
-                            `(SELECT first_name FROM user WHERE user.id = log.logged_by)`
+                            `(SELECT first_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
                         ),
                         'user_first_name',
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT last_name FROM user WHERE user.id = log.logged_by)`
+                            `(SELECT last_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
                         ),
                         'user_last_name',
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT user_id FROM user WHERE user.id = log.logged_by)`
+                            `(SELECT user_id FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
                         ),
                         'user_id',
                     ],
@@ -181,6 +193,11 @@ exports.getAll = asyncHandler(async (req, res) => {
             sort = ['id', 'DESC'],
             ...filters
         } = req.body;
+
+        const dialect = db.sequelize.getDialect();
+        const uTable = dialect === 'postgres' ? '"user"' : 'user';
+        const castText = dialect === 'postgres' ? '::TEXT' : '';
+
         // Build filtering conditions
         const whereConditions = {};
         Object.keys(filters).forEach((key) => {
@@ -220,19 +237,19 @@ exports.getAll = asyncHandler(async (req, res) => {
                 include: [
                     [
                         db.sequelize.literal(
-                            `(SELECT first_name FROM user WHERE user.id = log.logged_by)`
+                            `(SELECT first_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
                         ),
                         'user_first_name',
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT last_name FROM user WHERE user.id = log.logged_by)`
+                            `(SELECT last_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
                         ),
                         'user_last_name',
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT user_id FROM user WHERE user.id = log.logged_by)`
+                            `(SELECT user_id FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
                         ),
                         'user_id',
                     ],
@@ -260,6 +277,11 @@ exports.getChartData = asyncHandler(async (req, res) => {
             size = 10,
             status
         } = req.body;
+
+        const dialect = db.sequelize.getDialect();
+        const uTable = dialect === 'postgres' ? '"user"' : 'user';
+        const castText = dialect === 'postgres' ? '::TEXT' : '';
+
         // Build filtering conditions
         const whereConditions = {
             status,
@@ -281,19 +303,19 @@ exports.getChartData = asyncHandler(async (req, res) => {
                 include: [
                     [
                         db.sequelize.literal(
-                            `(SELECT first_name FROM user WHERE user.id = log.logged_by)`
+                            `(SELECT first_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
                         ),
                         'user_first_name',
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT last_name FROM user WHERE user.id = log.logged_by)`
+                            `(SELECT last_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
                         ),
                         'user_last_name',
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT user_id FROM user WHERE user.id = log.logged_by)`
+                            `(SELECT user_id FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
                         ),
                         'user_id',
                     ],
