@@ -224,6 +224,8 @@ exports.createPick = asyncHandler(async (req, res) => {
             entity_number: modelNumber,
             activity: 'FILE_GENERATED',
             status: 'SUCCESS',
+            message: `File ${genFileName} generated and Model Number processed successfully.`,
+            success: true,
             logged_by: req.user?.id,
             log_type: 'PICK_PROCESS',
             user_first_name: req.user?.first_name,
@@ -231,6 +233,7 @@ exports.createPick = asyncHandler(async (req, res) => {
             user_id: req.user?.user_id,
             process_id
         }, res));
+
         await savedPickEntry.setLogs(logs);
         return res.end();
     }

@@ -509,6 +509,8 @@ exports.createPut = asyncHandler(async (req, res) => {
             entity_number: birthProcess?.SerialNumber,
             activity: 'FILE_GENERATED',
             status: 'SUCCESS',
+            message: `File ${genFileName} generated and Serial Number processed successfully.`,
+            success: true,
             logged_by: req.user?.id,
             log_type: 'PUT_PROCESS',
             user_first_name: req.user?.first_name,

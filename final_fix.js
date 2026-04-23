@@ -9,7 +9,7 @@ files.forEach(filePath => {
             let content = fs.readFileSync(filePath, 'utf8');
             if (content.includes('http://10.132.131.74')) {
                 console.log(`Found old IP in ${filePath}, replacing...`);
-                content = content.replace(/http:\/\/10\.132\.131\.74/g, 'http://localhost:5000');
+                content = content.replace(/http:\/\/10\.132\.131\.74/g, 'http://localhost:5005');
                 fs.writeFileSync(filePath, content, 'utf8');
                 console.log(`Replacement successful for ${filePath}`);
             } else {
