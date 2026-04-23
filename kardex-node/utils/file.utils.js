@@ -64,6 +64,10 @@ exports.mountNetworkDrive = async () => {
 
 
 exports.getLatestTxtFromNetworkDrive = async () => {
+    if (process.env.IS_OFFLINE === 'true') {
+        console.log('Skipping network directory check in offline mode');
+        return null;
+    }
     const directoryPath = process.env.NetworkDirectoryPath;
     try {
         const files = fs.readdirSync(directoryPath)

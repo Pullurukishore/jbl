@@ -245,14 +245,52 @@ exports.createPut = asyncHandler(async (req, res) => {
         }, res));
         activeProgressStep++;
 
-        // Mount the network drive
-        const result = await mountNetworkDrive();
-        if (result?.isError) {
+        let latestFile = null;
+        let results = [];
+        const isOffline = process.env.IS_OFFLINE === 'true';
+
+        if (!isOffline) {
+            // Mount the network drive
+            const result = await mountNetworkDrive();
+            if (result?.isError) {
+                logs.push(await createAndSendLog({
+                    entity_number: serialNumber,
+                    activity: 'FIND_CSV',
+                    status: 'FAILED',
+                    message: 'Failed to connect shared network drive.',
+                    logged_by: req.user?.id,
+                    log_type: 'PUT_PROCESS',
+                    user_first_name: req.user?.first_name,
+                    user_last_name: req.user?.last_name,
+                    user_id: req.user?.user_id,
+                    process_id
+                }, res));
+                return res.end();
+            }
+
+            latestFile = await getLatestTxtFromNetworkDrive();
+            //const latestFile = await getLatestTxtFromNetworkDriveonDirectory('C:\\Users\\\Administrator\\Desktop\\New folder');
+
+            if (!latestFile) {
+                logs.push(await createAndSendLog({
+                    entity_number: serialNumber,
+                    activity: 'FIND_CSV',
+                    status: 'FAILED',
+                    message: 'No PO File found in the shared network drive.',
+                    logged_by: req.user?.id,
+                    log_type: 'PUT_PROCESS',
+                    user_first_name: req.user?.first_name,
+                    user_last_name: req.user?.last_name,
+                    user_id: req.user?.user_id,
+                    process_id
+                }, res));
+                return res.end();
+            }
+
             logs.push(await createAndSendLog({
                 entity_number: serialNumber,
                 activity: 'FIND_CSV',
-                status: 'FAILED',
-                message: 'Failed to connect shared network drive.',
+                status: 'SUCCESS',
                 logged_by: req.user?.id,
                 log_type: 'PUT_PROCESS',
                 user_first_name: req.user?.first_name,
@@ -260,18 +298,31 @@ exports.createPut = asyncHandler(async (req, res) => {
                 user_id: req.user?.user_id,
                 process_id
             }, res));
-            return res.end();
-        }
+            activeProgressStep++;
 
-        const latestFile = await getLatestTxtFromNetworkDrive();
-        //const latestFile = await getLatestTxtFromNetworkDriveonDirectory('C:\\Users\\\Administrator\\Desktop\\New folder');
-
-        if (!latestFile) {
+            results = await parseTextFile(latestFile.path);
+            if (results?.isError) {
+                logs.push(await createAndSendLog({
+                    entity_number: serialNumber,
+                    activity: 'FIND_MODEL',
+                    status: 'FAILED',
+                    message: `Error while parsing PO file. (${results.error?.message})`,
+                    logged_by: req.user?.id,
+                    log_type: 'PUT_PROCESS',
+                    user_first_name: req.user?.first_name,
+                    user_last_name: req.user?.last_name,
+                    user_id: req.user?.user_id,
+                    process_id
+                }, res));
+                return res.end();
+            }
+        } else {
+            // Offline Mode: Skip network discovery
             logs.push(await createAndSendLog({
                 entity_number: serialNumber,
                 activity: 'FIND_CSV',
-                status: 'FAILED',
-                message: 'No PO File found in the shared network drive.',
+                status: 'SUCCESS',
+                message: 'Offline Mode: Skipping PO file discovery.',
                 logged_by: req.user?.id,
                 log_type: 'PUT_PROCESS',
                 user_first_name: req.user?.first_name,
@@ -279,37 +330,7 @@ exports.createPut = asyncHandler(async (req, res) => {
                 user_id: req.user?.user_id,
                 process_id
             }, res));
-            return res.end();
-        }
-
-        logs.push(await createAndSendLog({
-            entity_number: serialNumber,
-            activity: 'FIND_CSV',
-            status: 'SUCCESS',
-            logged_by: req.user?.id,
-            log_type: 'PUT_PROCESS',
-            user_first_name: req.user?.first_name,
-            user_last_name: req.user?.last_name,
-            user_id: req.user?.user_id,
-            process_id
-        }, res));
-        activeProgressStep++;
-
-        const results = await parseTextFile(latestFile.path);
-        if (results?.isError) {
-            logs.push(await createAndSendLog({
-                entity_number: serialNumber,
-                activity: 'FIND_MODEL',
-                status: 'FAILED',
-                message: `Error while parsing PO file. (${results.error?.message})`,
-                logged_by: req.user?.id,
-                log_type: 'PUT_PROCESS',
-                user_first_name: req.user?.first_name,
-                user_last_name: req.user?.last_name,
-                user_id: req.user?.user_id,
-                process_id
-            }, res));
-            return res.end();
+            activeProgressStep++;
         }
 
         const partFrmCsv = results?.some(prt =>
@@ -444,17 +465,20 @@ exports.createPut = asyncHandler(async (req, res) => {
 
 
         /**Latest Source CSV File upload */
-        const poUploadPath = path.join('uploads', 'files', 'source-po', latestFile.name);
-        fs.copyFileSync(latestFile.path, poUploadPath);
-        const poFileStats = fs.statSync(poUploadPath);
-        const savedCsvFile = await db.files.create({
-            name: latestFile.name,
-            size: poFileStats.size,
-            type: 'text',
-            path: poUploadPath,
-            created_by: 'SYSTEM',
-            updated_by: 'SYSTEM'
-        });
+        let savedCsvFile = null;
+        if (!isOffline && latestFile) {
+            const poUploadPath = path.join('uploads', 'files', 'source-po', latestFile.name);
+            fs.copyFileSync(latestFile.path, poUploadPath);
+            const poFileStats = fs.statSync(poUploadPath);
+            savedCsvFile = await db.files.create({
+                name: latestFile.name,
+                size: poFileStats.size,
+                type: 'text',
+                path: poUploadPath,
+                created_by: 'SYSTEM',
+                updated_by: 'SYSTEM'
+            });
+        }
         /**Latest Source CSV File upload */
 
         const genFileName = `kardex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.txt`;
@@ -498,7 +522,7 @@ exports.createPut = asyncHandler(async (req, res) => {
                 birth_date: createDateFromString(birthProcess?.StartDateTime),
                 pv_status: 'PASS',
                 process_status: testProcess,
-                po_file_id: savedCsvFile.id,
+                po_file_id: savedCsvFile?.id,
                 model_number: birthProcess?.Number,
                 scanned_by: req?.user?.id,
                 text_file_id: newFile.id,
