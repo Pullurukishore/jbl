@@ -1,0 +1,4 @@
+﻿model,serial,birth,name,status
+m101,m101,2021-02-15,model 101,okk
+m102,m103,2024-02-15,model 102,ssk
+m103,m102,2024-02-15,model 103,ok

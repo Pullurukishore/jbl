@@ -33,6 +33,6 @@ logs/
 *.log
 npm-debug.log*
 
-# Misc
-uploads/
-/tmp/
+# # Misc
+# uploads/
+# /tmp/

@@ -1,0 +1,10 @@
+
+Serial Number: 1234
+Model No: test
+Birth Date: Sat Feb 01 2025 23:47:48 GMT+0530 (India Standard Time)
+PV Status: PASS
+PO Text File: jj
+Scanned By: ADMIN
+Pick Status: AVAILABLE
+------------------------------------
+        
