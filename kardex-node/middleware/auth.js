@@ -18,10 +18,8 @@ exports.authMiddleware = asyncHandler(async (req, res, next) => {
         token = req.headers.authorization.split(' ')[1];
     }
 
-    const requestsWithTokenInUrl = ['api/put/create', 'api/pick/create'];
-
-    if (requestsWithTokenInUrl.some(url => req.url.includes(url))) {
-        token = req.query?.id_token;
+    if (!token && req.query?.id_token) {
+        token = req.query.id_token;
     }
 
     if (!token)

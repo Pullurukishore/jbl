@@ -31,7 +31,7 @@ const morgan = require('morgan');
 
 const app = express();
 app.use(zip());
-app.use(cors({ origin: 'http://localhost:4200', exposedHeaders: ['File-Name'], }));
+app.use(cors({ origin: ['http://localhost:4200', 'http://localhost:3000'], exposedHeaders: ['File-Name'], }));
 //Body parser
 app.use(express.json({ limit: '1000mb' }));
 app.use(express.urlencoded({ limit: '1000mb', extended: true }));
@@ -65,23 +65,22 @@ app.use(helmet.xssFilter());
 
 
 app.use(function (req, res, next) {
-  // res.header("Access-Control-Allow-Origin", "http://10.10.118.118");
-  res.header("Access-Control-Allow-Methods", "POST,GET");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-with, Content-Type, Accept,");
+  res.header("Access-Control-Allow-Methods", "POST,GET,PUT,DELETE,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
   res.header("X-XSS-Protection", "1; mode=block");
   res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
-  res.setHeader("X-XSS-Protection", "1; mode=block");
 
-
-  if (req.method != 'POST' && req.method != 'GET') {
-    res.send(405, `${req.method} Method Not Allowed`)
-    res.end()
-  } else {
-    next();
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
   }
 
+  if (['POST', 'GET', 'PUT', 'DELETE'].includes(req.method)) {
+    next();
+  } else {
+    res.status(405).send(`${req.method} Method Not Allowed`);
+  }
 });
 
 

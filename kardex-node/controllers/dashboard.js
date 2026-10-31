@@ -67,11 +67,7 @@ exports.getAllCounts = asyncHandler(async (req, res) => {
             }
         });
 
-        const totalPartsCount = await db.pick.count({
-            where: {
-                //status: 'SUCCESS' // Only count rows where status is 'SUCCESS'
-            }
-        });
+        const totalPartsCount = availableParts.length + pickedParts.length + holdParts.length;
 
         res.json({
             validScanCount,
