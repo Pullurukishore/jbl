@@ -10,6 +10,11 @@ const moment = require('moment');
 const { getPVStatusCheck, updateBoardHistory, getBoardHistory, getWipBySerialNumber } = require('../utils/api-call');
 
 
+// In-memory cache for parsed PO files to eliminate redundant parsing
+let cachedPoFileName = null;
+let cachedPoMtime = null;
+let cachedPoResults = null;
+
 exports.createPut = asyncHandler(async (req, res) => {
     const startTime = moment().format('MM/DD/YYYY hh:mm:ss A');
     const progressTimeline = ['FETCH_DETAILS', 'CHECK_STATUS', 'PASS_FAIL', 'FIND_CSV', 'FIND_MODEL', 'MODEL_FOUND/NOTFOUND', 'CHECKING_AVAILABILITY', 'FILE_GENERATED'];
@@ -300,21 +305,35 @@ exports.createPut = asyncHandler(async (req, res) => {
             }, res));
             activeProgressStep++;
 
-            results = await parseTextFile(latestFile.path);
-            if (results?.isError) {
-                logs.push(await createAndSendLog({
-                    entity_number: serialNumber,
-                    activity: 'FIND_MODEL',
-                    status: 'FAILED',
-                    message: `Error while parsing PO file. (${results.error?.message})`,
-                    logged_by: req.user?.id,
-                    log_type: 'PUT_PROCESS',
-                    user_first_name: req.user?.first_name,
-                    user_last_name: req.user?.last_name,
-                    user_id: req.user?.user_id,
-                    process_id
-                }, res));
-                return res.end();
+            let fileMtime = 0;
+            try {
+                fileMtime = fs.statSync(latestFile.path).mtimeMs;
+            } catch (e) {
+                fileMtime = 0;
+            }
+
+            if (cachedPoFileName === latestFile.name && cachedPoMtime === fileMtime && cachedPoResults) {
+                results = cachedPoResults;
+            } else {
+                results = await parseTextFile(latestFile.path);
+                if (results?.isError) {
+                    logs.push(await createAndSendLog({
+                        entity_number: serialNumber,
+                        activity: 'FIND_MODEL',
+                        status: 'FAILED',
+                        message: 'Error while parsing PO file. ' + (results.error?.message ? '(' + results.error.message + ')' : ''),
+                        logged_by: req.user?.id,
+                        log_type: 'PUT_PROCESS',
+                        user_first_name: req.user?.first_name,
+                        user_last_name: req.user?.last_name,
+                        user_id: req.user?.user_id,
+                        process_id
+                    }, res));
+                    return res.end();
+                }
+                cachedPoFileName = latestFile.name;
+                cachedPoMtime = fileMtime;
+                cachedPoResults = results;
             }
         } else {
             // Offline Mode: Skip network discovery
@@ -468,16 +487,24 @@ exports.createPut = asyncHandler(async (req, res) => {
         let savedCsvFile = null;
         if (!isOffline && latestFile) {
             const poUploadPath = path.join('uploads', 'files', 'source-po', latestFile.name);
-            fs.copyFileSync(latestFile.path, poUploadPath);
-            const poFileStats = fs.statSync(poUploadPath);
-            savedCsvFile = await db.files.create({
-                name: latestFile.name,
-                size: poFileStats.size,
-                type: 'text',
-                path: poUploadPath,
-                created_by: 'SYSTEM',
-                updated_by: 'SYSTEM'
-            });
+
+            // Reuse existing file record if this exact PO was already uploaded
+            savedCsvFile = await db.files.findOne({ where: { name: latestFile.name } });
+
+            if (!savedCsvFile) {
+                if (path.resolve(latestFile.path) !== path.resolve(poUploadPath)) {
+                    fs.copyFileSync(latestFile.path, poUploadPath);
+                }
+                const poFileStats = fs.statSync(poUploadPath);
+                savedCsvFile = await db.files.create({
+                    name: latestFile.name,
+                    size: poFileStats.size,
+                    type: 'text',
+                    path: poUploadPath,
+                    created_by: 'SYSTEM',
+                    updated_by: 'SYSTEM'
+                });
+            }
         }
         /**Latest Source CSV File upload */
 
