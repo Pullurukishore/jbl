@@ -14,7 +14,6 @@
         "activedirectory2": "^2.1.0",
         "adm-zip": "^0.5.9",
         "axios": "^1.7.9",
-        "bcrypt": "^5.1.1",
         "bcryptjs": "^2.4.3",
         "body-parser": "^1.20.1",
         "colors": "^1.4.0",
@@ -22,7 +21,6 @@
         "compression": "^1.7.4",
         "cookie-parser": "^1.4.5",
         "cors": "^2.8.5",
-        "crypto": "^1.0.1",
         "crypto-js": "^4.1.1",
         "dotenv": "^8.2.0",
         "exceljs": "^4.4.0",
@@ -31,7 +29,6 @@
         "express-easy-zip": "^1.1.5",
         "express-soap": "^1.1.4",
         "helmet": "^3.23.3",
-        "install": "^0.13.0",
         "jsonwebtoken": "^8.5.1",
         "koa": "^2.13.4",
         "koa-helmet": "^6.1.0",
@@ -42,10 +39,8 @@
         "node-cron": "^3.0.3",
         "node-schedule": "^2.1.0",
         "nodemailer": "^6.9.16",
-        "npm": "^11.0.0",
         "openpgp": "^6.0.1",
         "papaparse": "^5.4.1",
-        "path": "^0.12.7",
         "pg": "^8.7.1",
         "pg-hstore": "^2.3.4",
         "sequelize": "^5.21.7",
@@ -54,7 +49,6 @@
         "xmlbuilder2": "^3.1.1"
     },
     "devDependencies": {
-        "@types/helmet": "^4.0.0",
         "cross-env": "^10.1.0",
         "nodemon": "^2.0.3"
     }

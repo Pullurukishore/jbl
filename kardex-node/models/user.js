@@ -52,7 +52,7 @@ module.exports = (sequelize, DataTypes) => {
     model.afterSync(async (options) => {
         const existingUser = await model.findOne();
         if (!existingUser) {
-            const bcrypt = require('bcrypt');
+            const bcrypt = require('bcryptjs');
             await model.create({
                 first_name: 'Admin',
                 last_name: 'User',
