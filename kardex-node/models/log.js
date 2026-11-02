@@ -19,7 +19,7 @@ module.exports = (sequelize, DataTypes) => {
             allowNull: false
         },
         message: {
-            type: DataTypes.STRING
+            type: DataTypes.TEXT
         },
         log_date_time: {
             type: DataTypes.DATE,

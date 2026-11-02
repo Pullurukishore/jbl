@@ -258,10 +258,30 @@ exports.createPick = asyncHandler(async (req, res) => {
 });
 
 async function createAndSendLog(log, res) {
-    const saved = await db.log.create(log);
-    res.write(`data: ${JSON.stringify({ ...log, ...saved.get(), completed: true })} \n\n`);
-    res.flush();
-    return saved;
+    let saved = null;
+    try {
+        saved = await db.log.create(log);
+    } catch (dbErr) {
+        if (log?.message && typeof log.message === 'string') {
+            try {
+                saved = await db.log.create({
+                    ...log,
+                    message: log.message.slice(0, 250)
+                });
+            } catch (e) {
+                console.error('Failed to persist log in DB:', e.message);
+            }
+        }
+    }
+    const payload = {
+        ...log,
+        ...(saved ? saved.get() : {}),
+        message: log.message,
+        completed: true
+    };
+    res.write("data: " + JSON.stringify(payload) + "\n\n");
+    if (typeof res.flush === 'function') res.flush();
+    return saved || { id: null, ...log };
 }
 
 exports.getAll = asyncHandler(async (req, res) => {
