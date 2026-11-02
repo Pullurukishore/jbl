@@ -292,6 +292,12 @@ exports.getWipBySerialNumber = async (serialNumber) => {
             }, { headers: { APIKey: process.env.GetBySerialApiKey } }
         )
             .then((response) => {
+                if (Array.isArray(response?.data) && response.data.length > 0) {
+                    const first = response.data[0];
+                    if (first && typeof first === 'object') {
+                        Object.assign(response.data, first);
+                    }
+                }
                 resolve(response);
             })
             .catch((error) => {
