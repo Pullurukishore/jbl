@@ -1,3 +1,10 @@
+// Polyfill for Node 24+ where SlowBuffer was removed (required for buffer-equal-constant-time / jsonwebtoken)
+const buffer = require('buffer');
+if (!buffer.SlowBuffer) {
+  buffer.SlowBuffer = function () {};
+  buffer.SlowBuffer.prototype = {};
+}
+
 const express = require('express');
 const zip = require('express-easy-zip');
 const dotenv = require('dotenv');
