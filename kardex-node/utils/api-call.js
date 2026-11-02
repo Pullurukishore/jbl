@@ -5,7 +5,6 @@ let client;
 initializeSoapClient();
 
 // Initialize SOAP client at startup
-
 async function initializeSoapClient() {
     return new Promise(async (resolve, reject) => {
         try {
@@ -17,7 +16,6 @@ async function initializeSoapClient() {
         }
     });
 }
-
 
 async function getSoapClient() {
     return new Promise(async (resolve, reject) => {
@@ -34,6 +32,11 @@ async function getSoapClient() {
         }
     });
 }
+
+// ==============================================================================
+// 1 & 2: SOAP TIS Service Calls (TIS.asmx / http://jabil.com/GMS/MES_TIS)
+// Works for both STG (http://azapserjncmp83) and PROD (http://inrjnm0tis03)
+// ==============================================================================
 
 exports.getPVStatusCheck = async (serialNumber, processName) => {
     if (process.env.IS_OFFLINE === 'true') {
@@ -96,6 +99,111 @@ exports.updateBoardHistory = async (data) => {
     })
 }
 
+// ==============================================================================
+// 5: GetBoardData (PRESENT / STAGING API)
+// Endpoint: https://azapserjniis81.corp.jabil.org:8080/MESWebAPI/Wip/GetBoardData
+// ==============================================================================
+exports.getBoardData = async (serialNumber) => {
+    if (process.env.IS_OFFLINE === 'true') {
+        return {
+            data: {
+                SerialNumber: serialNumber,
+                Number: 'SA005157',
+                CurrentlyOnHold: false,
+                CurrentProcess: 'KANBAN_IN'
+            }
+        };
+    }
+
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+    return new Promise(async (resolve, reject) => {
+        const apiUrl = process.env.GetBoardDataApiUrl || process.env.BoardHistroyApiUrl;
+        axios.post(apiUrl,
+            {
+                custId: process.env.BoardHistroyCustomerId || '41',
+                serial: serialNumber,
+                useMultiPartBarCode: process.env.BoardHistroyMultiPartBarCode || '0',
+                lang: process.env.BoardHistroyMultiLang || '0',
+            }, { headers: { APIKey: process.env.BoardHistroyApiKey } }
+        ).then((response) => {
+            if (response && response.data && !Array.isArray(response.data)) {
+                response.data = [response.data];
+            }
+            resolve(response);
+        }).catch((error) => {
+            resolve({ isError: true, error });
+        });
+    });
+};
+
+// ==============================================================================
+// 4: GetUserByWindowsId (PRESENT / STAGING API)
+// Endpoint: https://azapserjniis81.corp.jabil.org:8080/MESWebAPI/Security/GetUserByWindowsId
+// ==============================================================================
+exports.getUserByWindowsId = async (windowsId) => {
+    if (process.env.IS_OFFLINE === 'true') {
+        return {
+            data: {
+                WindowsId: windowsId,
+                UserId: 'Admin',
+                UserName: 'Administrator',
+                IsActive: true
+            }
+        };
+    }
+
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+    return new Promise(async (resolve, reject) => {
+        const apiUrl = process.env.GetUserByWindowApiUrl;
+        axios.post(apiUrl,
+            {
+                windowsId: windowsId
+            }, { headers: { APIKey: process.env.BoardHistroyApiKey } }
+        ).then((response) => {
+            resolve(response);
+        }).catch((error) => {
+            resolve({ isError: true, error });
+        });
+    });
+};
+
+// ==============================================================================
+// 3: GetPanelSerializeResult (PRESENT / STAGING API)
+// Endpoint: https://azapserjniis81.corp.jabil.org:8080/MESWebAPI/Test/GetPanelSerializeResult
+// ==============================================================================
+exports.getPanelSerializeResult = async (panelBarcode) => {
+    if (process.env.IS_OFFLINE === 'true') {
+        return {
+            data: {
+                PanelBarcode: panelBarcode,
+                Result: 'PASS',
+                Serials: []
+            }
+        };
+    }
+
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+    return new Promise(async (resolve, reject) => {
+        const apiUrl = process.env.GetPanelSerializeApiUrl;
+        axios.post(apiUrl,
+            {
+                panelBarcode: panelBarcode,
+                custId: process.env.BoardHistroyCustomerId || '41'
+            }, { headers: { APIKey: process.env.BoardHistroyApiKey } }
+        ).then((response) => {
+            resolve(response);
+        }).catch((error) => {
+            resolve({ isError: true, error });
+        });
+    });
+};
+
+// ==============================================================================
+// OLD / REAL ENVIRONMENT (PRODUCTION) WRAPPERS - KEPT FOR FUTURE PRODUCTION USE
+// ==============================================================================
+
+// [OLD / REAL PROD] BoardHistoryReport wrapper (calls https://inrjnm0iis13.corp.jabil.org:8082/... in prod)
+// In STG, this routes to GetBoardData URL configured in config.env
 exports.getBoardHistory = async (serialNumber) => {
     if (process.env.IS_OFFLINE === 'true') {
         // DYNAMIC MOCK FOR REAL-TIME TEST FEEL
@@ -118,18 +226,18 @@ exports.getBoardHistory = async (serialNumber) => {
                 const content = fs.readFileSync(latestPO, 'utf8');
                 const lines = content.split('\n');
                 if (lines.length > 1) {
-                const firstRow = lines[1].split('\t');
-                const partNumber = (firstRow[0] || '').trim(); // Column 1 is 'Short text' in PO_MOCK.txt
-                if (partNumber) {
-                    return {
-                        data: [{
-                            Test_Process: 'BIRTH / BIRTH',
-                            Number: partNumber,
-                            StartDateTime: new Date().toISOString(),
-                            SerialNumber: serialNumber
-                        }]
-                    };
-                }
+                    const firstRow = lines[1].split('\t');
+                    const partNumber = (firstRow[0] || '').trim();
+                    if (partNumber) {
+                        return {
+                            data: [{
+                                Test_Process: 'BIRTH / BIRTH',
+                                Number: partNumber,
+                                StartDateTime: new Date().toISOString(),
+                                SerialNumber: serialNumber
+                            }]
+                        };
+                    }
                 }
             }
         } catch (e) { }
@@ -162,6 +270,8 @@ exports.getBoardHistory = async (serialNumber) => {
     })
 }
 
+// [OLD / REAL PROD] GetWipBySerial wrapper (calls https://inrjnm0iis13.corp.jabil.org:8082/... in prod)
+// In STG, this routes to GetBoardData URL configured in config.env
 exports.getWipBySerialNumber = async (serialNumber) => {
     if (process.env.IS_OFFLINE === 'true') {
         return {
