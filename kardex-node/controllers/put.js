@@ -354,7 +354,7 @@ exports.createPut = asyncHandler(async (req, res) => {
 
         const partFrmCsv = results?.some(prt =>
             prt?.['Short text']?.trim()?.toUpperCase() == birthProcess?.Number?.trim()?.toUpperCase() &&
-            Number(prt['Open GR']) > 0
+            Number(prt['Open GR'] || prt['OPEN GR'] || 0) > 0
         );
 
         if (process.env.IS_OFFLINE === 'true') {
@@ -391,7 +391,7 @@ exports.createPut = asyncHandler(async (req, res) => {
                 entity_number: serialNumber,
                 activity: 'CHECKING_AVAILABILITY',
                 status: 'FAILED',
-                message: 'Model number NOT available in PO File.',
+                message: `Model number NOT available in PO File. (Part Model: ${birthProcess?.Number || 'N/A'})`,
                 logged_by: req.user?.id,
                 log_type: 'PUT_PROCESS',
                 user_first_name: req.user?.first_name,
