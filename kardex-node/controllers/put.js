@@ -69,14 +69,14 @@ exports.createPut = asyncHandler(async (req, res) => {
             return res.end();
         }
 
-        let existingPart = null;
+        let existingPart = await db.put.findOne({
+            where: { serial_number: serialNumber },
+            order: [['id', 'DESC']]
+        });
         let testProcess = process.env.KanbanInProcessStep || 'KANBAN-IN';
 
         if (isKanbanIn && isKanbanOut) {
             testProcess = process.env.KanbanRtnProcessStep || 'KANBAN-RTN';
-        }
-        else {
-            existingPart = await db.put.findOne({ where: { serial_number: serialNumber } });
         }
 
         const pvStatusResponse = await getPVStatusCheck(serialNumber, testProcess);
@@ -108,6 +108,23 @@ exports.createPut = asyncHandler(async (req, res) => {
             process_id
         }, res));
         activeProgressStep++;
+
+        // Reject if serial number is already in storage as AVAILABLE
+        if (existingPart && existingPart.pick_status === 'AVAILABLE') {
+            logs.push(await createAndSendLog({
+                entity_number: serialNumber,
+                activity: 'CHECK_STATUS',
+                status: 'FAILED',
+                message: 'Serial number is already available in Kardex storage.',
+                logged_by: req.user?.id,
+                log_type: 'PUT_PROCESS',
+                user_first_name: req.user?.first_name,
+                user_last_name: req.user?.last_name,
+                user_id: req.user?.user_id,
+                process_id
+            }, res));
+            return res.end();
+        }
 
         //check status success
         logs.push(await createAndSendLog({
@@ -541,7 +558,15 @@ exports.createPut = asyncHandler(async (req, res) => {
 
         let putEntry = existingPart;
         if (putEntry?.id) {
-            await putEntry.update({ process_status: testProcess, pick_status: 'AVAILABLE' });
+            await putEntry.update({
+                process_status: testProcess,
+                pick_status: 'AVAILABLE',
+                po_file_id: savedCsvFile?.id,
+                text_file_id: newFile.id,
+                pick_id: null,
+                scanned_by: req?.user?.id,
+                text_file_downloaded: false
+            });
         }
         else {
             putEntry = await db.put.create({
