@@ -219,7 +219,9 @@ exports.getBoardHistory = async (serialNumber) => {
         try {
             const fs = require('fs');
             const path = require('path');
-            const poDir = path.join(__dirname, '..', 'uploads', 'files', 'source-po');
+            const poDir = (process.env.NetworkDirectoryPath && fs.existsSync(process.env.NetworkDirectoryPath))
+                ? process.env.NetworkDirectoryPath
+                : path.join(__dirname, '..', 'uploads', 'files', 'source-po');
             const files = fs.readdirSync(poDir)
                 .filter(f => f.endsWith('.txt'))
                 .map(file => ({
@@ -236,7 +238,10 @@ exports.getBoardHistory = async (serialNumber) => {
                 const lines = content.split('\n');
                 if (lines.length > 1) {
                     const firstRow = lines[1].split('\t');
-                    const partNumber = (firstRow[0] || '').trim();
+                    const headers = (lines[0] || '').split('\t').map(h => h.trim().toLowerCase());
+                    let shortTextIdx = headers.indexOf('short text');
+                    if (shortTextIdx === -1) shortTextIdx = 8;
+                    const partNumber = (firstRow[shortTextIdx] || firstRow[0] || '').trim();
                     if (partNumber) {
                         return {
                             data: [{
