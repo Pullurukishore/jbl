@@ -16,7 +16,7 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.ENUM(['PASS', 'FAIL'])
         },
         process_status: {
-            type: DataTypes.ENUM(['KANBAN_IN', 'KANBAN_OUT', 'KANBAN_RTN'])
+            type: DataTypes.ENUM(['KANBIN-IN', 'KANBIN-OUT', 'KANBIN-RTN', 'KANBAN-IN', 'KANBAN-OUT', 'KANBAN-RTN', 'KANBIN_IN', 'KANBIN_OUT', 'KANBIN_RTN', 'KANBAN_IN', 'KANBAN_OUT', 'KANBAN_RTN'])
         },
         model_number: {
             type: DataTypes.STRING,

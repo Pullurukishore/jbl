@@ -2,7 +2,19 @@ import { FileRecord } from '@/types/files';
 import { Pick } from '@/types/pick';
 
 export type PVStatus = 'PASS' | 'FAIL';
-export type ProcessStatus = 'KANBAN_IN' | 'KANBAN_OUT' | 'KANBAN_RTN';
+export type ProcessStatus =
+  | 'KANBIN-IN'
+  | 'KANBIN-OUT'
+  | 'KANBIN-RTN'
+  | 'KANBAN-IN'
+  | 'KANBAN-OUT'
+  | 'KANBAN-RTN'
+  | 'KANBIN_IN'
+  | 'KANBIN_OUT'
+  | 'KANBIN_RTN'
+  | 'KANBAN_IN'
+  | 'KANBAN_OUT'
+  | 'KANBAN_RTN';
 export type PickStatus = 'AVAILABLE' | 'PICKED' | 'HOLD';
 
 export interface Put {

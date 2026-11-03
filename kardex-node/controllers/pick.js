@@ -15,6 +15,7 @@ exports.createPick = asyncHandler(async (req, res) => {
     const process_id = uuid4();
     const { modelNumber, qty } = req.params;
     const quantity = Number(qty);
+    const pickProcessStep = process.env.KanbanOutProcessStep || 'KANBIN-OUT';
     const logs = [];
 
     try {
@@ -57,7 +58,7 @@ exports.createPick = asyncHandler(async (req, res) => {
         let validSerialNumbers = [];
 
         for (const putEntry of dataFromDb) {
-            const pvStatusResponse = await getPVStatusCheck(putEntry.serial_number, 'KANBAN_OUT');
+            const pvStatusResponse = await getPVStatusCheck(putEntry.serial_number, pickProcessStep);
             if (pvStatusResponse?.isError) {
                 logs.push(await createAndSendLog({
                     entity_number: modelNumber,
@@ -163,7 +164,7 @@ exports.createPick = asyncHandler(async (req, res) => {
         for (const putEntry of validSerialNumbers) {
             const updateResponse = await updateBoardHistory({
                 serialNumber: putEntry.serial_number,
-                processName: 'KANBAN_OUT',
+                processName: pickProcessStep,
                 userId: req.user?.user_id,
                 startTime: startTime,
                 endTime: moment().format('MM/DD/YYYY hh:mm:ss A'),
@@ -183,7 +184,7 @@ exports.createPick = asyncHandler(async (req, res) => {
         }
 
         for (const putEntry of updatedEntries) {
-            await putEntry.update({ pick_status: 'PICKED', process_status: 'KANBAN_OUT' });
+            await putEntry.update({ pick_status: 'PICKED', process_status: pickProcessStep });
         }
 
         const lastPick = await db.pick.findOne({ order: [['id', 'DESC']] });
@@ -214,7 +215,7 @@ exports.createPick = asyncHandler(async (req, res) => {
         const savedPickEntry = await db.pick.create({
             model_number: modelNumber,
             quantity: quantity,
-            process_status: 'KANBAN_OUT',
+            process_status: pickProcessStep,
             entered_by: req.user?.id,
             text_file_id: newFile.id
         });

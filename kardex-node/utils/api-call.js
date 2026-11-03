@@ -8,7 +8,16 @@ initializeSoapClient();
 async function initializeSoapClient() {
     return new Promise(async (resolve, reject) => {
         try {
-            client = await soap.createClientAsync(`${process.env.ClientTISBaseSoapUrl}${process.env.KanbanApiEndpoint}?WSDL`);
+            const baseUrl = (process.env.ClientTISBaseSoapUrl || '').trim();
+            const endpoint = (process.env.KanbanApiEndpoint || '').trim();
+            let fullSoapUrl = baseUrl;
+            if (!baseUrl.toLowerCase().includes('.asmx')) {
+                fullSoapUrl = `${baseUrl}${endpoint}`;
+            }
+            if (!fullSoapUrl.toLowerCase().includes('?wsdl')) {
+                fullSoapUrl = `${fullSoapUrl}?WSDL`;
+            }
+            client = await soap.createClientAsync(fullSoapUrl);
             resolve(client);
         }
         catch (err) {
@@ -110,7 +119,7 @@ exports.getBoardData = async (serialNumber) => {
                 SerialNumber: serialNumber,
                 Number: 'SA005157',
                 CurrentlyOnHold: false,
-                CurrentProcess: 'KANBAN_IN'
+                CurrentProcess: 'KANBIN-IN'
             }
         };
     }
