@@ -12,7 +12,7 @@ module.exports = (sequelize, DataTypes) => {
             allowNull: false
         },
         process_status: {
-            type: DataTypes.ENUM(['KANBIN-IN', 'KANBIN-OUT', 'KANBIN-RTN', 'KANBAN-IN', 'KANBAN-OUT', 'KANBAN-RTN', 'KANBIN_IN', 'KANBIN_OUT', 'KANBIN_RTN', 'KANBAN_IN', 'KANBAN_OUT', 'KANBAN_RTN'])
+            type: DataTypes.ENUM(['KANBAN-IN', 'KANBAN-OUT', 'KANBAN-RTN', 'KANBAN_IN', 'KANBAN_OUT', 'KANBAN_RTN'])
         },
         text_file_downloaded: {
             type: DataTypes.BOOLEAN,

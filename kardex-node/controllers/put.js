@@ -47,10 +47,10 @@ exports.createPut = asyncHandler(async (req, res) => {
         }
 
         const isKanbanIn = boardHistoryResponse.data.some((part) => (
-            ['KANBIN-IN', 'KANBAN-IN', 'KANBIN_IN', 'KANBAN_IN'].some(step => part.Test_Process?.toUpperCase()?.trim()?.includes(step))
+            ['KANBAN-IN', 'KANBAN_IN'].some(step => part.Test_Process?.toUpperCase()?.trim()?.includes(step))
         ));
         const isKanbanOut = boardHistoryResponse.data.some((part) => (
-            ['KANBIN-OUT', 'KANBAN-OUT', 'KANBIN_OUT', 'KANBAN_OUT'].some(step => part.Test_Process?.toUpperCase()?.trim()?.includes(step))
+            ['KANBAN-OUT', 'KANBAN_OUT'].some(step => part.Test_Process?.toUpperCase()?.trim()?.includes(step))
         ));
 
         if (isKanbanIn && !isKanbanOut) {
@@ -70,10 +70,10 @@ exports.createPut = asyncHandler(async (req, res) => {
         }
 
         let existingPart = null;
-        let testProcess = process.env.KanbanInProcessStep || 'KANBIN-IN';
+        let testProcess = process.env.KanbanInProcessStep || 'KANBAN-IN';
 
         if (isKanbanIn && isKanbanOut) {
-            testProcess = process.env.KanbanRtnProcessStep || 'KANBIN-RTN';
+            testProcess = process.env.KanbanRtnProcessStep || 'KANBAN-RTN';
         }
         else {
             existingPart = await db.put.findOne({ where: { serial_number: serialNumber } });

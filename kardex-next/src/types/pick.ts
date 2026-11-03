@@ -1,15 +1,9 @@
 import { FileRecord } from '@/types/files';
 
 export type PickProcessStatus =
-  | 'KANBIN-IN'
-  | 'KANBIN-OUT'
-  | 'KANBIN-RTN'
   | 'KANBAN-IN'
   | 'KANBAN-OUT'
   | 'KANBAN-RTN'
-  | 'KANBIN_IN'
-  | 'KANBIN_OUT'
-  | 'KANBIN_RTN'
   | 'KANBAN_IN'
   | 'KANBAN_OUT'
   | 'KANBAN_RTN';

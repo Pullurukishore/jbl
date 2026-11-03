@@ -119,7 +119,7 @@ exports.getBoardData = async (serialNumber) => {
                 SerialNumber: serialNumber,
                 Number: 'SA005157',
                 CurrentlyOnHold: false,
-                CurrentProcess: 'KANBIN-IN'
+                CurrentProcess: 'KANBAN-IN'
             }
         };
     }

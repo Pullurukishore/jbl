@@ -15,7 +15,7 @@ exports.createPick = asyncHandler(async (req, res) => {
     const process_id = uuid4();
     const { modelNumber, qty } = req.params;
     const quantity = Number(qty);
-    const pickProcessStep = process.env.KanbanOutProcessStep || 'KANBIN-OUT';
+    const pickProcessStep = process.env.KanbanOutProcessStep || 'KANBAN-OUT';
     const logs = [];
 
     try {
