@@ -245,8 +245,9 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         <p className="text-muted" style={{ fontSize: '14px' }}>
           The requested handling unit could not be located in the database.
         </p>
-        <Link href="/app/bins" className="btn btn-outline-secondary mt-3">
-          <ArrowLeft size={15} className="me-1" /> Back to Bins Inventory
+        <Link href="/app/bins" className="btn-back-nav mt-3">
+          <ArrowLeft size={15} className="back-nav-arrow" />
+          <span>Back to Handling Units List</span>
         </Link>
       </div>
     );
@@ -283,28 +284,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin-bottom: -0.5rem;
-        }
-
-        .btn-back-link {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          color: #475569;
-          font-size: 13.5px;
-          font-weight: 500;
-          text-decoration: none;
-          padding: 6px 12px;
-          border-radius: 8px;
-          background: #ffffff;
-          border: 1px solid #e2e8f0;
-          transition: all 0.15s ease;
-        }
-
-        .btn-back-link:hover {
-          color: #0f172a;
-          background: #f8fafc;
-          border-color: #cbd5e1;
+          margin-bottom: -0.25rem;
         }
 
         .header-hero {
@@ -774,9 +754,10 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
       `}</style>
 
       {/* Top Breadcrumb & Quick Nav */}
-      <div className="back-nav-bar">
-        <Link href="/app/bins" className="btn-back-link">
-          <ArrowLeft size={14} /> Back to Handling Units List
+      <div className="back-nav-bar d-flex align-items-center justify-content-between mb-3">
+        <Link href="/app/bins" className="btn-back-nav" title="Return to Handling Units List">
+          <ArrowLeft size={15} className="back-nav-arrow" />
+          <span>Back to Handling Units List</span>
         </Link>
         <div className="d-flex align-items-center gap-2">
           <span className="text-muted" style={{ fontSize: '12px' }}>
