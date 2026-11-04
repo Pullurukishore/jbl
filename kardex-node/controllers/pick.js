@@ -24,6 +24,17 @@ exports.createPick = asyncHandler(async (req, res) => {
         res.setHeader('Connection', 'keep-alive');
         res.flushHeaders();
 
+        // Immediate initial progress event to establish live SSE connection without lag
+        res.write("data: " + JSON.stringify({
+            entity_number: modelNumber,
+            activity: 'FETCH_DETAILS',
+            status: 'IN_PROGRESS',
+            message: `Fetching available serial numbers for model ${modelNumber}...`,
+            completed: false,
+            process_id
+        }) + "\n\n");
+        if (typeof res.flush === 'function') res.flush();
+
         if (quantity > 20) {
             return res.end();
         }
@@ -57,7 +68,18 @@ exports.createPick = asyncHandler(async (req, res) => {
 
         let validSerialNumbers = [];
 
-        for (const putEntry of dataFromDb) {
+        for (let i = 0; i < dataFromDb.length; i++) {
+            const putEntry = dataFromDb[i];
+            res.write("data: " + JSON.stringify({
+                entity_number: modelNumber,
+                activity: 'FETCH_DETAILS',
+                status: 'IN_PROGRESS',
+                message: `Validating serial ${putEntry.serial_number} (${validSerialNumbers.length}/${quantity} confirmed)... `,
+                completed: false,
+                process_id
+            }) + "\n\n");
+            if (typeof res.flush === 'function') res.flush();
+
             const pvStatusResponse = await getPVStatusCheck(putEntry.serial_number, pickProcessStep);
             if (pvStatusResponse?.isError) {
                 logs.push(await createAndSendLog({
@@ -161,7 +183,18 @@ exports.createPick = asyncHandler(async (req, res) => {
 
 
         let updatedEntries = [];
-        for (const putEntry of validSerialNumbers) {
+        for (let i = 0; i < validSerialNumbers.length; i++) {
+            const putEntry = validSerialNumbers[i];
+            res.write("data: " + JSON.stringify({
+                entity_number: modelNumber,
+                activity: 'CHECK_STATUS',
+                status: 'IN_PROGRESS',
+                message: `Updating board history for serial ${putEntry.serial_number} (${i + 1}/${validSerialNumbers.length})...`,
+                completed: false,
+                process_id
+            }) + "\n\n");
+            if (typeof res.flush === 'function') res.flush();
+
             const updateResponse = await updateBoardHistory({
                 serialNumber: putEntry.serial_number,
                 processName: pickProcessStep,

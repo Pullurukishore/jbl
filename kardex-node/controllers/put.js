@@ -27,6 +27,18 @@ exports.createPut = asyncHandler(async (req, res) => {
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
         res.flushHeaders();
+
+        // Immediate initial progress event to establish live SSE connection without lag
+        res.write("data: " + JSON.stringify({
+            entity_number: serialNumber,
+            activity: 'FETCH_DETAILS',
+            status: 'IN_PROGRESS',
+            message: 'Fetching board details & checking status...',
+            completed: false,
+            process_id
+        }) + "\n\n");
+        if (typeof res.flush === 'function') res.flush();
+
         const logs = [];
 
         const boardHistoryResponse = await getBoardHistory(serialNumber);
@@ -271,6 +283,16 @@ exports.createPut = asyncHandler(async (req, res) => {
         let results = [];
         const isOffline = process.env.IS_OFFLINE === 'true';
 
+        res.write("data: " + JSON.stringify({
+            entity_number: serialNumber,
+            activity: 'FIND_CSV',
+            status: 'IN_PROGRESS',
+            message: 'Searching PO file in network drive...',
+            completed: false,
+            process_id
+        }) + "\n\n");
+        if (typeof res.flush === 'function') res.flush();
+
         if (!isOffline) {
             // Mount the network drive
             const result = await mountNetworkDrive();
@@ -457,6 +479,16 @@ exports.createPut = asyncHandler(async (req, res) => {
             process_id
         }, res));
         activeProgressStep++;
+
+        res.write("data: " + JSON.stringify({
+            entity_number: serialNumber,
+            activity: 'FILE_GENERATED',
+            status: 'IN_PROGRESS',
+            message: 'Updating Kanban board history & generating order text file...',
+            completed: false,
+            process_id
+        }) + "\n\n");
+        if (typeof res.flush === 'function') res.flush();
 
         const updateResponse = await updateBoardHistory({
             serialNumber,

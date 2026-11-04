@@ -1,4 +1,4 @@
-export type LogStatus = 'SUCCESS' | 'FAILED';
+export type LogStatus = 'SUCCESS' | 'FAILED' | 'IN_PROGRESS';
 export type LogType = 'PUT_PROCESS' | 'PICK_PROCESS';
 export type PutActivity = 'FETCH_DETAILS' | 'CHECK_STATUS' | 'PASS_FAIL' | 'FIND_CSV' | 'FIND_MODEL' | 'MODEL_FOUND/NOTFOUND' | 'CHECKING_AVAILABILITY' | 'FILE_GENERATED';
 export type PickActivity = 'FETCH_DETAILS' | 'CHECK_QTY' | 'CHECK_STATUS' | 'FILE_GENERATED';

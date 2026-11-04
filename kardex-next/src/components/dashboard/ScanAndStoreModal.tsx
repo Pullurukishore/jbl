@@ -68,10 +68,10 @@ export const ScanAndStoreModal: React.FC<ScanAndStoreModalProps> = ({
   }, [isOpen]);
 
   useEffect(() => {
-    if (logs.length > 0 && logsEndRef.current) {
+    if ((isProcessing || logs.length > 0) && logsEndRef.current) {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [logs]);
+  }, [isProcessing, logs]);
 
   const handleReset = () => {
     setModelNumber('');
@@ -730,7 +730,7 @@ export const ScanAndStoreModal: React.FC<ScanAndStoreModalProps> = ({
         )}
 
         {/* Timeline Logs Section */}
-        {logs.length > 0 && (
+        {(isProcessing || logs.length > 0) && (
           <div className="logs-wrapper">
             <TimelineProgress
               logs={logs}

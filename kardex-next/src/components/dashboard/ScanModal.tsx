@@ -46,10 +46,10 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onSuccess
   }, [isOpen]);
 
   useEffect(() => {
-    if (logs.length > 0 && logsEndRef.current) {
+    if ((isProcessing || logs.length > 0) && logsEndRef.current) {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [logs]);
+  }, [isProcessing, logs]);
 
   const handleReset = () => {
     setSerialNumber('');
@@ -419,7 +419,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onSuccess
         )}
 
         {/* Timeline Log Section */}
-        {logs.length > 0 && (
+        {(isProcessing || logs.length > 0) && (
           <div className="logs-wrapper">
             <TimelineProgress
               logs={logs}

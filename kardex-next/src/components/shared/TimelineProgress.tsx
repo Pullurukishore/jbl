@@ -25,9 +25,12 @@ export const TimelineProgress: React.FC<TimelineProgressProps> = ({
   steps.forEach((step, index) => {
     const log = logMap.get(step.key);
     if (log) {
-      activeIndex = index;
-      if (log.status === 'SUCCESS') completedCount++;
-      if (log.status === 'FAILED') hasFailed = true;
+      if (log.status === 'SUCCESS') {
+        completedCount++;
+        activeIndex = index;
+      } else if (log.status === 'FAILED') {
+        hasFailed = true;
+      }
     }
   });
 
@@ -235,7 +238,7 @@ export const TimelineProgress: React.FC<TimelineProgressProps> = ({
           const log = logMap.get(step.key);
           const isSuccess = log?.status === 'SUCCESS';
           const isFailed = log?.status === 'FAILED';
-          const isInProgress = isProcessing && idx === activeIndex + 1;
+          const isInProgress = (log?.status === 'IN_PROGRESS') || (isProcessing && !hasFailed && idx === activeIndex + 1);
           const isLast = idx === steps.length - 1;
 
           return (
