@@ -561,36 +561,42 @@ exports.createPut = asyncHandler(async (req, res) => {
         }
         /**Latest Source CSV File upload */
 
-        const genFileName = `kardex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.txt`;
-        const filePath = path.join(process.env.Put_Text_File_Path, genFileName);
+        const isBinScan = !!req.query?.hu_id;
+        let newFile = null;
 
-        // Ensure directories exist
-        if (!fs.existsSync(process.env.Put_Text_File_Path)) {
-            fs.mkdirSync(process.env.Put_Text_File_Path, { recursive: true });
+        // Generate individual text file ONLY for standalone dashboard scans.
+        // For bin scans, the consolidated PUT file is generated when clicking "Send to Kardex".
+        if (!isBinScan) {
+            const genFileName = `kardex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.txt`;
+            const filePath = path.join(process.env.Put_Text_File_Path, genFileName);
+
+            if (!fs.existsSync(process.env.Put_Text_File_Path)) {
+                fs.mkdirSync(process.env.Put_Text_File_Path, { recursive: true });
+            }
+
+            const lastEntry = await db.put.findOne({
+                order: [['id', 'DESC']],
+            });
+            const formattedDate = moment().format('DD.MM.YYYY HH:mm:ss');
+            const fileTextContent = `Put_Order${(lastEntry?.id || 0) + 1}|${birthProcess?.SerialNumber}|${birthProcess?.Number}|${formattedDate}|1`;
+            fs.writeFileSync(filePath, fileTextContent, 'ascii');
+            const uploadDir = path.join('uploads', 'files', 'put');
+            if (!fs.existsSync(uploadDir)) {
+                fs.mkdirSync(uploadDir, { recursive: true });
+            }
+            const uploadFilePath = path.join(uploadDir, genFileName);
+            fs.writeFileSync(uploadFilePath, fileTextContent, 'ascii');
+            const fileStats = fs.statSync(uploadFilePath);
+
+            newFile = await db.files.create({
+                name: genFileName,
+                size: fileStats.size,
+                type: 'text/plain',
+                path: uploadFilePath,
+                created_by: req.user?.id,
+                updated_by: req.user?.id
+            });
         }
-
-        const lastEntry = await db.put.findOne({
-            order: [['id', 'DESC']], // Order by date_of_upload in descending order
-        });
-        const formattedDate = moment().format('DD.MM.YYYY HH:mm:ss');
-        const content = `Put_Order${(lastEntry?.id || 0) + 1}|${birthProcess?.SerialNumber}|${birthProcess?.Number}|${formattedDate}|1`;
-        fs.writeFileSync(filePath, content, 'ascii');
-        const uploadDir = path.join('uploads', 'files', 'put');
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-        }
-        const uploadFilePath = path.join(uploadDir, genFileName);
-        fs.writeFileSync(uploadFilePath, content, 'ascii');
-        const fileStats = fs.statSync(uploadFilePath);
-
-        const newFile = await db.files.create({
-            name: genFileName,
-            size: fileStats.size,
-            type: 'text/plain',
-            path: uploadFilePath,
-            created_by: req.user?.id,
-            updated_by: req.user?.id
-        });
 
         let putEntry = existingPart;
         if (putEntry?.id) {
@@ -598,7 +604,7 @@ exports.createPut = asyncHandler(async (req, res) => {
                 process_status: testProcess,
                 pick_status: 'AVAILABLE',
                 po_file_id: savedCsvFile?.id,
-                text_file_id: newFile.id,
+                text_file_id: newFile ? newFile.id : putEntry.text_file_id,
                 pick_id: null,
                 scanned_by: req?.user?.id,
                 text_file_downloaded: false
@@ -613,15 +619,62 @@ exports.createPut = asyncHandler(async (req, res) => {
                 po_file_id: savedCsvFile?.id,
                 model_number: birthProcess?.Number,
                 scanned_by: req?.user?.id,
-                text_file_id: newFile.id,
+                text_file_id: newFile ? newFile.id : null,
                 pick_status: 'AVAILABLE'
             });
         }
+        // Link to Handling Unit & Compartment BEFORE sending FILE_GENERATED event to eliminate race condition
+        if (req.query?.hu_id) {
+            try {
+                const hu = await db.handling_unit.findOne({ where: { hu_id: req.query.hu_id } });
+                if (hu) {
+                    let compNum = req.query.compartment_number ? parseInt(req.query.compartment_number, 10) : null;
+                    let comp = null;
+                    if (compNum) {
+                        comp = await db.compartment.findOne({
+                            where: { handling_unit_id: hu.id, compartment_number: compNum }
+                        });
+                    }
+                    if (!comp) {
+                        comp = await db.compartment.findOne({
+                            where: { handling_unit_id: hu.id, status: 'EMPTY' },
+                            order: [['compartment_number', 'ASC']]
+                        });
+                    }
+                    if (comp) {
+                        await comp.update({
+                            status: 'OCCUPIED',
+                            serial_number: birthProcess?.SerialNumber,
+                            material_name: birthProcess?.Number,
+                            allocated_at: new Date(),
+                            allocated_by: req.user?.id || 'SYSTEM'
+                        });
+                        await putEntry.update({
+                            handling_unit_id: hu.id,
+                            compartment_id: comp.id
+                        });
+
+                        const allComps = await db.compartment.findAll({ where: { handling_unit_id: hu.id } });
+                        const allFilled = allComps.length > 0 && allComps.every(c => c.status === 'OCCUPIED');
+                        const allEmpty = allComps.every(c => c.status === 'EMPTY');
+                        const nextStatus = allFilled ? 'FULL' : (allEmpty ? 'EMPTY' : 'PARTIALLY_FILLED');
+                        await hu.update({ hu_status: nextStatus });
+                    }
+                }
+            } catch (huErr) {
+                console.error('Error linking put to Handling Unit:', huErr);
+            }
+        }
+
+        const successMessage = isBinScan
+            ? `Serial Number ${birthProcess?.SerialNumber} verified and allocated to Bin ${req.query.hu_id}.`
+            : `File ${newFile?.name || ''} generated and Serial Number processed successfully.`;
+
         logs.push(await createAndSendLog({
             entity_number: birthProcess?.SerialNumber,
             activity: 'FILE_GENERATED',
             status: 'SUCCESS',
-            message: `File ${genFileName} generated and Serial Number processed successfully.`,
+            message: successMessage,
             success: true,
             logged_by: req.user?.id,
             log_type: 'PUT_PROCESS',
@@ -836,20 +889,20 @@ exports.searchAll = asyncHandler(async (req, res) => {
                     {
                         [Op.or]: [
                             db.sequelize.literal(
-                                `(SELECT COUNT(*) FROM ${uTable} 
-                              WHERE ${uTable}.id${castText} = ${pTable}.scanned_by 
-                              AND (${uTable}.first_name LIKE '%${search}%' 
-                              OR ${uTable}.last_name LIKE '%${search}%')) > 0`
+                                `(SELECT COUNT(*) FROM ${uTable} u
+                              WHERE u.id${castText} = ${pTable}.scanned_by 
+                              AND (u.first_name LIKE '%${search}%' 
+                              OR u.last_name LIKE '%${search}%')) > 0`
                             ),
                             ...(search.includes(' ')
                                 ? (() => {
                                     const [firstName, lastName] = search.split(' ');
                                     return [
                                         db.sequelize.literal(
-                                            `(SELECT COUNT(*) FROM ${uTable} 
-                                      WHERE ${uTable}.id${castText} = ${pTable}.scanned_by 
-                                      AND ${uTable}.first_name LIKE '%${firstName}%'
-                                      AND ${uTable}.last_name LIKE '%${lastName}%') > 0`
+                                            `(SELECT COUNT(*) FROM ${uTable} u
+                                      WHERE u.id${castText} = ${pTable}.scanned_by 
+                                      AND u.first_name LIKE '%${firstName}%'
+                                      AND u.last_name LIKE '%${lastName}%') > 0`
                                         ),
                                     ];
                                 })()
@@ -881,19 +934,19 @@ exports.searchAll = asyncHandler(async (req, res) => {
                 include: [
                     [
                         db.sequelize.literal(
-                            `(SELECT first_name FROM ${uTable} WHERE ${uTable}.id${castText} = ${pTable}.scanned_by)`
+                            `(SELECT first_name FROM ${uTable} u WHERE u.id${castText} = ${pTable}.scanned_by)`
                         ),
                         'user_first_name',
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT last_name FROM ${uTable} WHERE ${uTable}.id${castText} = ${pTable}.scanned_by)`
+                            `(SELECT last_name FROM ${uTable} u WHERE u.id${castText} = ${pTable}.scanned_by)`
                         ),
                         'user_last_name',
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT user_id FROM ${uTable} WHERE ${uTable}.id${castText} = ${pTable}.scanned_by)`
+                            `(SELECT user_id FROM ${uTable} u WHERE u.id${castText} = ${pTable}.scanned_by)`
                         ),
                         'user_id',
                     ],

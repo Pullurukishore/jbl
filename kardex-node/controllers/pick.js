@@ -231,9 +231,36 @@ exports.createPick = asyncHandler(async (req, res) => {
         if (updatedEntries.length > 0) {
             const entryIds = updatedEntries.map(e => e.id);
             await db.put.update(
-                { pick_status: 'PICKED', process_status: pickProcessStep },
+                { pick_status: 'PICKED', process_status: pickProcessStep, compartment_id: null },
                 { where: { id: entryIds } }
             );
+
+            // If any picked items were stored in Handling Unit compartments, clear them
+            try {
+                const affectedHUIds = new Set();
+                for (const pt of updatedEntries) {
+                    if (pt.compartment_id) {
+                        await db.compartment.update(
+                            { status: 'EMPTY', serial_number: null, material_name: null, allocated_at: null, allocated_by: null },
+                            { where: { id: pt.compartment_id } }
+                        );
+                    }
+                    if (pt.handling_unit_id) {
+                        affectedHUIds.add(pt.handling_unit_id);
+                    }
+                }
+                for (const huId of affectedHUIds) {
+                    const compartments = await db.compartment.findAll({ where: { handling_unit_id: huId } });
+                    if (compartments && compartments.length > 0) {
+                        const allEmpty = compartments.every(c => c.status === 'EMPTY');
+                        const allOccupied = compartments.every(c => c.status === 'OCCUPIED');
+                        const nextStatus = allEmpty ? 'EMPTY' : (allOccupied ? 'FULL' : 'PARTIALLY_FILLED');
+                        await db.handling_unit.update({ hu_status: nextStatus }, { where: { id: huId } });
+                    }
+                }
+            } catch (huErr) {
+                console.error('Error clearing HU compartments on pick:', huErr);
+            }
         }
 
         const lastPick = await db.pick.findOne({ order: [['id', 'DESC']] });

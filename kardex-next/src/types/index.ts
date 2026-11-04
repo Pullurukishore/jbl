@@ -5,3 +5,4 @@ export * from './log';
 export * from './pick';
 export * from './put';
 export * from './user';
+export * from './hu';

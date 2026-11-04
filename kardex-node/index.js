@@ -31,6 +31,7 @@ const dashboardRoutes = require('./routes/dashboard');
 const userRoutes = require('./routes/user');
 const fileRoutes = require('./routes/file');
 const authRoutes = require('./routes/auth');
+const huRoutes = require('./routes/hu');
 const { create } = require('xmlbuilder2');
 
 //Request logger
@@ -93,7 +94,6 @@ app.use(function (req, res, next) {
 
 
 
-
 //Cookie parser
 app.use(cookieParser());
 
@@ -109,6 +109,7 @@ app.use('/api/user', userRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/file', fileRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/hu', huRoutes);
 
 
 

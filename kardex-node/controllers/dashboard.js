@@ -43,31 +43,31 @@ exports.getAllCounts = asyncHandler(async (req, res) => {
         });
 
 
+        const dateFilter = (parsedStartDate && parsedEndDate)
+            ? { scanned_at: { [Op.gte]: parsedStartDate, [Op.lte]: parsedEndDate } }
+            : {};
+
         const availableParts = await db.put.findAll({
-            where: {
-                pick_status: 'AVAILABLE', ...(parsedStartDate && { scanned_at: { [Op.gte]: parsedStartDate } }), // Filter if startDate is provided
-                ...(parsedEndDate && { scanned_at: { [Op.lte]: parsedEndDate } }), // Filter if endDate is provided 
-            }
+            where: { pick_status: 'AVAILABLE', ...dateFilter }
         });
 
         const pickedParts = await db.put.findAll({
-            where: {
-                pick_status: 'PICKED',
-                ...(parsedStartDate && { scanned_at: { [Op.gte]: parsedStartDate } }), // Filter if startDate is provided
-                ...(parsedEndDate && { scanned_at: { [Op.lte]: parsedEndDate } }), // Filter if endDate is provided 
-
-            }
+            where: { pick_status: 'PICKED', ...dateFilter }
         });
 
         const holdParts = await db.put.findAll({
-            where: {
-                pick_status: 'HOLD',
-                ...(parsedStartDate && { scanned_at: { [Op.gte]: parsedStartDate } }), // Filter if startDate is provided
-                ...(parsedEndDate && { scanned_at: { [Op.lte]: parsedEndDate } }), // Filter if endDate is provided 
-            }
+            where: { pick_status: 'HOLD', ...dateFilter }
         });
 
         const totalPartsCount = availableParts.length + pickedParts.length + holdParts.length;
+
+        // HU Stats
+        const totalHUs = await db.handling_unit.count();
+        const inKardexHUs = await db.handling_unit.count({ where: { storage_status: 'IN_KARDEX' } });
+        const emptyHUs = await db.handling_unit.count({ where: { hu_status: 'EMPTY', storage_status: 'IN_KARDEX' } });
+        const partialHUs = await db.handling_unit.count({ where: { hu_status: 'PARTIALLY_FILLED' } });
+        const fullHUs = await db.handling_unit.count({ where: { hu_status: 'FULL' } });
+        const draftHUs = await db.handling_unit.count({ where: { storage_status: 'DRAFT' } });
 
         res.json({
             validScanCount,
@@ -76,9 +76,16 @@ exports.getAllCounts = asyncHandler(async (req, res) => {
             holdPartsCount: holdParts.length,
             pickedPartsCount: pickedParts.length,
             availablePartsCount: availableParts.length,
+            totalHUs,
+            inKardexHUs,
+            emptyHUs,
+            partialHUs,
+            fullHUs,
+            draftHUs
         });
 
     } catch (err) {
+        console.error('Dashboard getAllCounts error:', err);
         res.status(500).json({ error: err.message });
     }
 });

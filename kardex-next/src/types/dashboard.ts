@@ -5,4 +5,11 @@ export interface DashboardCounts {
   holdPartsCount: number;
   pickedPartsCount: number;
   availablePartsCount: number;
+  // HU stats
+  totalHUs: number;
+  inKardexHUs: number;
+  emptyHUs: number;
+  partialHUs: number;
+  fullHUs: number;
+  draftHUs: number;
 }

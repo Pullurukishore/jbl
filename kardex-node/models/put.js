@@ -2,7 +2,6 @@
 
 const uuid4 = require("uuid4");
 
-
 module.exports = (sequelize, DataTypes) => {
     const model = sequelize.define('put', {
         serial_number: {
@@ -35,6 +34,14 @@ module.exports = (sequelize, DataTypes) => {
         pick_status: {
             type: DataTypes.ENUM(['AVAILABLE', 'PICKED', 'HOLD']),
             allowNull: false
+        },
+        handling_unit_id: {
+            type: DataTypes.INTEGER,
+            allowNull: true
+        },
+        compartment_id: {
+            type: DataTypes.INTEGER,
+            allowNull: true
         },
     },
         {

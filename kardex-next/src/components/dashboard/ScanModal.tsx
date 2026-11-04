@@ -10,7 +10,9 @@ import { Scan, RotateCcw, PackagePlus, CheckCircle2, AlertCircle, X, ArrowRight 
 interface ScanModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (serialNumber?: string) => void;
+  huId?: string;
+  compartmentNumber?: number | null;
 }
 
 const PUT_STEPS = [
@@ -24,7 +26,13 @@ const PUT_STEPS = [
   { key: 'FILE_GENERATED', label: '8. Generate Put Order Text File' },
 ];
 
-export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onSuccess }) => {
+export const ScanModal: React.FC<ScanModalProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  huId,
+  compartmentNumber,
+}) => {
   const [serialNumber, setSerialNumber] = useState('');
   const [logs, setLogs] = useState<Log[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -70,7 +78,11 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onSuccess
     setIsCompleted(false);
 
     connectSSE(
-      `/put/create/${encodeURIComponent(serialNumber.trim())}`,
+      `/put/create/${encodeURIComponent(serialNumber.trim())}${
+        huId && compartmentNumber
+          ? `?hu_id=${encodeURIComponent(huId)}&compartment_number=${compartmentNumber}`
+          : ''
+      }`,
       (data: any) => {
         if (data && typeof data === 'object') {
           setLogs((prev) => {
@@ -91,7 +103,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onSuccess
           if (data.activity === 'FILE_GENERATED' && data.status === 'SUCCESS') {
             setIsProcessing(false);
             setIsCompleted(true);
-            onSuccess();
+            onSuccess(serialNumber.trim());
           }
         }
       },
@@ -146,7 +158,9 @@ export const ScanModal: React.FC<ScanModalProps> = ({ isOpen, onClose, onSuccess
               </span>
             </div>
             <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
-              Verify Kanban board status, PV test results, and generate text order
+              {huId && compartmentNumber
+                ? `Loading into Slot #${compartmentNumber < 10 ? '0' + compartmentNumber : compartmentNumber} • Bin ${huId}`
+                : 'Verify Kanban board status, PV test results, and generate text order'}
             </div>
           </div>
         </div>

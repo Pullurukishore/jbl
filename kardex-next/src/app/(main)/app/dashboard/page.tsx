@@ -5,6 +5,8 @@ import { ViewLogsModal } from '@/components/dashboard/ViewLogsModal';
 import { PartScanLogsModal } from '@/components/dashboard/PartScanLogsModal';
 import { ScanModal } from '@/components/dashboard/ScanModal';
 import { ScanAndStoreModal } from '@/components/dashboard/ScanAndStoreModal';
+import { HUPutModal } from '@/components/dashboard/HUPutModal';
+import { HUPickDashboardModal } from '@/components/dashboard/HUPickDashboardModal';
 import { DateRangePicker } from '@/components/shared/DateRangePicker';
 import { Pagination } from '@/components/shared/Pagination';
 import { Loader } from '@/components/shared/Loader';
@@ -12,7 +14,23 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { apiPost, apiDownloadFile, downloadBlob } from '@/lib/api';
 import { DashboardCounts, Put, PaginatedResponse } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { Calendar, Search, FileText, Download, PackagePlus, PackageMinus, Copy, Check, Scan, Package, CheckCircle2 } from 'lucide-react';
+import {
+  Calendar,
+  Search,
+  FileText,
+  Download,
+  PackagePlus,
+  PackageMinus,
+  PackageSearch,
+  Copy,
+  Check,
+  Scan,
+  Package,
+  CheckCircle2,
+  Layers,
+  Archive,
+  Box,
+} from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function DashboardPage() {
@@ -32,6 +50,8 @@ export default function DashboardPage() {
   const [endDate, setEndDate] = useState<Date | null>(null);
 
   // Modals
+  const [isHUPutModalOpen, setIsHUPutModalOpen] = useState(false);
+  const [isHUPickModalOpen, setIsHUPickModalOpen] = useState(false);
   const [isPutModalOpen, setIsPutModalOpen] = useState(false);
   const [isPickModalOpen, setIsPickModalOpen] = useState(false);
   const [viewLogPutId, setViewLogPutId] = useState<number | null>(null);
@@ -202,6 +222,18 @@ export default function DashboardPage() {
           background-color: #fef3c7;
           color: #d97706;
         }
+        .bg-blue-light {
+          background-color: #dbeafe;
+          color: #2563eb;
+        }
+        .bg-slate-light {
+          background-color: #f1f5f9;
+          color: #64748b;
+        }
+        .bg-green-dark-light {
+          background-color: #dcfce7;
+          color: #15803d;
+        }
         .map-card {
           background-image: url('/assets/images/dashboard-matched-map.jpg');
           background-size: contain;
@@ -334,6 +366,51 @@ export default function DashboardPage() {
           cursor: pointer;
           font-weight: 600;
         }
+        .hu-section-title {
+          font-size: 15px;
+          font-weight: 700;
+          color: #0f172a;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding-bottom: 10px;
+          border-bottom: 1.5px solid #e2e8f0;
+          margin-bottom: 0;
+        }
+        .hu-stat-card {
+          background: #ffffff;
+          border-radius: 8px;
+          border: 1.5px solid #d0d5dd;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 3px 8px rgba(0, 0, 0, 0.08);
+          padding: 14px 16px;
+          min-height: 90px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .hu-stat-card:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .hu-stat-label {
+          font-size: 12px;
+          font-weight: 600;
+          color: #64748b;
+          text-transform: uppercase;
+          letter-spacing: 0.4px;
+        }
+        .hu-stat-sub {
+          font-size: 11px;
+          color: #94a3b8;
+          margin-top: 1px;
+        }
+        .hu-stat-value {
+          font-size: 26px;
+          font-weight: 800;
+          line-height: 1;
+          margin-top: 8px;
+        }
       `}</style>
 
       {/* Top Action Header */}
@@ -355,12 +432,13 @@ export default function DashboardPage() {
           <button
             type="button"
             className="scan-action-btn scan-btn-put"
-            onClick={() => setIsPutModalOpen(true)}
+            onClick={() => setIsHUPutModalOpen(true)}
+            title="Handling Unit PUT: Select floor bin to scan parts or send to Kardex"
           >
             <div className="scan-icon-pill put-pill">
               <PackagePlus size={16} />
             </div>
-            <span className="scan-btn-title">Scan Part Number</span>
+            <span className="scan-btn-title">Handling Unit PUT</span>
             <span className="scan-type-badge put-badge">PUT</span>
           </button>
 
@@ -368,11 +446,12 @@ export default function DashboardPage() {
             type="button"
             className="scan-action-btn scan-btn-pick"
             onClick={() => setIsPickModalOpen(true)}
+            title="Scan & Pick: Verify serials and generate Kardex pick order"
           >
             <div className="scan-icon-pill pick-pill">
               <PackageMinus size={16} />
             </div>
-            <span className="scan-btn-title">Scan Model Number</span>
+            <span className="scan-btn-title">Scan & Pick</span>
             <span className="scan-type-badge pick-badge">PICK</span>
           </button>
         </div>
@@ -478,7 +557,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Bottom Stat Row - Identical structure to Picked Parts card */}
+            {/* Bottom Stat Row */}
             <div className="row bottom-stat pt-2">
               <div className="col-6 border-r text-center">
                 <h4 className="text-dark mb-0" style={{ fontSize: '13px', fontWeight: 600 }}>
@@ -539,6 +618,91 @@ export default function DashboardPage() {
                 <h3 className="text-success fw-bold mb-0">
                   {countsLoading ? '...' : counts?.availablePartsCount || 0}
                 </h3>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          HANDLING UNIT OVERVIEW SECTION
+      ═══════════════════════════════════════════════════════════════════ */}
+      <div className="card table-card mb-4">
+        <div className="hu-section-title mb-3">
+          <Layers size={18} />
+          Handling Unit Overview
+        </div>
+
+        <div className="row g-3">
+          {/* Total Bins */}
+          <div className="col-6 col-md-4 col-lg-2">
+            <div className="hu-stat-card">
+              <div>
+                <div className="hu-stat-label">Total Bins</div>
+              </div>
+              <div className="hu-stat-value" style={{ color: '#0f172a' }}>
+                {countsLoading ? '—' : counts?.totalHUs ?? 0}
+              </div>
+            </div>
+          </div>
+
+          {/* In Kardex */}
+          <div className="col-6 col-md-4 col-lg-2">
+            <div className="hu-stat-card">
+              <div>
+                <div className="hu-stat-label">In Kardex</div>
+              </div>
+              <div className="hu-stat-value" style={{ color: '#2563eb' }}>
+                {countsLoading ? '—' : counts?.inKardexHUs ?? 0}
+              </div>
+            </div>
+          </div>
+
+          {/* Draft */}
+          <div className="col-6 col-md-4 col-lg-2">
+            <div className="hu-stat-card">
+              <div>
+                <div className="hu-stat-label">Draft</div>
+              </div>
+              <div className="hu-stat-value" style={{ color: '#64748b' }}>
+                {countsLoading ? '—' : counts?.draftHUs ?? 0}
+              </div>
+            </div>
+          </div>
+
+          {/* Empty in Kardex */}
+          <div className="col-6 col-md-4 col-lg-2">
+            <div className="hu-stat-card">
+              <div>
+                <div className="hu-stat-label">Empty</div>
+                <div className="hu-stat-sub">Ready for Reuse</div>
+              </div>
+              <div className="hu-stat-value" style={{ color: '#16a34a' }}>
+                {countsLoading ? '—' : counts?.emptyHUs ?? 0}
+              </div>
+            </div>
+          </div>
+
+          {/* Partially Filled */}
+          <div className="col-6 col-md-4 col-lg-2">
+            <div className="hu-stat-card">
+              <div>
+                <div className="hu-stat-label">Partially Filled</div>
+              </div>
+              <div className="hu-stat-value" style={{ color: '#d97706' }}>
+                {countsLoading ? '—' : counts?.partialHUs ?? 0}
+              </div>
+            </div>
+          </div>
+
+          {/* Full in Kardex */}
+          <div className="col-6 col-md-4 col-lg-2">
+            <div className="hu-stat-card">
+              <div>
+                <div className="hu-stat-label">Full</div>
+              </div>
+              <div className="hu-stat-value" style={{ color: '#059669' }}>
+                {countsLoading ? '—' : counts?.fullHUs ?? 0}
               </div>
             </div>
           </div>
@@ -725,6 +889,24 @@ export default function DashboardPage() {
       </div>
 
       {/* Modals */}
+      <HUPutModal
+        isOpen={isHUPutModalOpen}
+        onClose={() => setIsHUPutModalOpen(false)}
+        onSuccess={() => {
+          fetchCounts();
+          fetchPuts(1);
+        }}
+      />
+
+      <HUPickDashboardModal
+        isOpen={isHUPickModalOpen}
+        onClose={() => setIsHUPickModalOpen(false)}
+        onSuccess={() => {
+          fetchCounts();
+          fetchPuts(1);
+        }}
+      />
+
       <ScanModal
         isOpen={isPutModalOpen}
         onClose={() => setIsPutModalOpen(false)}

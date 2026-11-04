@@ -6,6 +6,9 @@ const Sequelize = require('sequelize');
 const basename = path.basename(__filename);
 const db = {};
 
+// Ensure env vars are loaded even when this module is required before dotenv.config() runs in index.js
+require('dotenv').config({ path: require('path').join(__dirname, '..', 'config', 'config.env') });
+
 const sequelize = new Sequelize(process.env.DB_DATABASE, process.env.DB_USERNAME, process.env.DB_PASSWORD, {
     dialect: process.env.DB_DIALECT,
     host: process.env.DB_HOST,
@@ -55,6 +58,19 @@ db.put.belongsTo(db.files, { as: 'put_text_file', foreignKey: 'text_file_id' });
 
 db.files.hasMany(db.put, { as: 'put_po_file', foreignKey: 'po_file_id' });
 db.put.belongsTo(db.files, { as: 'put_po_file', foreignKey: 'po_file_id' });
+
+// NEW: HU/Compartment associations
+db.bin_type.hasMany(db.handling_unit, { foreignKey: 'bin_type_id' });
+db.handling_unit.belongsTo(db.bin_type, { foreignKey: 'bin_type_id' });
+
+db.handling_unit.hasMany(db.compartment, { foreignKey: 'handling_unit_id' });
+db.compartment.belongsTo(db.handling_unit, { foreignKey: 'handling_unit_id' });
+
+db.compartment.hasOne(db.put, { foreignKey: 'compartment_id' });
+db.put.belongsTo(db.compartment, { foreignKey: 'compartment_id' });
+
+db.handling_unit.hasMany(db.put, { foreignKey: 'handling_unit_id' });
+db.put.belongsTo(db.handling_unit, { foreignKey: 'handling_unit_id' });
 
 //users
 //db.master_customer_group.belongsTo(db.config_matrix);
