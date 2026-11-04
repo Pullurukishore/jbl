@@ -208,6 +208,17 @@ exports.createPick = asyncHandler(async (req, res) => {
             }
         }
 
+        // Signal FILE_GENERATED in-progress to frontend immediately
+        res.write("data: " + JSON.stringify({
+            entity_number: modelNumber,
+            activity: 'FILE_GENERATED',
+            status: 'IN_PROGRESS',
+            message: 'Generating pick order text file...',
+            completed: false,
+            process_id
+        }) + "\n\n");
+        if (typeof res.flush === 'function') res.flush();
+
         const genFileName = `kardex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.txt`;
         const filePath = path.join(process.env.Pick_Text_File_Path, genFileName);
 
@@ -216,8 +227,13 @@ exports.createPick = asyncHandler(async (req, res) => {
             fs.mkdirSync(process.env.Pick_Text_File_Path, { recursive: true });
         }
 
-        for (const putEntry of updatedEntries) {
-            await putEntry.update({ pick_status: 'PICKED', process_status: pickProcessStep });
+        // Bulk update all picked entries in a single fast query
+        if (updatedEntries.length > 0) {
+            const entryIds = updatedEntries.map(e => e.id);
+            await db.put.update(
+                { pick_status: 'PICKED', process_status: pickProcessStep },
+                { where: { id: entryIds } }
+            );
         }
 
         const lastPick = await db.pick.findOne({ order: [['id', 'DESC']] });

@@ -541,6 +541,10 @@ exports.createPut = asyncHandler(async (req, res) => {
             savedCsvFile = await db.files.findOne({ where: { name: latestFile.name } });
 
             if (!savedCsvFile) {
+                const poUploadDir = path.dirname(poUploadPath);
+                if (!fs.existsSync(poUploadDir)) {
+                    fs.mkdirSync(poUploadDir, { recursive: true });
+                }
                 if (path.resolve(latestFile.path) !== path.resolve(poUploadPath)) {
                     fs.copyFileSync(latestFile.path, poUploadPath);
                 }
