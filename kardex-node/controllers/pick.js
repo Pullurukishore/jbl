@@ -219,7 +219,13 @@ exports.createPick = asyncHandler(async (req, res) => {
         }) + "\n\n");
         if (typeof res.flush === 'function') res.flush();
 
-        const genFileName = `kardex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.txt`;
+        const existingPickCount = await db.files.count({
+            where: {
+                name: { [Op.like]: `PICK_${modelNumber}_%` }
+            }
+        });
+        const pickSeq = String(existingPickCount + 1).padStart(2, '0');
+        const genFileName = `PICK_${modelNumber}_${pickSeq}_${Date.now()}.txt`;
         const filePath = path.join(process.env.Pick_Text_File_Path, genFileName);
 
         // Ensure directories exist
@@ -263,12 +269,11 @@ exports.createPick = asyncHandler(async (req, res) => {
             }
         }
 
-        const lastPick = await db.pick.findOne({ order: [['id', 'DESC']] });
-        const nextId = (lastPick?.id || 0) + 1;
-
-        const content = updatedEntries.map((pt, i) => (
-            `Pick_Order${nextId + i}|${pt?.serial_number}|${pt?.model_number}|1`
-        )).join('\r\n');
+        // Build Kardex Pick Order content: <MODEL>-PICK-<01>|serial|model|1
+        const pickOrderNumber = `${modelNumber}-PICK-${pickSeq}`;
+        const content = updatedEntries.map((pt) => {
+            return `${pickOrderNumber}|${pt?.serial_number}|${pt?.model_number}|1`;
+        }).join('\r\n');
 
         fs.writeFileSync(filePath, content, 'ascii');
         const uploadDir = path.join('uploads', 'files', 'pick');
@@ -495,7 +500,11 @@ exports.getUndownloadedPicks = asyncHandler(async (req, res) => {
             return res.status(404).json({ message: 'No files found to download.' });
         }
 
-        const content = `${puts.map((pt) => (`Pick_Order${pt.pick_id}|${pt?.serial_number}|${pt?.model_number}|1`))?.join('\r\n')}`;
+        const content = puts.map((pt) => {
+            const m = pt?.model_number || 'MODEL';
+            const s = String(pt.pick_id || puts[0]?.pick_id || 1).padStart(2, '0');
+            return `${m}-PICK-${s}|${pt?.serial_number}|${m}|1`;
+        }).join('\r\n');
 
         res.setHeader('Content-Disposition', 'attachment; filename="orders.txt"');
         res.setHeader('Content-Type', 'text/plain');

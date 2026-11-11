@@ -9,7 +9,8 @@ import {
   Users,
   Power,
   Package,
-  PackageSearch,
+  PackagePlus,
+  Boxes,
 } from 'lucide-react';
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
@@ -201,17 +202,17 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             </Link>
 
             <Link
-              href="/app/bins"
-              className={`dock-nav-link ${pathname.startsWith('/app/bins') ? 'active' : ''}`}
+              href="/app/hu-put"
+              className={`dock-nav-link ${pathname.startsWith('/app/hu-put') ? 'active' : ''}`}
             >
-              <Package size={15} /> Bins
+              <PackagePlus size={15} /> HU Put
             </Link>
 
             <Link
-              href="/app/hu-pick"
-              className={`dock-nav-link ${pathname === '/app/hu-pick' ? 'active' : ''}`}
+              href="/app/bins"
+              className={`dock-nav-link ${pathname === '/app/bins' ? 'active' : ''}`}
             >
-              <PackageSearch size={15} /> HU Pick
+              <Boxes size={15} /> Bins
             </Link>
 
             {isAdmin && (

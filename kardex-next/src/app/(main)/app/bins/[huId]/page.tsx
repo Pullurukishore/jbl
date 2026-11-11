@@ -11,7 +11,6 @@ import { CompartmentGrid } from '@/components/bins/CompartmentGrid';
 import { ScanModal } from '@/components/dashboard/ScanModal';
 import { ScanPickModal } from '@/components/bins/ScanPickModal';
 import { SendToKardexModal } from '@/components/bins/SendToKardexModal';
-import { HUPickModal } from '@/components/bins/HUPickModal';
 import { Modal } from '@/components/shared/Modal';
 import { Loader } from '@/components/shared/Loader';
 import {
@@ -20,18 +19,13 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Package,
-  Info,
   RefreshCw,
   Copy,
   Check,
   Layers,
-  Inbox,
-  Boxes,
   Barcode,
   Search,
   PackagePlus,
-  PackageSearch,
   PackageMinus,
 } from 'lucide-react';
 
@@ -55,19 +49,18 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
   const [filterMode, setFilterMode] = useState<'ALL' | 'EMPTY' | 'OCCUPIED'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Modals
+  // Modals & Side-by-Side Panel State
   const [selectedCompartment, setSelectedCompartment] = useState<number | null>(null);
-  const [isScanModalOpen, setIsScanModalOpen] = useState(false);
+  const [isScanModalOpen, setIsScanModalOpen] = useState(true);
+  const [userDismissedScan, setUserDismissedScan] = useState(false);
   const [isScanPickModalOpen, setIsScanPickModalOpen] = useState(false);
   const [selectedPickCompartment, setSelectedPickCompartment] = useState<number | null>(null);
   const [isSendToKardexOpen, setIsSendToKardexOpen] = useState(false);
-  const [isHUPickOpen, setIsHUPickOpen] = useState(false);
-  const [isPickAllConfirmOpen, setIsPickAllConfirmOpen] = useState(false);
-  const [pickingAll, setPickingAll] = useState(false);
   const [pickCompartmentTarget, setPickCompartmentTarget] = useState<Compartment | null>(null);
   const [pickingSlot, setPickingSlot] = useState(false);
   const [sendingPick, setSendingPick] = useState(false);
   const [pickSendSuccess, setPickSendSuccess] = useState<string | null>(null);
+  const [kardexPutSuccess, setKardexPutSuccess] = useState<string | null>(null);
 
   const handleSendPickToKardex = async () => {
     if (!hu) return;
@@ -88,32 +81,18 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
     }
   };
 
-  const fetchLayout = useCallback(async () => {
+  const fetchLayout = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
       const res = await apiGet<HandlingUnit>(`/hu/${encodeURIComponent(huId)}/layout`);
       setHu(res);
     } catch (err: any) {
       setError(err.message || 'Failed to load bin details');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [huId]);
-
-  const handlePickAll = async () => {
-    if (!hu) return;
-    try {
-      setPickingAll(true);
-      await apiPost(`/hu/${encodeURIComponent(hu.hu_id)}/pick-all`);
-      setIsPickAllConfirmOpen(false);
-      fetchLayout();
-    } catch (err: any) {
-      alert(err.message || 'Failed to pick all parts');
-    } finally {
-      setPickingAll(false);
-    }
-  };
 
   const handlePickCompartment = async () => {
     if (!hu || !pickCompartmentTarget) return;
@@ -133,6 +112,25 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
     fetchLayout();
   }, [fetchLayout]);
 
+  // Strictly sort compartments by compartment_number in ascending order (1, 2, 3... 30)
+  const compartments = useMemo(() => {
+    if (!hu?.compartments) return [];
+    return [...hu.compartments].sort((a, b) => a.compartment_number - b.compartment_number);
+  }, [hu]);
+
+  // Auto-open scan panel and target the lowest numbered empty slot (#1, #2...) by default on page load
+  useEffect(() => {
+    if (hu && hu.storage_status !== 'IN_KARDEX' && !userDismissedScan) {
+      if (selectedCompartment === null) {
+        const firstEmpty = compartments.find((c) => c.status === 'EMPTY');
+        if (firstEmpty) {
+          setSelectedCompartment(firstEmpty.compartment_number);
+          setIsScanModalOpen(true);
+        }
+      }
+    }
+  }, [hu, compartments, selectedCompartment, userDismissedScan]);
+
   const handleCopyId = () => {
     if (!hu) return;
     navigator.clipboard.writeText(hu.hu_id);
@@ -143,13 +141,14 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
   const handleSelectEmpty = (compartmentNumber: number) => {
     if (!hu) return;
     if (hu.storage_status === 'IN_KARDEX') return; // locked while inside Kardex
+    setUserDismissedScan(false);
     setSelectedCompartment(compartmentNumber);
     setIsScanModalOpen(true);
   };
 
   const handleQuickNextEmpty = () => {
     if (!hu || hu.storage_status === 'IN_KARDEX') return;
-    const firstEmpty = (hu.compartments || []).find((c) => c.status === 'EMPTY');
+    const firstEmpty = compartments.find((c) => c.status === 'EMPTY');
     if (firstEmpty) {
       handleSelectEmpty(firstEmpty.compartment_number);
     }
@@ -159,7 +158,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
     // 1. Immediately update UI state optimistically (0ms update - no reload needed)
     const currentTarget =
       selectedCompartment ||
-      (hu?.compartments || []).find((c) => c.status === 'EMPTY')?.compartment_number;
+      compartments.find((c) => c.status === 'EMPTY')?.compartment_number;
 
     if (currentTarget) {
       setHu((prev) => {
@@ -184,8 +183,8 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         };
       });
 
-      // Auto-advance selectedCompartment to next empty slot for continuous scanning
-      const nextEmpty = (hu?.compartments || []).find(
+      // Auto-advance selectedCompartment to the next lowest empty slot for continuous scanning
+      const nextEmpty = compartments.find(
         (c) => c.status === 'EMPTY' && c.compartment_number !== currentTarget
       );
       if (nextEmpty) {
@@ -216,8 +215,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
     }
   };
 
-  // Filtered compartments
-  const compartments = useMemo(() => hu?.compartments || [], [hu]);
+  // Filtered compartments for display
   const filteredCompartments = useMemo(() => {
     return compartments.filter((c) => {
       if (filterMode === 'EMPTY' && c.status !== 'EMPTY') return false;
@@ -267,8 +265,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
   const fillPct = totalCount > 0 ? Math.round((occupiedCount / totalCount) * 100) : 0;
   const isLocked = hu.storage_status === 'IN_KARDEX';
   const isFloorBin = hu.storage_status === 'DRAFT' || hu.storage_status === 'OUTSIDE_KARDEX';
-  const canSendToKardex = isFloorBin;
-  const canConfirmKardex = hu.storage_status === 'IN_KARDEX' && hu.transaction_status === 'PENDING';
+  const canSendToKardex = occupiedCount > 0;
 
   return (
     <div className="hu-detail-fullscreen">
@@ -277,310 +274,158 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
           width: 100%;
           display: flex;
           flex-direction: column;
-          gap: 1.5rem;
+          gap: 0.6rem;
+          min-height: calc(100vh - 85px);
         }
 
-        .back-nav-bar {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: -0.25rem;
-        }
-
-        .header-hero {
+        /* Unified Sleek Top Command Bar */
+        .top-command-bar {
           background: #ffffff;
           border: 1px solid #e2e8f0;
-          border-radius: 14px;
-          padding: 1.5rem 1.75rem;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.02);
+          border-radius: 12px;
+          padding: 8px 16px;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          flex-wrap: wrap;
-          gap: 1.25rem;
-        }
-
-        .hu-title-group {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-        }
-
-        .hu-icon-box {
-          width: 54px;
-          height: 54px;
-          border-radius: 14px;
-          background: linear-gradient(135deg, #1e40af 0%, #2563eb 50%, #3b82f6 100%);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #ffffff;
-          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+          gap: 12px;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
           flex-shrink: 0;
+          flex-wrap: wrap;
         }
 
-        .hu-id-text {
-          font-size: 32px;
-          font-weight: 800;
-          color: #0f172a;
-          font-family: monospace;
-          letter-spacing: 1.5px;
-          line-height: 1.1;
+        .cmd-left {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: nowrap;
         }
 
-        .copy-pill {
+        .btn-nav-chip {
           background: #f1f5f9;
           border: 1px solid #e2e8f0;
-          border-radius: 6px;
-          padding: 2px 7px;
-          color: #64748b;
-          cursor: pointer;
-          font-size: 11px;
+          border-radius: 7px;
+          padding: 4px 9px;
+          font-size: 12px;
+          font-weight: 600;
+          color: #475569;
           display: inline-flex;
           align-items: center;
-          gap: 4px;
+          gap: 5px;
+          text-decoration: none;
           transition: all 0.15s ease;
         }
 
-        .copy-pill:hover {
+        .btn-nav-chip:hover {
           background: #e2e8f0;
           color: #0f172a;
         }
 
-        .tags-row {
-          display: flex;
+        .hu-id-box {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          font-size: 15px;
+          font-weight: 800;
+          color: #0f172a;
+          letter-spacing: 0.5px;
+          display: inline-flex;
           align-items: center;
-          gap: 8px;
-          flex-wrap: wrap;
-          margin-top: 8px;
+          gap: 6px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          padding: 3px 8px;
+          border-radius: 7px;
         }
 
-        .info-pill {
+        .copy-btn-mini {
+          border: none;
+          background: transparent;
+          color: #94a3b8;
+          padding: 2px;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+        }
+
+        .copy-btn-mini:hover {
+          color: #0f172a;
+        }
+
+        .meta-chip {
           background: #f8fafc;
           border: 1px solid #e2e8f0;
           border-radius: 6px;
-          padding: 3px 10px;
-          font-size: 12px;
-          color: #334155;
+          padding: 3px 8px;
+          font-size: 11.5px;
           font-weight: 600;
+          color: #334155;
           display: inline-flex;
           align-items: center;
           gap: 5px;
+          white-space: nowrap;
         }
 
-        .actions-cluster {
+        .cmd-center {
           display: flex;
           align-items: center;
           gap: 10px;
-          flex-wrap: wrap;
+          flex: 1;
+          max-width: 340px;
+          min-width: 180px;
         }
 
-        .btn-action-primary {
-          background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-          color: #ffffff;
-          border: none;
-          padding: 10px 20px;
-          border-radius: 10px;
-          font-size: 13.5px;
-          font-weight: 600;
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-          box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3);
-        }
-
-        .btn-action-primary:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
-        }
-
-        .btn-action-primary:disabled {
-          opacity: 0.55;
-          cursor: not-allowed;
-          transform: none;
-        }
-
-        .btn-scan-put {
-          background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-          color: #ffffff;
-          border: none;
-          padding: 10px 20px;
-          border-radius: 10px;
-          font-size: 13.5px;
-          font-weight: 600;
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-          box-shadow: 0 4px 10px rgba(2, 132, 199, 0.3);
-        }
-
-        .btn-scan-put:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 16px rgba(2, 132, 199, 0.4);
-        }
-
-        .btn-scan-put:disabled {
-          opacity: 0.55;
-          cursor: not-allowed;
-          transform: none;
-        }
-
-        .btn-action-success {
-          background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
-          color: #ffffff;
-          border: none;
-          padding: 10px 20px;
-          border-radius: 10px;
-          font-size: 13.5px;
-          font-weight: 600;
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-          box-shadow: 0 4px 10px rgba(22, 163, 74, 0.3);
-        }
-
-        .btn-action-success:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 16px rgba(22, 163, 74, 0.4);
-        }
-
-        .btn-action-success:disabled {
-          opacity: 0.55;
-          cursor: not-allowed;
-          transform: none;
-        }
-
-        .btn-icon-reload {
-          background: #ffffff;
-          border: 1px solid #e2e8f0;
-          color: #475569;
-          width: 42px;
-          height: 42px;
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: all 0.15s ease;
-        }
-
-        .btn-icon-reload:hover {
-          background: #f8fafc;
-          color: #0f172a;
-          border-color: #cbd5e1;
-        }
-
-        .metrics-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-          gap: 1rem;
+        .progress-compact-block {
           width: 100%;
-        }
-
-        .stat-card {
-          background: #ffffff;
-          border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          padding: 1.25rem 1.5rem;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
-          transition: transform 0.15s ease, box-shadow 0.15s ease;
-        }
-
-        .stat-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-        }
-
-        .stat-meta {
           display: flex;
           flex-direction: column;
+          gap: 3px;
         }
 
-        .stat-label {
-          font-size: 12px;
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          color: #64748b;
-          margin-bottom: 4px;
-        }
-
-        .stat-number {
-          font-size: 26px;
-          font-weight: 800;
-          color: #0f172a;
-          line-height: 1.1;
-        }
-
-        .stat-sub {
-          font-size: 12px;
-          color: #94a3b8;
-          margin-top: 4px;
-        }
-
-        .stat-icon-wrapper {
-          width: 44px;
-          height: 44px;
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-
-        .progress-banner-card {
-          background: #ffffff;
-          border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          padding: 1.25rem 1.5rem;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
-          width: 100%;
-        }
-
-        .progress-header-row {
+        .progress-compact-labels {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 0.65rem;
-        }
-
-        .progress-title-text {
-          font-size: 13.5px;
+          font-size: 11px;
           font-weight: 700;
-          color: #1e293b;
+          color: #334155;
         }
 
-        .progress-bar-track {
-          height: 12px;
+        .progress-compact-track {
+          height: 7px;
           background: #f1f5f9;
           border-radius: 9999px;
           overflow: hidden;
           position: relative;
         }
 
-        .progress-bar-fill {
+        .progress-compact-fill {
           height: 100%;
           border-radius: 9999px;
           background: linear-gradient(90deg, #2563eb 0%, #3b82f6 50%, #10b981 100%);
-          transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          transition: width 0.3s ease;
+        }
+
+        .cmd-right {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          flex-wrap: nowrap;
+        }
+
+        /* Main Workspace Split Row */
+        .workspace-split-row {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          width: 100%;
         }
 
         .layout-card {
           background: #ffffff;
           border: 1px solid #e2e8f0;
-          border-radius: 14px;
-          padding: 1.5rem;
+          border-radius: 12px;
+          padding: 10px 12px;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-          width: 100%;
+          display: flex;
+          flex-direction: column;
         }
 
         .layout-toolbar {
@@ -588,21 +433,21 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
           align-items: center;
           justify-content: space-between;
           flex-wrap: wrap;
-          gap: 1rem;
-          margin-bottom: 1.25rem;
-          padding-bottom: 1rem;
+          gap: 8px;
+          margin-bottom: 8px;
+          padding-bottom: 6px;
           border-bottom: 1px solid #f1f5f9;
         }
 
         .toolbar-left {
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 10px;
           flex-wrap: wrap;
         }
 
         .toolbar-title {
-          font-size: 16px;
+          font-size: 14px;
           font-weight: 800;
           color: #0f172a;
           margin: 0;
@@ -611,8 +456,8 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         .legend-group {
           display: flex;
           align-items: center;
-          gap: 14px;
-          font-size: 12px;
+          gap: 10px;
+          font-size: 11px;
           color: #64748b;
           font-weight: 500;
           flex-wrap: wrap;
@@ -621,32 +466,32 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         .legend-item {
           display: inline-flex;
           align-items: center;
-          gap: 6px;
+          gap: 4px;
         }
 
         .legend-indicator {
-          width: 10px;
-          height: 10px;
-          border-radius: 3px;
+          width: 8px;
+          height: 8px;
+          border-radius: 2px;
         }
 
         .toolbar-right {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
           flex-wrap: wrap;
         }
 
         .search-box-wrap {
           position: relative;
-          min-width: 200px;
+          min-width: 150px;
         }
 
         .search-input {
           width: 100%;
-          padding: 6px 12px 6px 32px;
-          font-size: 12.5px;
-          border-radius: 8px;
+          padding: 4px 10px 4px 28px;
+          font-size: 11.5px;
+          border-radius: 6px;
           border: 1px solid #e2e8f0;
           background: #f8fafc;
           outline: none;
@@ -656,12 +501,12 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         .search-input:focus {
           background: #ffffff;
           border-color: #3b82f6;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
         }
 
         .search-icon-pos {
           position: absolute;
-          left: 10px;
+          left: 8px;
           top: 50%;
           transform: translateY(-50%);
           color: #94a3b8;
@@ -671,18 +516,18 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         .filter-pill-container {
           display: inline-flex;
           background: #f1f5f9;
-          border-radius: 8px;
-          padding: 3px;
-          gap: 3px;
+          border-radius: 6px;
+          padding: 2px;
+          gap: 2px;
         }
 
         .filter-pill-btn {
           border: none;
           background: transparent;
-          padding: 5px 12px;
-          font-size: 12px;
+          padding: 3px 8px;
+          font-size: 11px;
           font-weight: 600;
-          border-radius: 6px;
+          border-radius: 5px;
           color: #64748b;
           cursor: pointer;
           transition: all 0.15s ease;
@@ -691,20 +536,20 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         .filter-pill-btn.active {
           background: #ffffff;
           color: #0f172a;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
         }
 
         .btn-quick-scan {
           background: #eff6ff;
           border: 1px solid #bfdbfe;
           color: #1d4ed8;
-          padding: 6px 14px;
-          border-radius: 8px;
-          font-size: 12.5px;
+          padding: 4px 10px;
+          border-radius: 6px;
+          font-size: 11.5px;
           font-weight: 600;
           display: inline-flex;
           align-items: center;
-          gap: 6px;
+          gap: 5px;
           cursor: pointer;
           transition: all 0.15s ease;
         }
@@ -722,27 +567,27 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         .alert-bar-success {
           background: #f0fdf4;
           border: 1px solid #bbf7d0;
-          border-radius: 10px;
-          padding: 12px 18px;
+          border-radius: 8px;
+          padding: 6px 12px;
           color: #15803d;
-          font-size: 13.5px;
+          font-size: 12.5px;
           font-weight: 500;
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
         }
 
         .alert-bar-error {
           background: #fef2f2;
           border: 1px solid #fecaca;
-          border-radius: 10px;
-          padding: 12px 18px;
+          border-radius: 8px;
+          padding: 6px 12px;
           color: #b91c1c;
-          font-size: 13.5px;
+          font-size: 12.5px;
           font-weight: 500;
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
         }
 
         @keyframes spin {
@@ -753,190 +598,143 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         }
       `}</style>
 
-      {/* Top Breadcrumb & Quick Nav */}
-      <div className="back-nav-bar d-flex align-items-center justify-content-between mb-3">
-        <Link href="/app/bins" className="btn-back-nav" title="Return to Handling Units List">
-          <ArrowLeft size={15} className="back-nav-arrow" />
-          <span>Back to Handling Units List</span>
-        </Link>
-        <div className="d-flex align-items-center gap-2">
-          <span className="text-muted" style={{ fontSize: '12px' }}>
-            Last Synced: {new Date().toLocaleTimeString()}
+      {/* Sleek All-in-One Command Bar */}
+      <div className="top-command-bar">
+        {/* Left: Navigation, HU ID, Spec Badges */}
+        <div className="cmd-left">
+          <Link href="/app/hu-put" className="btn-nav-chip" title="Back to HU Put">
+            <ArrowLeft size={13} />
+            <span>HU Put</span>
+          </Link>
+
+          <div className="hu-id-box">
+            <span>{hu.hu_id}</span>
+            <button className="copy-btn-mini" onClick={handleCopyId} title="Copy Handling Unit ID">
+              {copiedId ? <Check size={11} className="text-success" /> : <Copy size={11} />}
+            </button>
+          </div>
+
+          <span className="meta-chip">
+            <Barcode size={12} className="text-secondary" />
+            <strong>{hu.bin_type?.bin_name || 'CON_BINA'}</strong>
           </span>
-          <button
-            className="btn-icon-reload"
-            onClick={() => fetchLayout()}
-            title="Refresh Bin Layout"
-          >
-            <RefreshCw size={15} />
-          </button>
-        </div>
-      </div>
 
-      {/* Hero Header Card */}
-      <div className="header-hero">
-        <div className="hu-title-group">
-          <div className="hu-icon-box">
-            <Package size={26} />
-          </div>
-          <div>
-            <div className="d-flex align-items-center gap-2">
-              <span className="hu-id-text">{hu.hu_id}</span>
-              <button
-                className="copy-pill"
-                onClick={handleCopyId}
-                title="Copy Handling Unit ID"
-              >
-                {copiedId ? <Check size={12} className="text-success" /> : <Copy size={12} />}
-                {copiedId ? 'Copied' : 'Copy'}
-              </button>
+          <span className="meta-chip">
+            <Layers size={12} className="text-primary" />
+            <span>{hu.bin_type?.name || 'Bin Carrier'}</span>
+          </span>
+
+          <HUStatusBadge status={hu.hu_status} />
+          <StorageStatusBadge status={hu.storage_status} />
+        </div>
+
+        {/* Center: Inline Allocation Progress Meter */}
+        <div className="cmd-center">
+          <div className="progress-compact-block">
+            <div className="progress-compact-labels">
+              <span>
+                <strong>{occupiedCount}</strong> / {totalCount} Loaded ({fillPct}%)
+              </span>
+              <span className="text-muted">{emptyCount} empty</span>
             </div>
-            <div className="tags-row">
-              <span className="info-pill">
-                <Layers size={13} className="text-primary" />
-                {hu.bin_type?.name || `Bin Type #${hu.bin_type_id}`}
-              </span>
-              <span className="info-pill">
-                <Barcode size={13} className="text-secondary" />
-                PPS Bin: <strong>{hu.bin_type?.bin_name || 'CON_BINA'}</strong>
-              </span>
-              <HUStatusBadge status={hu.hu_status} />
-              <StorageStatusBadge status={hu.storage_status} />
-              {hu.transaction_status && (
-                <span
-                  className={`badge ${
-                    hu.transaction_status === 'PENDING'
-                      ? 'bg-warning text-dark'
-                      : hu.transaction_status === 'SUCCESSFUL'
-                      ? 'bg-success'
-                      : 'bg-danger'
-                  }`}
-                  style={{ fontSize: '11.5px', padding: '5px 9px' }}
-                >
-                  Transaction: {hu.transaction_status}
-                </span>
-              )}
+            <div className="progress-compact-track">
+              <div className="progress-compact-fill" style={{ width: `${fillPct}%` }} />
             </div>
           </div>
         </div>
 
-        {/* Action Buttons Cluster */}
-        <div className="actions-cluster">
-          {!isLocked && emptyCount > 0 && (
+        {/* Right: Actions Cluster */}
+        <div className="cmd-right">
+          {!isLocked && emptyCount > 0 && !isScanModalOpen && (
             <button
-              className="btn-scan-put"
+              className="btn btn-sm btn-primary fw-bold d-flex align-items-center gap-1"
               onClick={() => {
+                setUserDismissedScan(false);
                 const nextEmpty = compartments.find((c) => c.status === 'EMPTY');
                 setSelectedCompartment(nextEmpty ? nextEmpty.compartment_number : null);
                 setIsScanModalOpen(true);
               }}
+              style={{ fontSize: '11.5px', padding: '4px 10px', borderRadius: '7px' }}
             >
-              <PackagePlus size={16} /> PUT Process — Scan Part
+              <PackagePlus size={13} /> Scan Part
             </button>
           )}
 
-          {!isLocked && occupiedCount > 0 && (
-            <>
-              <button
-                className="btn btn-warning text-dark d-flex align-items-center gap-2 fw-bold"
-                onClick={() => {
-                  setSelectedPickCompartment(null);
-                  setIsScanPickModalOpen(true);
-                }}
-                style={{ padding: '9px 18px', borderRadius: '10px', boxShadow: '0 2px 6px rgba(245, 158, 11, 0.25)' }}
-                title="Scan and validate parts one-by-one with MES KANBAN-OUT"
-              >
-                <PackageMinus size={16} /> Scan & Pick (One-by-One)
-              </button>
-
-              <button
-                className="btn btn-outline-danger d-flex align-items-center gap-2 fw-semibold"
-                onClick={() => setIsPickAllConfirmOpen(true)}
-                style={{ padding: '9px 16px', borderRadius: '10px' }}
-                title="Pick and unload all occupied compartments in this bin"
-              >
-                <PackageMinus size={16} /> Pick All Parts
-              </button>
-            </>
-          )}
-
-          {hu.storage_status === 'IN_KARDEX' && (
+          {occupiedCount > 0 && (
             <button
-              className="btn btn-warning d-flex align-items-center gap-2 fw-bold text-dark"
-              onClick={() => setIsHUPickOpen(true)}
-              style={{ padding: '9px 18px', borderRadius: '10px', boxShadow: '0 2px 6px rgba(245, 158, 11, 0.25)' }}
+              className="btn btn-sm btn-warning text-dark fw-bold d-flex align-items-center gap-1"
+              onClick={() => {
+                setSelectedPickCompartment(null);
+                setIsScanPickModalOpen(true);
+              }}
+              style={{ fontSize: '11.5px', padding: '4px 10px', borderRadius: '7px' }}
+              title="Scan and pick parts one-by-one"
             >
-              <PackageSearch size={16} /> Retrieve Bin from Kardex (HU PICK)
+              <PackageMinus size={13} /> Pick Part (One-by-One)
             </button>
           )}
 
           {pickedCount > 0 && (
             <button
-              className="btn btn-warning text-dark d-flex align-items-center gap-2 fw-bold"
+              className="btn btn-sm btn-warning text-dark d-flex align-items-center gap-1 fw-bold"
               onClick={handleSendPickToKardex}
               disabled={sendingPick}
-              style={{
-                padding: '9px 18px',
-                borderRadius: '10px',
-                boxShadow: '0 2px 6px rgba(245, 158, 11, 0.25)',
-              }}
-              title="Generate Kardex Pick Order text file for all validated picked parts"
+              style={{ fontSize: '11.5px', padding: '4px 10px', borderRadius: '7px' }}
             >
-              {sendingPick ? (
-                <Loader2 size={16} className="spin-animation" />
-              ) : (
-                <Send size={16} />
-              )}
-              {sendingPick
-                ? 'Sending Pick Order to Kardex...'
-                : `Send Pick Order to Kardex PPS (${pickedCount} Picked)`}
+              {sendingPick ? <Loader2 size={13} className="spin-animation" /> : <Send size={13} />}
+              Send Pick ({pickedCount})
             </button>
           )}
 
           {canSendToKardex && (
             <button
-              className="btn-action-primary"
+              className="btn btn-sm btn-success fw-bold d-flex align-items-center gap-1"
               onClick={() => setIsSendToKardexOpen(true)}
               disabled={occupiedCount === 0}
-              title={
-                occupiedCount === 0
-                  ? 'Load at least one part into bin before sending to Kardex PPS'
-                  : 'Send Bin to Kardex PPS'
-              }
               style={{
+                fontSize: '11.5px',
+                padding: '4px 12px',
+                borderRadius: '7px',
                 opacity: occupiedCount === 0 ? 0.6 : 1,
-                cursor: occupiedCount === 0 ? 'not-allowed' : 'pointer',
               }}
             >
-              <Send size={16} /> Send Bin to Kardex PPS ({occupiedCount} Loaded)
+              <Send size={13} /> Send to Kardex ({occupiedCount})
             </button>
           )}
 
-          {canConfirmKardex && !confirmSuccess && (
-            <button
-              className="btn-action-success"
-              onClick={handleConfirmKardex}
-              disabled={confirming}
-            >
-              {confirming ? (
-                <Loader2 size={16} className="spin-animation" />
-              ) : (
-                <CheckCircle2 size={16} />
-              )}
-              {confirming ? 'Confirming with Kardex...' : 'Confirm Kardex Storage'}
-            </button>
-          )}
+          <button
+            className="btn btn-sm btn-light border text-muted p-1 rounded-circle"
+            onClick={() => fetchLayout()}
+            title="Refresh Bin"
+            style={{ width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <RefreshCw size={12} />
+          </button>
         </div>
       </div>
 
       {/* Confirmation Notifications */}
+      {kardexPutSuccess && (
+        <div className="alert-bar-success">
+          <CheckCircle2 size={16} />
+          <div className="d-flex align-items-center justify-content-between w-100">
+            <span>{kardexPutSuccess}</span>
+            <button
+              className="btn btn-sm btn-link text-success p-0 ms-2 text-decoration-none"
+              onClick={() => setKardexPutSuccess(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
       {pickSendSuccess && (
-        <div className="alert-bar-success mb-3">
-          <CheckCircle2 size={18} />
+        <div className="alert-bar-success">
+          <CheckCircle2 size={16} />
           <div className="d-flex align-items-center justify-content-between w-100">
             <span>{pickSendSuccess}</span>
             <button
-              className="btn btn-sm btn-link text-success p-0 ms-3 text-decoration-none"
+              className="btn btn-sm btn-link text-success p-0 ms-2 text-decoration-none"
               onClick={() => setPickSendSuccess(null)}
             >
               Dismiss
@@ -947,232 +745,146 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
 
       {confirmSuccess && (
         <div className="alert-bar-success">
-          <CheckCircle2 size={20} className="flex-shrink-0" />
+          <CheckCircle2 size={16} className="flex-shrink-0" />
           <div>
-            <strong>Kardex Storage Confirmed!</strong> This Handling Unit is now physically stored in Kardex and marked as <strong>IN_KARDEX</strong>.
+            <strong>Kardex Storage Confirmed!</strong> This Handling Unit is physically stored in Kardex PPS.
           </div>
         </div>
       )}
 
       {confirmError && (
         <div className="alert-bar-error">
-          <AlertCircle size={20} className="flex-shrink-0" />
+          <AlertCircle size={16} className="flex-shrink-0" />
           <div>
             <strong>Confirmation Error:</strong> {confirmError}
           </div>
         </div>
       )}
 
-      {/* 4 Metric Cards Across Full Screen Width */}
-      <div className="metrics-grid">
-        <div className="stat-card">
-          <div className="stat-meta">
-            <span className="stat-label">Total Capacity</span>
-            <span className="stat-number">{totalCount}</span>
-            <span className="stat-sub">Physical compartments</span>
-          </div>
-          <div className="stat-icon-wrapper" style={{ background: '#f1f5f9', color: '#475569' }}>
-            <Layers size={22} />
-          </div>
-        </div>
-
-        {pickedCount > 0 && (
-          <div className="stat-card" style={{ borderColor: '#fef08a' }}>
-            <div className="stat-meta">
-              <span className="stat-label">Picked Parts</span>
-              <span className="stat-number" style={{ color: '#d97706' }}>
-                {pickedCount}
-              </span>
-              <span className="stat-sub">Ready for Kardex PPS</span>
+      {/* Side-by-Side Split Workspace: Bin Layout on Left, Scan & Validation on Right */}
+      <div className="workspace-split-row">
+        {/* Left Side: Compartment Layout */}
+        <div
+          className="layout-card"
+          style={{
+            flex: isScanModalOpen ? '1 1 58%' : '1 1 100%',
+            minWidth: 0,
+          }}
+        >
+          <div className="layout-toolbar">
+            <div className="toolbar-left">
+              <h2 className="toolbar-title">Physical Compartment Layout</h2>
+              <div className="legend-group">
+                <span className="legend-item">
+                  <span className="legend-indicator" style={{ background: '#22c55e' }} />
+                  Occupied ({occupiedCount})
+                </span>
+                <span className="legend-item">
+                  <span className="legend-indicator" style={{ background: '#cbd5e1' }} />
+                  Empty ({emptyCount})
+                </span>
+                <span className="legend-item">
+                  <span className="legend-indicator" style={{ background: '#3b82f6' }} />
+                  Scanning
+                </span>
+              </div>
             </div>
-            <div className="stat-icon-wrapper" style={{ background: '#fef9c3', color: '#d97706' }}>
-              <PackageMinus size={22} />
+
+            <div className="toolbar-right">
+              {/* Quick Next Empty Action */}
+              {!isLocked && emptyCount > 0 && (
+                <button
+                  className="btn-quick-scan"
+                  onClick={handleQuickNextEmpty}
+                  title="Jump directly to scan the next empty slot"
+                >
+                  Next Empty (#{compartments.find((c) => c.status === 'EMPTY')?.compartment_number})
+                </button>
+              )}
+
+              {/* Filter Toggle */}
+              <div className="filter-pill-container">
+                <button
+                  className={`filter-pill-btn ${filterMode === 'ALL' ? 'active' : ''}`}
+                  onClick={() => setFilterMode('ALL')}
+                >
+                  All ({totalCount})
+                </button>
+                <button
+                  className={`filter-pill-btn ${filterMode === 'EMPTY' ? 'active' : ''}`}
+                  onClick={() => setFilterMode('EMPTY')}
+                >
+                  Empty ({emptyCount})
+                </button>
+                <button
+                  className={`filter-pill-btn ${filterMode === 'OCCUPIED' ? 'active' : ''}`}
+                  onClick={() => setFilterMode('OCCUPIED')}
+                >
+                  Occupied ({occupiedCount})
+                </button>
+              </div>
+
+              {/* Search Input for Serial or Cell Number */}
+              <div className="search-box-wrap">
+                <Search size={13} className="search-icon-pos" />
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Search cell or serial..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </div>
           </div>
-        )}
 
-        <div className="stat-card">
-          <div className="stat-meta">
-            <span className="stat-label">Occupied Slots</span>
-            <span className="stat-number" style={{ color: '#16a34a' }}>
-              {occupiedCount}
-            </span>
-            <span className="stat-sub">Adapters loaded</span>
-          </div>
-          <div className="stat-icon-wrapper" style={{ background: '#f0fdf4', color: '#16a34a' }}>
-            <Boxes size={22} />
-          </div>
+          {/* Compartment Grid */}
+          {filteredCompartments.length === 0 ? (
+            <div className="text-center text-muted py-4" style={{ fontSize: '13px' }}>
+              No compartments match your current filter or search criteria.
+            </div>
+          ) : (
+            <CompartmentGrid
+              compartments={filteredCompartments}
+              onSelectEmpty={isLocked ? undefined : handleSelectEmpty}
+              onSelectOccupied={(comp) => {
+                setSelectedPickCompartment(comp.compartment_number);
+                setIsScanPickModalOpen(true);
+              }}
+              selectedCompartment={isScanModalOpen ? selectedCompartment : null}
+              huId={hu.hu_id}
+              binName={hu.bin_type?.bin_name || 'CON_BINA'}
+              binType={hu.bin_type?.name}
+            />
+          )}
         </div>
 
-        <div className="stat-card">
-          <div className="stat-meta">
-            <span className="stat-label">Available to Scan</span>
-            <span className="stat-number" style={{ color: '#2563eb' }}>
-              {emptyCount}
-            </span>
-            <span className="stat-sub">Remaining empty slots</span>
-          </div>
-          <div className="stat-icon-wrapper" style={{ background: '#eff6ff', color: '#2563eb' }}>
-            <Inbox size={22} />
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-meta">
-            <span className="stat-label">Load Percentage</span>
-            <span className="stat-number" style={{ color: fillPct === 100 ? '#16a34a' : '#0f172a' }}>
-              {fillPct}%
-            </span>
-            <span className="stat-sub">
-              {fillPct === 100 ? 'Bin completely full' : `${emptyCount} slots open`}
-            </span>
-          </div>
+        {/* Right Side: Existing Working PUT Process Scan & Live Validation Panel */}
+        {isScanModalOpen && (
           <div
-            className="stat-icon-wrapper"
+            className="scan-panel-col"
             style={{
-              background: fillPct === 100 ? '#f0fdf4' : '#eff6ff',
-              color: fillPct === 100 ? '#16a34a' : '#2563eb',
+              flex: '0 0 450px',
+              maxWidth: '480px',
+              width: '100%',
+              minWidth: '350px',
             }}
           >
-            <CheckCircle2 size={22} />
-          </div>
-        </div>
-      </div>
-
-      {/* Full Width Progress Tracker Bar */}
-      <div className="progress-banner-card">
-        <div className="progress-header-row">
-          <span className="progress-title-text">
-            Bin Allocation Progress: <strong>{occupiedCount}</strong> of <strong>{totalCount}</strong> compartments filled
-          </span>
-          <span style={{ fontSize: '13px', fontWeight: 800, color: fillPct === 100 ? '#16a34a' : '#2563eb' }}>
-            {fillPct}% Complete
-          </span>
-        </div>
-        <div className="progress-bar-track">
-          <div className="progress-bar-fill" style={{ width: `${fillPct}%` }} />
-        </div>
-      </div>
-
-      {/* Main Compartments Layout Panel (Full Width) */}
-      <div className="layout-card">
-        <div className="layout-toolbar">
-          <div className="toolbar-left">
-            <h2 className="toolbar-title">Physical Compartment Layout</h2>
-            <div className="legend-group">
-              <span className="legend-item">
-                <span className="legend-indicator" style={{ background: '#22c55e' }} />
-                Occupied ({occupiedCount})
-              </span>
-              <span className="legend-item">
-                <span className="legend-indicator" style={{ background: '#cbd5e1' }} />
-                Empty ({emptyCount})
-              </span>
-              <span className="legend-item">
-                <span className="legend-indicator" style={{ background: '#3b82f6' }} />
-                Scanning
-              </span>
-            </div>
-          </div>
-
-          <div className="toolbar-right">
-            {/* Quick Next Empty Action */}
-            {!isLocked && emptyCount > 0 && (
-              <button
-                className="btn-quick-scan"
-                onClick={handleQuickNextEmpty}
-                title="Jump directly to scan the next empty slot"
-              >
-                Scan Next Empty (#{compartments.find((c) => c.status === 'EMPTY')?.compartment_number})
-              </button>
-            )}
-
-            {/* Filter Toggle */}
-            <div className="filter-pill-container">
-              <button
-                className={`filter-pill-btn ${filterMode === 'ALL' ? 'active' : ''}`}
-                onClick={() => setFilterMode('ALL')}
-              >
-                All ({totalCount})
-              </button>
-              <button
-                className={`filter-pill-btn ${filterMode === 'EMPTY' ? 'active' : ''}`}
-                onClick={() => setFilterMode('EMPTY')}
-              >
-                Empty ({emptyCount})
-              </button>
-              <button
-                className={`filter-pill-btn ${filterMode === 'OCCUPIED' ? 'active' : ''}`}
-                onClick={() => setFilterMode('OCCUPIED')}
-              >
-                Occupied ({occupiedCount})
-              </button>
-            </div>
-
-            {/* Search Input for Serial or Cell Number */}
-            <div className="search-box-wrap">
-              <Search size={14} className="search-icon-pos" />
-              <input
-                type="text"
-                className="search-input"
-                placeholder="Search cell or serial..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Lock Notice if in Kardex */}
-        {isLocked && (
-          <div
-            className="d-flex align-items-center gap-2 mb-3 p-2 rounded"
-            style={{ background: '#eff6ff', border: '1px solid #bfdbfe', fontSize: '13px', color: '#1d4ed8' }}
-          >
-            <Info size={16} className="flex-shrink-0" />
-            <span>
-              This Handling Unit is currently inside <strong>Kardex PPS storage</strong>. Compartments are read-only until the bin is retrieved via <strong>HU Pick</strong>.
-            </span>
+            <ScanModal
+              isOpen={isScanModalOpen}
+              onClose={() => {
+                setIsScanModalOpen(false);
+                setSelectedCompartment(null);
+                setUserDismissedScan(true);
+              }}
+              onSuccess={handleScanSuccess}
+              huId={hu.hu_id}
+              compartmentNumber={selectedCompartment}
+              embedded={true}
+            />
           </div>
         )}
-
-        {/* Compartment Grid */}
-        {filteredCompartments.length === 0 ? (
-          <div className="text-center text-muted py-5" style={{ fontSize: '14px' }}>
-            No compartments match your current filter or search criteria.
-          </div>
-        ) : (
-          <CompartmentGrid
-            compartments={filteredCompartments}
-            onSelectEmpty={isLocked ? undefined : handleSelectEmpty}
-            onSelectOccupied={
-              !isLocked
-                ? (comp) => {
-                    setSelectedPickCompartment(comp.compartment_number);
-                    setIsScanPickModalOpen(true);
-                  }
-                : undefined
-            }
-            selectedCompartment={isScanModalOpen ? selectedCompartment : null}
-            disabled={isLocked}
-            huId={hu.hu_id}
-            binName={hu.bin_type?.bin_name || 'CON_BINA'}
-            binType={hu.bin_type?.name}
-          />
-        )}
       </div>
-
-      {/* Old Working PUT Process Modal (Same UI & Same 8-Step Process) */}
-      <ScanModal
-        isOpen={isScanModalOpen}
-        onClose={() => {
-          setIsScanModalOpen(false);
-          setSelectedCompartment(null);
-        }}
-        onSuccess={handleScanSuccess}
-        huId={hu.hu_id}
-        compartmentNumber={selectedCompartment}
-      />
 
       {/* One-by-One Pick Scan Modal with Live MES Validations */}
       {hu && isScanPickModalOpen && (
@@ -1195,22 +907,10 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         <SendToKardexModal
           isOpen={isSendToKardexOpen}
           onClose={() => setIsSendToKardexOpen(false)}
-          onSuccess={() => {
+          onSuccess={(orderNumber) => {
             setIsSendToKardexOpen(false);
-            fetchLayout();
-          }}
-          hu={hu}
-        />
-      )}
-
-      {/* HU Pick Retrieval Modal */}
-      {hu && isHUPickOpen && (
-        <HUPickModal
-          isOpen={isHUPickOpen}
-          onClose={() => setIsHUPickOpen(false)}
-          onSuccess={() => {
-            setIsHUPickOpen(false);
-            fetchLayout();
+            setKardexPutSuccess(`Handling Unit ${hu.hu_id} Sent to Kardex Successfully! ${orderNumber ? `(Order: ${orderNumber})` : ''}`);
+            fetchLayout(true);
           }}
           hu={hu}
         />
@@ -1261,43 +961,6 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         </Modal>
       )}
 
-      {/* Pick All Parts Modal */}
-      {isPickAllConfirmOpen && (
-        <Modal
-          isOpen={isPickAllConfirmOpen}
-          onClose={() => setIsPickAllConfirmOpen(false)}
-          title={`Pick All ${occupiedCount} Parts from ${hu.hu_id}`}
-          maxWidth="500px"
-        >
-          <div>
-            <p className="text-muted mb-3" style={{ fontSize: '13px' }}>
-              Are you sure you want to unload all <strong>{occupiedCount}</strong> parts from Handling Unit <strong>{hu.hu_id}</strong>?
-            </p>
-            <div className="alert alert-warning py-2 px-3 mb-3" style={{ fontSize: '12.5px' }}>
-              This will update MES Kanban board history for each part to <strong>KANBAN-OUT</strong>, mark all serials as <strong>PICKED</strong>, and clear all compartments back to <strong>EMPTY</strong>.
-            </div>
-            <div className="d-flex justify-content-end gap-2">
-              <button
-                type="button"
-                className="btn btn-outline-secondary"
-                onClick={() => setIsPickAllConfirmOpen(false)}
-                disabled={pickingAll}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-danger d-flex align-items-center gap-2"
-                onClick={handlePickAll}
-                disabled={pickingAll}
-              >
-                {pickingAll ? <Loader2 size={15} className="spin-animation" /> : <PackageMinus size={15} />}
-                {pickingAll ? 'Picking All Parts...' : `Confirm Pick All (${occupiedCount})`}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }

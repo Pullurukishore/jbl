@@ -2,57 +2,53 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
-import { apiPost } from '@/lib/api';
-import { HandlingUnit, StorageStatus, HUStatus, HUListResponse, HUStats } from '@/types/hu';
+import { apiPost, apiGet } from '@/lib/api';
+import { HandlingUnit, StorageStatus, HUStatus, HUListResponse, HUStats, BinType } from '@/types/hu';
 import { HUStatusBadge } from '@/components/bins/HUStatusBadge';
 import { StorageStatusBadge } from '@/components/bins/StorageStatusBadge';
 import { RegisterBinModal } from '@/components/bins/RegisterBinModal';
-import { SendToKardexModal } from '@/components/bins/SendToKardexModal';
-import { HUPickModal } from '@/components/bins/HUPickModal';
 import { Loader } from '@/components/shared/Loader';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Pagination } from '@/components/shared/Pagination';
 import {
-  Package,
+  Boxes,
   PackagePlus,
   Eye,
-  Send,
-  PackageSearch,
-  Layers,
   CheckCircle2,
-  Archive,
-  Boxes,
+  Package,
+  Layers,
   Search,
   RefreshCw,
   Copy,
   Check,
-  Inbox,
   X,
-  ExternalLink,
+  Tag,
+  Barcode,
+  Calendar,
+  User,
+  Zap,
+  Archive,
   ChevronRight,
-  Sparkles,
+  PieChart,
 } from 'lucide-react';
 
 const PAGE_SIZE = 20;
 
-const STORAGE_FILTER_TABS: { label: string; value: StorageStatus | 'ALL' }[] = [
-  { label: 'All Bins', value: 'ALL' },
-  { label: 'In Kardex', value: 'IN_KARDEX' },
-  { label: 'Draft', value: 'DRAFT' },
-  { label: 'Outside Kardex', value: 'OUTSIDE_KARDEX' },
-];
+type SortOption = 'HU_ASC' | 'HU_DESC' | 'CAPACITY_DESC' | 'CAPACITY_ASC' | 'DATE_DESC';
 
-export default function BinsPage() {
+export default function BinsMasterPage() {
   const [hus, setHus] = useState<HandlingUnit[]>([]);
+  const [binTypes, setBinTypes] = useState<BinType[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
-  // Filters & Search
+  // Filters, Search & Sort
   const [storageFilter, setStorageFilter] = useState<StorageStatus | 'ALL'>('ALL');
   const [huStatusFilter, setHuStatusFilter] = useState<HUStatus | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('HU_ASC');
   const [copiedHuId, setCopiedHuId] = useState<string | null>(null);
 
   // Stats
@@ -66,10 +62,17 @@ export default function BinsPage() {
     full: 0,
   });
 
-  // Modals
+  // Modal
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
-  const [sendToKardexHU, setSendToKardexHU] = useState<HandlingUnit | null>(null);
-  const [huPickHU, setHuPickHU] = useState<HandlingUnit | null>(null);
+
+  const fetchBinTypes = async () => {
+    try {
+      const data = await apiGet<BinType[]>('/hu/bin-types');
+      setBinTypes(data || []);
+    } catch {
+      // silently fallback
+    }
+  };
 
   const fetchHUs = useCallback(
     async (
@@ -107,6 +110,10 @@ export default function BinsPage() {
   );
 
   useEffect(() => {
+    fetchBinTypes();
+  }, []);
+
+  useEffect(() => {
     fetchHUs(1, storageFilter, huStatusFilter, searchQuery);
   }, [storageFilter, huStatusFilter]);
 
@@ -127,73 +134,65 @@ export default function BinsPage() {
 
   const handleRefresh = () => {
     fetchHUs(page, storageFilter, huStatusFilter, searchQuery);
+    fetchBinTypes();
   };
 
   const handleSuccess = () => {
     fetchHUs(page, storageFilter, huStatusFilter, searchQuery);
   };
 
-  const getTransactionBadge = (status: string | null) => {
-    if (!status) return null;
-    const map: Record<string, { bg: string; text: string; border: string }> = {
-      PENDING: { bg: '#fef3c7', text: '#92400e', border: '#fde68a' },
-      SUCCESSFUL: { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' },
-      FAILED: { bg: '#fee2e2', text: '#991b1b', border: '#fecaca' },
-    };
-    const style = map[status] || { bg: '#f1f5f9', text: '#475569', border: '#e2e8f0' };
-    return (
-      <span
-        style={{
-          background: style.bg,
-          color: style.text,
-          border: `1px solid ${style.border}`,
-          borderRadius: '6px',
-          fontSize: '11px',
-          fontWeight: 700,
-          padding: '2px 7px',
-          letterSpacing: '0.3px',
-        }}
-      >
-        {status}
-      </span>
-    );
-  };
+  // Client-side sorting
+  const sortedHUs = useMemo(() => {
+    const list = [...hus];
+    switch (sortBy) {
+      case 'HU_ASC':
+        return list.sort((a, b) => a.hu_id.localeCompare(b.hu_id));
+      case 'HU_DESC':
+        return list.sort((a, b) => b.hu_id.localeCompare(a.hu_id));
+      case 'CAPACITY_DESC':
+        return list.sort((a, b) => {
+          const occA = (a.compartments || []).filter((c) => c.status === 'OCCUPIED').length;
+          const occB = (b.compartments || []).filter((c) => c.status === 'OCCUPIED').length;
+          return occB - occA;
+        });
+      case 'CAPACITY_ASC':
+        return list.sort((a, b) => {
+          const occA = (a.compartments || []).filter((c) => c.status === 'OCCUPIED').length;
+          const occB = (b.compartments || []).filter((c) => c.status === 'OCCUPIED').length;
+          return occA - occB;
+        });
+      case 'DATE_DESC':
+        return list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+      default:
+        return list;
+    }
+  }, [hus, sortBy]);
 
-  const getLastTxBadge = (tx: string | null) => {
-    if (!tx) return <span className="text-muted" style={{ fontSize: '12px' }}>—</span>;
-    const map: Record<string, { bg: string; text: string }> = {
-      PUT: { bg: '#eff6ff', text: '#1d4ed8' },
-      MATERIAL_PICK: { bg: '#ecfeff', text: '#0e7490' },
-      HU_PICK: { bg: '#fefce8', text: '#a16207' },
-    };
-    const style = map[tx] || { bg: '#f8fafc', text: '#475569' };
-    return (
-      <span
-        style={{
-          background: style.bg,
-          color: style.text,
-          padding: '3px 8px',
-          borderRadius: '5px',
-          fontSize: '11px',
-          fontWeight: 600,
-        }}
-      >
-        {tx.replace('_', ' ')}
-      </span>
-    );
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '—';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    } catch {
+      return dateStr;
+    }
   };
 
   return (
-    <div className="bins-inventory-container">
+    <div className="bins-master-container">
       <style jsx>{`
-        .bins-inventory-container {
+        .bins-master-container {
           display: flex;
           flex-direction: column;
           gap: 1.5rem;
           width: 100%;
         }
 
-        /* Top Header Bar */
+        /* Top Header Card */
         .page-header-card {
           background: #ffffff;
           border: 1px solid #e2e8f0;
@@ -210,24 +209,24 @@ export default function BinsPage() {
         .header-title-wrap {
           display: flex;
           align-items: center;
-          gap: 1rem;
+          gap: 1.15rem;
         }
 
         .header-icon-box {
-          width: 50px;
-          height: 50px;
+          width: 52px;
+          height: 52px;
           border-radius: 12px;
-          background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 50%, #3b82f6 100%);
+          background: linear-gradient(135deg, #0284c7 0%, #2563eb 50%, #4f46e5 100%);
           display: flex;
           align-items: center;
           justify-content: center;
           color: #ffffff;
-          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+          box-shadow: 0 4px 14px rgba(37, 99, 235, 0.28);
           flex-shrink: 0;
         }
 
         .page-title {
-          font-size: 22px;
+          font-size: 23px;
           font-weight: 800;
           color: #0f172a;
           letter-spacing: -0.3px;
@@ -238,7 +237,8 @@ export default function BinsPage() {
         .page-subtitle {
           font-size: 13px;
           color: #64748b;
-          margin-top: 3px;
+          margin-top: 4px;
+          margin-bottom: 0;
         }
 
         .header-actions {
@@ -250,79 +250,111 @@ export default function BinsPage() {
 
         .btn-reload {
           background: #ffffff;
-          border: 1px solid #e2e8f0;
-          color: #64748b;
-          padding: 8px 14px;
-          border-radius: 9px;
+          border: 1px solid #cbd5e1;
+          color: #334155;
+          padding: 8px 16px;
+          border-radius: 10px;
           font-size: 13px;
           font-weight: 600;
-          cursor: pointer;
           display: inline-flex;
           align-items: center;
-          gap: 6px;
+          gap: 7px;
+          cursor: pointer;
           transition: all 0.15s ease;
         }
 
         .btn-reload:hover {
           background: #f8fafc;
+          border-color: #94a3b8;
           color: #0f172a;
-          border-color: #cbd5e1;
         }
 
         .btn-register-primary {
           background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-          color: #ffffff;
           border: none;
-          padding: 9px 18px;
-          border-radius: 9px;
+          color: #ffffff;
+          padding: 9px 20px;
+          border-radius: 10px;
           font-size: 13.5px;
           font-weight: 700;
-          cursor: pointer;
           display: inline-flex;
           align-items: center;
           gap: 8px;
+          cursor: pointer;
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+          box-shadow: 0 3px 10px rgba(37, 99, 235, 0.3);
         }
 
         .btn-register-primary:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
+          transform: translateY(-1.5px);
+          box-shadow: 0 5px 16px rgba(37, 99, 235, 0.4);
         }
 
-        /* 6 Interactive Stats Grid */
+        /* Bin Specification Summary Pill Banner */
+        .specs-banner {
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 1rem 1.25rem;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 1rem;
+        }
+
+        .specs-left {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+
+        .spec-badge-chip {
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          padding: 6px 12px;
+          border-radius: 8px;
+          font-size: 12.5px;
+          font-weight: 600;
+          color: #334155;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        /* 6 Interactive Stats Cards */
         .stats-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-          gap: 1rem;
+          gap: 0.85rem;
           width: 100%;
         }
 
         .interactive-stat-card {
           background: #ffffff;
-          border: 1.5px solid #e2e8f0;
+          border: 1px solid #e2e8f0;
           border-radius: 12px;
-          padding: 14px 16px;
+          padding: 1rem 1.15rem;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
           cursor: pointer;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-          position: relative;
-          overflow: hidden;
+          transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+          user-select: none;
         }
 
         .interactive-stat-card:hover {
           transform: translateY(-2px);
-          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
           border-color: #cbd5e1;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
         }
 
         .interactive-stat-card.active-stat {
-          border-color: #3b82f6;
-          background: #f8fafc;
-          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+          border-color: #2563eb;
+          background: #f8faff;
+          box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.22), 0 4px 12px rgba(37, 99, 235, 0.08);
         }
 
         .stat-meta {
@@ -334,13 +366,13 @@ export default function BinsPage() {
           font-size: 11px;
           font-weight: 700;
           text-transform: uppercase;
-          letter-spacing: 0.6px;
+          letter-spacing: 0.5px;
           color: #64748b;
-          margin-bottom: 4px;
+          margin-bottom: 2px;
         }
 
         .stat-value {
-          font-size: 26px;
+          font-size: 24px;
           font-weight: 800;
           line-height: 1.1;
         }
@@ -355,7 +387,7 @@ export default function BinsPage() {
           flex-shrink: 0;
         }
 
-        /* Main Table Container Card */
+        /* Main Table Card */
         .table-card {
           background: #ffffff;
           border: 1px solid #e2e8f0;
@@ -364,6 +396,7 @@ export default function BinsPage() {
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
         }
 
+        /* Table Toolbar */
         .table-toolbar {
           display: flex;
           align-items: center;
@@ -385,6 +418,7 @@ export default function BinsPage() {
         .filter-tab-pill-group {
           display: inline-flex;
           background: #f1f5f9;
+          border: 1px solid #e2e8f0;
           border-radius: 9px;
           padding: 3px;
           gap: 3px;
@@ -399,6 +433,9 @@ export default function BinsPage() {
           border-radius: 7px;
           color: #64748b;
           cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
           transition: all 0.15s ease;
         }
 
@@ -409,7 +446,21 @@ export default function BinsPage() {
           font-weight: 700;
         }
 
-        .status-dropdown-select {
+        .tab-badge {
+          font-size: 11px;
+          font-weight: 700;
+          padding: 1px 6px;
+          border-radius: 9999px;
+          background: #e2e8f0;
+          color: #475569;
+        }
+
+        .filter-tab-pill.active .tab-badge {
+          background: #eff6ff;
+          color: #1d4ed8;
+        }
+
+        .select-filter-control {
           padding: 6px 12px;
           font-size: 12.5px;
           border-radius: 8px;
@@ -422,7 +473,7 @@ export default function BinsPage() {
           transition: all 0.15s ease;
         }
 
-        .status-dropdown-select:focus {
+        .select-filter-control:focus {
           border-color: #3b82f6;
           box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
         }
@@ -453,7 +504,7 @@ export default function BinsPage() {
         .search-input-field:focus {
           background: #ffffff;
           border-color: #3b82f6;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
         }
 
         .search-icon-affix {
@@ -476,6 +527,7 @@ export default function BinsPage() {
           cursor: pointer;
           display: flex;
           align-items: center;
+          justify-content: center;
           padding: 2px;
         }
 
@@ -483,60 +535,80 @@ export default function BinsPage() {
           color: #0f172a;
         }
 
-        /* Modern Table Styles */
+        /* Modern Table Styling */
+        .table-responsive {
+          overflow-x: auto;
+          border-radius: 10px;
+          border: 1px solid #e2e8f0;
+        }
+
         .bins-table {
           width: 100%;
           border-collapse: separate;
           border-spacing: 0;
-          border: 1px solid #e2e8f0;
-          border-radius: 10px;
-          overflow: hidden;
+          font-size: 13px;
+          background: #ffffff;
         }
 
         .bins-table th {
           background: #f8fafc;
-          font-size: 11.5px;
-          font-weight: 700;
           color: #475569;
+          font-weight: 700;
+          font-size: 11px;
           text-transform: uppercase;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.6px;
           padding: 12px 14px;
           border-bottom: 1.5px solid #e2e8f0;
-          border-top: none;
           white-space: nowrap;
+          text-align: left;
         }
 
         .bins-table td {
-          padding: 12px 14px;
+          padding: 13px 14px;
           border-bottom: 1px solid #f1f5f9;
-          font-size: 13px;
           vertical-align: middle;
-          background: #ffffff;
+          color: #1e293b;
         }
 
-        .bins-table tr:hover td {
-          background: #f8fafc;
+        .bins-table tr.table-row-item:hover td {
+          background: #f8faff;
+        }
+
+        .bins-table tr.table-row-item:hover td:first-child {
+          border-left: 3px solid #2563eb;
         }
 
         .bins-table tr:last-child td {
           border-bottom: none;
         }
 
-        /* Table Specific Elements */
-        .hu-id-link {
+        /* Handling Unit Capsule */
+        .hu-id-capsule {
           display: inline-flex;
           align-items: center;
           gap: 6px;
-          text-decoration: none;
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-weight: 800;
-          font-size: 14px;
-          color: #1e40af;
+          background: #eff6ff;
+          border: 1px solid #dbeafe;
+          padding: 4px 10px;
+          border-radius: 8px;
           transition: all 0.15s ease;
         }
 
+        .hu-id-capsule:hover {
+          border-color: #bfdbfe;
+          background: #dbeafe;
+        }
+
+        .hu-id-link {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          font-weight: 700;
+          font-size: 13px;
+          color: #1d4ed8;
+          text-decoration: none;
+          letter-spacing: 0.3px;
+        }
+
         .hu-id-link:hover {
-          color: #2563eb;
           text-decoration: underline;
         }
 
@@ -563,18 +635,41 @@ export default function BinsPage() {
           border: 1px solid #e2e8f0;
           padding: 2px 7px;
           border-radius: 5px;
-          font-size: 11px;
+          font-size: 10.5px;
           font-weight: 700;
           color: #334155;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         }
 
-        /* Mini Capacity Fill Progress Bar */
+        /* Visual Compartment Matrix Dots Preview */
+        .matrix-dots-row {
+          display: flex;
+          align-items: center;
+          gap: 3px;
+          margin-top: 5px;
+        }
+
+        .matrix-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 2px;
+          transition: all 0.15s ease;
+        }
+
+        .matrix-dot.occupied {
+          background: #10b981;
+        }
+
+        .matrix-dot.empty {
+          background: #e2e8f0;
+        }
+
+        /* Capacity Allocation Progress */
         .capacity-cell-wrap {
           display: flex;
           flex-direction: column;
           gap: 4px;
-          min-width: 110px;
+          min-width: 125px;
         }
 
         .capacity-numbers-row {
@@ -600,68 +695,62 @@ export default function BinsPage() {
         }
 
         /* Action Buttons */
-        .btn-view-fill {
-          background: #eff6ff;
-          border: 1px solid #bfdbfe;
-          color: #1d4ed8;
-          padding: 5px 12px;
-          border-radius: 7px;
-          font-size: 12px;
-          font-weight: 700;
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          text-decoration: none;
-          transition: all 0.15s ease;
+        :global(a.btn-view-details) {
+          background: #ffffff !important;
+          border: 1.5px solid #cbd5e1 !important;
+          color: #334155 !important;
+          padding: 7px 14px !important;
+          border-radius: 8px !important;
+          font-size: 12.5px !important;
+          font-weight: 700 !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 6px !important;
+          text-decoration: none !important;
+          transition: all 0.15s ease !important;
+          white-space: nowrap !important;
         }
 
-        .btn-view-fill:hover {
-          background: #dbeafe;
-          border-color: #93c5fd;
-          color: #1e40af;
-          transform: translateY(-1px);
+        :global(a.btn-view-details:hover) {
+          background: #f1f5f9 !important;
+          border-color: #94a3b8 !important;
+          color: #0f172a !important;
+          text-decoration: none !important;
+          transform: translateY(-1px) !important;
         }
 
-        .btn-action-send {
-          background: #f0fdf4;
-          border: 1px solid #bbf7d0;
-          color: #166534;
-          padding: 5px 12px;
-          border-radius: 7px;
-          font-size: 12px;
-          font-weight: 700;
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          cursor: pointer;
-          transition: all 0.15s ease;
+        :global(a.btn-hu-put-shortcut) {
+          background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+          border: 1px solid #1d4ed8 !important;
+          color: #ffffff !important;
+          padding: 7px 14px !important;
+          border-radius: 8px !important;
+          font-size: 12.5px !important;
+          font-weight: 700 !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 6px !important;
+          text-decoration: none !important;
+          box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25) !important;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+          white-space: nowrap !important;
         }
 
-        .btn-action-send:hover {
-          background: #dcfce7;
-          border-color: #86efac;
-          transform: translateY(-1px);
+        :global(a.btn-hu-put-shortcut:hover) {
+          background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
+          color: #ffffff !important;
+          text-decoration: none !important;
+          transform: translateY(-1px) !important;
+          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35) !important;
         }
 
-        .btn-action-pick {
-          background: #fefce8;
-          border: 1px solid #fef08a;
-          color: #854d0e;
-          padding: 5px 12px;
-          border-radius: 7px;
-          font-size: 12px;
-          font-weight: 700;
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          cursor: pointer;
-          transition: all 0.15s ease;
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
         }
-
-        .btn-action-pick:hover {
-          background: #fef9c3;
-          border-color: #fde047;
-          transform: translateY(-1px);
+        :global(.spin-animation) {
+          animation: spin 0.8s linear infinite;
         }
       `}</style>
 
@@ -669,12 +758,12 @@ export default function BinsPage() {
       <div className="page-header-card">
         <div className="header-title-wrap">
           <div className="header-icon-box">
-            <Layers size={24} />
+            <Boxes size={26} />
           </div>
           <div>
-            <h1 className="page-title">Handling Units (Bins) Inventory</h1>
+            <h1 className="page-title">Bins & Handling Units Master</h1>
             <p className="page-subtitle">
-              Monitor real-time bin storage statuses, capacity allocation, and Kardex PPS shuttle operations.
+              Master catalog of physical handling units, bin specifications, capacity allocation, and bin registration.
             </p>
           </div>
         </div>
@@ -690,6 +779,48 @@ export default function BinsPage() {
         </div>
       </div>
 
+      {/* Bin Types & System Specifications Banner */}
+      <div className="specs-banner">
+        <div className="specs-left">
+          <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+            Supported Tray Specifications:
+          </span>
+          {binTypes.length > 0 ? (
+            binTypes.map((t) => (
+              <span key={t.id} className="spec-badge-chip">
+                <Tag size={13} className="text-primary" />
+                <span>{t.name}</span>
+                <span className="text-muted">({t.compartment_count} Compartments)</span>
+                <span className="badge bg-secondary font-monospace" style={{ fontSize: '10.5px' }}>
+                  PPS: {t.bin_name}
+                </span>
+              </span>
+            ))
+          ) : (
+            <span className="spec-badge-chip">
+              <Tag size={13} className="text-primary" />
+              <span>Type-A (15 Compartments)</span>
+              <span className="badge bg-secondary font-monospace" style={{ fontSize: '10.5px' }}>
+                PPS: CON_BINA
+              </span>
+            </span>
+          )}
+        </div>
+
+        <div className="d-flex align-items-center gap-2">
+          <span className="text-muted" style={{ fontSize: '12.5px' }}>
+            Ready to deploy another physical bin?
+          </span>
+          <button
+            className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1"
+            onClick={() => setIsRegisterOpen(true)}
+            style={{ fontWeight: 700, borderRadius: '7px' }}
+          >
+            <PackagePlus size={14} /> Add Bin
+          </button>
+        </div>
+      </div>
+
       {/* 6 Interactive Stats Cards */}
       <div className="stats-grid">
         {/* Total Bins */}
@@ -699,7 +830,7 @@ export default function BinsPage() {
             setStorageFilter('ALL');
             setHuStatusFilter('ALL');
           }}
-          title="Click to show all bins"
+          title="Click to show all registered bins"
         >
           <div className="stat-meta">
             <span className="stat-label">Total Bins</span>
@@ -719,7 +850,7 @@ export default function BinsPage() {
             setStorageFilter('IN_KARDEX');
             setHuStatusFilter('ALL');
           }}
-          title="Click to filter bins currently in Kardex"
+          title="Click to filter bins currently stored in Kardex"
         >
           <div className="stat-meta">
             <span className="stat-label">In Kardex</span>
@@ -732,7 +863,7 @@ export default function BinsPage() {
           </div>
         </div>
 
-        {/* Draft Bins */}
+        {/* Draft (Floor) */}
         <div
           className={`interactive-stat-card ${storageFilter === 'DRAFT' ? 'active-stat' : ''}`}
           onClick={() => {
@@ -748,45 +879,67 @@ export default function BinsPage() {
             </span>
           </div>
           <div className="stat-icon-well" style={{ background: '#f8fafc', color: '#64748b' }}>
-            <Archive size={20} />
+            <Layers size={20} />
           </div>
         </div>
 
-        {/* Empty Bins */}
+        {/* Outside Kardex */}
+        <div
+          className={`interactive-stat-card ${storageFilter === 'OUTSIDE_KARDEX' ? 'active-stat' : ''}`}
+          onClick={() => {
+            setStorageFilter('OUTSIDE_KARDEX');
+            setHuStatusFilter('ALL');
+          }}
+          title="Click to filter bins outside Kardex"
+        >
+          <div className="stat-meta">
+            <span className="stat-label">Outside Kardex</span>
+            <span className="stat-value" style={{ color: '#d97706' }}>
+              {stats.outsideKardex}
+            </span>
+          </div>
+          <div className="stat-icon-well" style={{ background: '#fef3c7', color: '#b45309' }}>
+            <Layers size={20} />
+          </div>
+        </div>
+
+        {/* Empty */}
         <div
           className={`interactive-stat-card ${huStatusFilter === 'EMPTY' ? 'active-stat' : ''}`}
           onClick={() => setHuStatusFilter(huStatusFilter === 'EMPTY' ? 'ALL' : 'EMPTY')}
           title="Click to filter empty bins"
         >
           <div className="stat-meta">
-            <span className="stat-label">Empty</span>
+            <span className="stat-label">Empty (0%)</span>
             <span className="stat-value" style={{ color: '#16a34a' }}>
               {stats.empty}
             </span>
           </div>
           <div className="stat-icon-well" style={{ background: '#f0fdf4', color: '#16a34a' }}>
-            <Inbox size={20} />
-          </div>
-        </div>
-
-        {/* Partial Bins */}
-        <div
-          className={`interactive-stat-card ${huStatusFilter === 'PARTIALLY_FILLED' ? 'active-stat' : ''}`}
-          onClick={() => setHuStatusFilter(huStatusFilter === 'PARTIALLY_FILLED' ? 'ALL' : 'PARTIALLY_FILLED')}
-          title="Click to filter partially filled bins"
-        >
-          <div className="stat-meta">
-            <span className="stat-label">Partially Filled</span>
-            <span className="stat-value" style={{ color: '#d97706' }}>
-              {stats.partial}
-            </span>
-          </div>
-          <div className="stat-icon-well" style={{ background: '#fffbeb', color: '#d97706' }}>
             <Package size={20} />
           </div>
         </div>
 
-        {/* Full Bins */}
+        {/* Partial */}
+        <div
+          className={`interactive-stat-card ${huStatusFilter === 'PARTIALLY_FILLED' ? 'active-stat' : ''}`}
+          onClick={() =>
+            setHuStatusFilter(huStatusFilter === 'PARTIALLY_FILLED' ? 'ALL' : 'PARTIALLY_FILLED')
+          }
+          title="Click to filter partially filled bins"
+        >
+          <div className="stat-meta">
+            <span className="stat-label">Partially Filled</span>
+            <span className="stat-value" style={{ color: '#ea580c' }}>
+              {stats.partial}
+            </span>
+          </div>
+          <div className="stat-icon-well" style={{ background: '#fff7ed', color: '#ea580c' }}>
+            <Package size={20} />
+          </div>
+        </div>
+
+        {/* Full */}
         <div
           className={`interactive-stat-card ${huStatusFilter === 'FULL' ? 'active-stat' : ''}`}
           onClick={() => setHuStatusFilter(huStatusFilter === 'FULL' ? 'ALL' : 'FULL')}
@@ -809,29 +962,62 @@ export default function BinsPage() {
         {/* Table Toolbar */}
         <div className="table-toolbar">
           <div className="toolbar-left-cluster">
-            {/* Storage Status Tabs */}
+            {/* Storage Status Tabs with Count Badges */}
             <div className="filter-tab-pill-group">
-              {STORAGE_FILTER_TABS.map((tab) => (
-                <button
-                  key={tab.value}
-                  className={`filter-tab-pill ${storageFilter === tab.value ? 'active' : ''}`}
-                  onClick={() => setStorageFilter(tab.value)}
-                >
-                  {tab.label}
-                </button>
-              ))}
+              <button
+                className={`filter-tab-pill ${storageFilter === 'ALL' ? 'active' : ''}`}
+                onClick={() => setStorageFilter('ALL')}
+              >
+                <span>All Bins</span>
+                <span className="tab-badge">{stats.total || totalItems}</span>
+              </button>
+              <button
+                className={`filter-tab-pill ${storageFilter === 'IN_KARDEX' ? 'active' : ''}`}
+                onClick={() => setStorageFilter('IN_KARDEX')}
+              >
+                <span>In Kardex</span>
+                <span className="tab-badge">{stats.inKardex}</span>
+              </button>
+              <button
+                className={`filter-tab-pill ${storageFilter === 'DRAFT' ? 'active' : ''}`}
+                onClick={() => setStorageFilter('DRAFT')}
+              >
+                <span>Draft (Floor)</span>
+                <span className="tab-badge">{stats.draft}</span>
+              </button>
+              <button
+                className={`filter-tab-pill ${storageFilter === 'OUTSIDE_KARDEX' ? 'active' : ''}`}
+                onClick={() => setStorageFilter('OUTSIDE_KARDEX')}
+              >
+                <span>Outside Kardex</span>
+                <span className="tab-badge">{stats.outsideKardex}</span>
+              </button>
             </div>
 
             {/* HU Fill Status Filter */}
             <select
-              className="status-dropdown-select"
+              className="select-filter-control"
               value={huStatusFilter}
               onChange={(e) => setHuStatusFilter(e.target.value as HUStatus | 'ALL')}
             >
               <option value="ALL">All Fill Levels</option>
-              <option value="EMPTY">Only Empty</option>
+              <option value="EMPTY">Only Empty (0%)</option>
               <option value="PARTIALLY_FILLED">Only Partially Filled</option>
               <option value="FULL">Only 100% Full</option>
+            </select>
+
+            {/* Sort Control */}
+            <select
+              className="select-filter-control"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              title="Sort table rows"
+            >
+              <option value="HU_ASC">Sort: Bin ID (A-Z)</option>
+              <option value="HU_DESC">Sort: Bin ID (Z-A)</option>
+              <option value="CAPACITY_DESC">Sort: Most Filled First</option>
+              <option value="CAPACITY_ASC">Sort: Least Filled First</option>
+              <option value="DATE_DESC">Sort: Newest Registered</option>
             </select>
           </div>
 
@@ -842,7 +1028,7 @@ export default function BinsPage() {
               <input
                 type="text"
                 className="search-input-field"
-                placeholder="Search Handling Unit ID..."
+                placeholder="Search Handling Unit ID or spec..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -858,21 +1044,21 @@ export default function BinsPage() {
             </div>
 
             <span className="text-muted" style={{ fontSize: '12.5px', fontWeight: 600 }}>
-              {totalItems} {totalItems === 1 ? 'bin' : 'bins'} found
+              {sortedHUs.length} {sortedHUs.length === 1 ? 'bin' : 'bins'}
             </span>
           </div>
         </div>
 
         {/* Table Body */}
         {loading ? (
-          <Loader message="Loading handling units..." />
-        ) : hus.length === 0 ? (
+          <Loader message="Loading bins inventory..." />
+        ) : sortedHUs.length === 0 ? (
           <EmptyState
-            title="No Handling Units Found"
+            title="No Bins Found"
             description={
               searchQuery || storageFilter !== 'ALL' || huStatusFilter !== 'ALL'
-                ? 'No bins match your current search or filter settings. Try adjusting the filters or search term.'
-                : 'No handling units are registered yet. Register your first bin to start scanning adapters.'
+                ? 'No bins match your current filters. Try resetting the filters or clearing search.'
+                : 'No physical bins have been registered yet. Click "Register New Bin" above to add your first bin!'
             }
           />
         ) : (
@@ -880,42 +1066,83 @@ export default function BinsPage() {
             <table className="bins-table">
               <thead>
                 <tr>
-                  <th>Handling Unit</th>
-                  <th>Bin Specification</th>
-                  <th>Capacity Allocation</th>
-                  <th>HU Status</th>
-                  <th>Storage Status</th>
-                  <th>Last Transaction</th>
-                  <th>Tx Status</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
+                  <th>
+                    <div className="d-flex align-items-center gap-1">
+                      <Barcode size={13} className="text-muted" />
+                      <span>Handling Unit</span>
+                    </div>
+                  </th>
+                  <th>
+                    <div className="d-flex align-items-center gap-1">
+                      <Layers size={13} className="text-muted" />
+                      <span>Specification & PPS</span>
+                    </div>
+                  </th>
+                  <th>
+                    <div className="d-flex align-items-center gap-1">
+                      <Boxes size={13} className="text-muted" />
+                      <span>Slots</span>
+                    </div>
+                  </th>
+                  <th>
+                    <div className="d-flex align-items-center gap-1">
+                      <PieChart size={13} className="text-muted" />
+                      <span>Capacity Load</span>
+                    </div>
+                  </th>
+                  <th>
+                    <div className="d-flex align-items-center gap-1">
+                      <CheckCircle2 size={13} className="text-muted" />
+                      <span>HU Status</span>
+                    </div>
+                  </th>
+                  <th>
+                    <div className="d-flex align-items-center gap-1">
+                      <Archive size={13} className="text-muted" />
+                      <span>Storage Location</span>
+                    </div>
+                  </th>
+                  <th>
+                    <div className="d-flex align-items-center gap-1">
+                      <User size={13} className="text-muted" />
+                      <span>Registered Info</span>
+                    </div>
+                  </th>
+                  <th style={{ textAlign: 'right' }}>
+                    <div className="d-flex align-items-center justify-content-end gap-1">
+                      <Zap size={13} className="text-muted" />
+                      <span>Actions</span>
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {hus.map((hu) => {
+                {sortedHUs.map((hu) => {
                   const compartments = hu.compartments || [];
-                  const occupied = compartments.filter((c) => c.status === 'OCCUPIED').length;
                   const total = compartments.length || hu.bin_type?.compartment_count || 15;
+                  const occupied = compartments.filter((c) => c.status === 'OCCUPIED').length;
                   const pct = total > 0 ? Math.round((occupied / total) * 100) : 0;
-                  const canSendToKardex =
-                    (hu.storage_status === 'DRAFT' || hu.storage_status === 'OUTSIDE_KARDEX') && occupied > 0;
-                  const canHUPick = hu.storage_status === 'IN_KARDEX';
-
-                  // Progress bar color based on load
                   const fillColor =
-                    pct === 100 ? '#10b981' : pct > 0 ? '#3b82f6' : '#cbd5e1';
+                    pct === 100 ? '#10b981' : pct > 0 ? '#2563eb' : '#cbd5e1';
+
+                  const dotCount = Math.min(total, 15);
+                  const occupiedCount = Math.min(occupied, dotCount);
 
                   return (
-                    <tr key={hu.id}>
-                      {/* Handling Unit ID */}
+                    <tr key={hu.id} className="table-row-item">
+                      {/* Handling Unit ID Capsule */}
                       <td>
                         <div className="d-flex align-items-center gap-2">
-                          <Link
-                            href={`/app/bins/${hu.hu_id}`}
-                            className="hu-id-link"
-                            title="Open physical bin layout"
-                          >
-                            {hu.hu_id}
-                          </Link>
+                          <div className="hu-id-capsule">
+                            <Barcode size={13} className="text-primary flex-shrink-0" />
+                            <Link
+                              href={`/app/bins/${hu.hu_id}`}
+                              className="hu-id-link"
+                              title="Open physical bin compartments"
+                            >
+                              {hu.hu_id}
+                            </Link>
+                          </div>
                           <button
                             className="copy-icon-btn"
                             onClick={(e) => handleCopyId(hu.hu_id, e)}
@@ -933,7 +1160,7 @@ export default function BinsPage() {
                       {/* Bin Specification */}
                       <td>
                         <div className="d-flex flex-column gap-1">
-                          <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                          <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
                             {hu.bin_type?.name || `Type #${hu.bin_type_id}`}
                           </span>
                           <span className="bin-name-badge">
@@ -942,7 +1169,14 @@ export default function BinsPage() {
                         </div>
                       </td>
 
-                      {/* Capacity Allocation with Mini Progress Bar */}
+                      {/* Total Slots */}
+                      <td>
+                        <span style={{ fontWeight: 700, color: '#334155' }}>
+                          {total} Slots
+                        </span>
+                      </td>
+
+                      {/* Capacity Allocation with Mini Progress Bar & Dots Preview */}
                       <td>
                         <div className="capacity-cell-wrap">
                           <div className="capacity-numbers-row">
@@ -950,9 +1184,15 @@ export default function BinsPage() {
                               <strong style={{ color: occupied > 0 ? '#16a34a' : '#64748b' }}>
                                 {occupied}
                               </strong>
-                              <span className="text-muted"> / {total}</span>
+                              <span className="text-muted"> / {total} filled</span>
                             </span>
-                            <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700 }}>
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                color: pct === 100 ? '#15803d' : pct > 0 ? '#1d4ed8' : '#64748b',
+                                fontWeight: 800,
+                              }}
+                            >
                               {pct}%
                             </span>
                           </div>
@@ -962,6 +1202,16 @@ export default function BinsPage() {
                               style={{ width: `${pct}%`, background: fillColor }}
                             />
                           </div>
+
+                          {/* Visual Dots Preview */}
+                          <div className="matrix-dots-row" title={`${occupied} of ${total} slots occupied`}>
+                            {Array.from({ length: dotCount }).map((_, idx) => (
+                              <div
+                                key={idx}
+                                className={`matrix-dot ${idx < occupiedCount ? 'occupied' : 'empty'}`}
+                              />
+                            ))}
+                          </div>
                         </div>
                       </td>
 
@@ -970,42 +1220,36 @@ export default function BinsPage() {
                         <HUStatusBadge status={hu.hu_status} />
                       </td>
 
-                      {/* Storage Status */}
+                      {/* Storage Location */}
                       <td>
                         <StorageStatusBadge status={hu.storage_status} />
                       </td>
 
-                      {/* Last Transaction */}
-                      <td>{getLastTxBadge(hu.last_transaction)}</td>
-
-                      {/* Transaction Status */}
-                      <td>{getTransactionBadge(hu.transaction_status)}</td>
+                      {/* Registered By & Date */}
+                      <td>
+                        <div className="d-flex flex-column gap-1">
+                          <span style={{ fontSize: '12.5px', color: '#1e293b', fontWeight: 600 }}>
+                            {hu.registered_by || 'Admin'}
+                          </span>
+                          <span style={{ fontSize: '11px', color: '#64748b' }}>
+                            {formatDate(hu.created_at)}
+                          </span>
+                        </div>
+                      </td>
 
                       {/* Actions */}
                       <td>
                         <div className="d-flex align-items-center justify-content-end gap-2 flex-wrap">
-                          <Link href={`/app/bins/${hu.hu_id}`} className="btn-view-fill">
-                            <Eye size={13} /> View / Fill
+                          <Link href={`/app/bins/${hu.hu_id}`} className="btn-view-details" title="Inspect bin compartments">
+                            <Eye size={13} />
+                            <span>View Layout</span>
                           </Link>
 
-                          {canSendToKardex && (
-                            <button
-                              className="btn-action-send"
-                              onClick={() => setSendToKardexHU(hu)}
-                              title="Send completed bin to Kardex PPS storage"
-                            >
-                              <Send size={12} /> Send to Kardex
-                            </button>
-                          )}
-
-                          {canHUPick && (
-                            <button
-                              className="btn-action-pick"
-                              onClick={() => setHuPickHU(hu)}
-                              title="Request Kardex PPS retrieval for this bin"
-                            >
-                              <PackageSearch size={12} /> HU Pick
-                            </button>
+                          {hu.storage_status !== 'IN_KARDEX' && (
+                            <Link href="/app/hu-put" className="btn-hu-put-shortcut" title="Open HU Put to scan parts into this bin">
+                              <PackagePlus size={13} />
+                              <span>HU Put</span>
+                            </Link>
                           )}
                         </div>
                       </td>
@@ -1028,41 +1272,16 @@ export default function BinsPage() {
             }}
             totalItems={totalItems}
             pageSize={PAGE_SIZE}
-            onPageSizeChange={() => {}}
           />
         </div>
       </div>
 
-      {/* Modals */}
+      {/* Register New Bin Modal */}
       <RegisterBinModal
         isOpen={isRegisterOpen}
         onClose={() => setIsRegisterOpen(false)}
         onSuccess={handleSuccess}
       />
-
-      {sendToKardexHU && (
-        <SendToKardexModal
-          isOpen={!!sendToKardexHU}
-          onClose={() => setSendToKardexHU(null)}
-          onSuccess={() => {
-            setSendToKardexHU(null);
-            handleSuccess();
-          }}
-          hu={sendToKardexHU}
-        />
-      )}
-
-      {huPickHU && (
-        <HUPickModal
-          isOpen={!!huPickHU}
-          onClose={() => setHuPickHU(null)}
-          onSuccess={() => {
-            setHuPickHU(null);
-            handleSuccess();
-          }}
-          hu={huPickHU}
-        />
-      )}
     </div>
   );
 }

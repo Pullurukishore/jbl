@@ -11,7 +11,7 @@ import { Send, CheckCircle2, XCircle, AlertCircle, Loader2, Package } from 'luci
 interface SendToKardexModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (orderNumber?: string) => void;
   hu: HandlingUnit;
 }
 
@@ -33,6 +33,8 @@ export const SendToKardexModal: React.FC<SendToKardexModalProps> = ({
     fileName?: string;
     line_count?: number;
     lineCount?: number;
+    orderNumber?: string;
+    file?: { name: string };
   } | null>(null);
 
   const handleClose = () => {
@@ -58,41 +60,16 @@ export const SendToKardexModal: React.FC<SendToKardexModalProps> = ({
         fileName?: string;
         line_count?: number;
         lineCount?: number;
+        orderNumber?: string;
+        file?: { name: string };
       }>(`/hu/${hu.hu_id}/send-to-kardex`);
       setSendResult(res);
       setStep('sent');
+      onSuccess(res?.orderNumber);
     } catch (err: any) {
       setError(err.message || 'Failed to generate PUT file');
     } finally {
       setSending(false);
-    }
-  };
-
-  const handleConfirmStorage = async () => {
-    try {
-      setConfirming(true);
-      setError('');
-      await apiPost(`/hu/${hu.hu_id}/confirm-put`, { status: 'SUCCESSFUL' });
-      setStep('confirmed');
-      onSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Failed to confirm Kardex storage');
-    } finally {
-      setConfirming(false);
-    }
-  };
-
-  const handleFailStorage = async () => {
-    try {
-      setFailing(true);
-      setError('');
-      await apiPost(`/hu/${hu.hu_id}/confirm-put`, { status: 'FAILED' });
-      onSuccess();
-      handleClose();
-    } catch (err: any) {
-      setError(err.message || 'Failed to mark as failed');
-    } finally {
-      setFailing(false);
     }
   };
 
@@ -401,17 +378,25 @@ export const SendToKardexModal: React.FC<SendToKardexModalProps> = ({
           </button>
         )}
 
-        {/* Step: Sent — confirm or fail */}
+        {/* Step: Sent */}
         {step === 'sent' && (
           <>
             <div className="success-box">
-              <CheckCircle2 size={22} className="text-success flex-shrink-0" />
-              <div>
-                <div className="fw-bold text-dark" style={{ fontSize: '13.5px' }}>
-                  PUT file generated successfully!
+              <CheckCircle2 size={26} className="text-success flex-shrink-0" />
+              <div style={{ flex: 1 }}>
+                <div className="fw-bold text-success" style={{ fontSize: '15px' }}>
+                  Sent to Kardex Successfully!
                 </div>
-                <div style={{ fontSize: '12px', color: '#15803d' }}>
-                  {sendResult?.file_name || sendResult?.fileName || 'PUT file ready'}
+                <div style={{ fontSize: '12.5px', color: '#14532d', marginTop: '2px' }}>
+                  Bin <strong>{hu.hu_id}</strong> dispatched to Kardex PPS.
+                </div>
+                {sendResult?.orderNumber && (
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#166534', marginTop: '4px' }}>
+                    Order Number: <span style={{ fontFamily: 'monospace' }}>{sendResult.orderNumber}</span>
+                  </div>
+                )}
+                <div style={{ fontSize: '12px', color: '#15803d', marginTop: '2px' }}>
+                  {sendResult?.file?.name || sendResult?.file_name || sendResult?.fileName || 'PUT file ready'}
                   {(sendResult?.line_count || sendResult?.lineCount) && (
                     <> — {sendResult.line_count || sendResult.lineCount} lines</>
                   )}
@@ -419,61 +404,14 @@ export const SendToKardexModal: React.FC<SendToKardexModalProps> = ({
               </div>
             </div>
 
-            <div
-              style={{
-                background: '#fffbeb',
-                border: '1px solid #fde68a',
-                borderRadius: '8px',
-                padding: '10px 14px',
-                fontSize: '13px',
-                color: '#92400e',
-              }}
+            <button
+              className="btn btn-success fw-bold w-100 py-2 d-flex align-items-center justify-content-center gap-2"
+              onClick={handleClose}
+              style={{ borderRadius: '8px', fontSize: '14px', marginTop: '0.5rem' }}
             >
-              ⚠ Please physically place bin <strong>{hu.hu_id}</strong> into Kardex, then
-              confirm or mark as failed below.
-            </div>
-
-            <div className="d-flex gap-2">
-              <button
-                className="btn-confirm-custom"
-                onClick={handleConfirmStorage}
-                disabled={confirming || failing}
-              >
-                {confirming ? (
-                  <Loader2 size={16} className="spin-ani" />
-                ) : (
-                  <CheckCircle2 size={16} />
-                )}
-                {confirming ? 'Confirming...' : 'Confirm Kardex Storage'}
-              </button>
-              <button
-                className="btn-fail-custom"
-                onClick={handleFailStorage}
-                disabled={confirming || failing}
-              >
-                {failing ? <Loader2 size={16} className="spin-ani" /> : <XCircle size={16} />}
-                {failing ? 'Marking...' : 'Mark as Failed'}
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* Step: Confirmed */}
-        {step === 'confirmed' && (
-          <div className="success-box">
-            <CheckCircle2 size={24} className="text-success flex-shrink-0" />
-            <div>
-              <div className="fw-bold text-dark" style={{ fontSize: '13.5px' }}>
-                Kardex storage confirmed!
-              </div>
-              <div style={{ fontSize: '12px', color: '#15803d' }}>
-                Bin <strong>{hu.hu_id}</strong> is now stored in Kardex.
-              </div>
-            </div>
-            <button className="btn btn-sm btn-success ms-auto" onClick={handleClose}>
-              Done
+              <CheckCircle2 size={16} /> Done
             </button>
-          </div>
+          </>
         )}
       </div>
     </Modal>

@@ -13,6 +13,7 @@ interface ScanModalProps {
   onSuccess: (serialNumber?: string) => void;
   huId?: string;
   compartmentNumber?: number | null;
+  embedded?: boolean;
 }
 
 const PUT_STEPS = [
@@ -32,6 +33,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
   onSuccess,
   huId,
   compartmentNumber,
+  embedded = false,
 }) => {
   const [serialNumber, setSerialNumber] = useState('');
   const [logs, setLogs] = useState<Log[]>([]);
@@ -52,6 +54,17 @@ export const ScanModal: React.FC<ScanModalProps> = ({
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSerialNumber('');
+      setLogs([]);
+      setIsProcessing(false);
+      setErrorMsg('');
+      setIsCompleted(false);
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [compartmentNumber]);
 
   useEffect(() => {
     if ((isProcessing || logs.length > 0) && logsEndRef.current) {
@@ -116,63 +129,60 @@ export const ScanModal: React.FC<ScanModalProps> = ({
     );
   };
 
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={
+  const titleContent = (
+    <div className="d-flex align-items-center gap-2">
+      <div
+        style={{
+          width: '32px',
+          height: '32px',
+          borderRadius: '8px',
+          background: 'rgba(56, 189, 248, 0.14)',
+          color: '#0284c7',
+          border: '1px solid rgba(56, 189, 248, 0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <PackagePlus size={18} />
+      </div>
+      <div>
         <div className="d-flex align-items-center gap-2">
-          <div
+          <span className="fw-bold" style={{ fontSize: '15.5px', color: '#0f172a' }}>
+            PUT Process — Scan Part Number
+          </span>
+          <span
             style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
-              background: 'rgba(56, 189, 248, 0.14)',
-              color: '#0284c7',
-              border: '1px solid rgba(56, 189, 248, 0.3)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              fontSize: '10px',
+              fontWeight: 700,
+              padding: '2px 8px',
+              borderRadius: '9999px',
+              background: 'rgba(56, 189, 248, 0.15)',
+              color: '#0369a1',
+              border: '1px solid rgba(56, 189, 248, 0.35)',
+              letterSpacing: '0.5px',
             }}
           >
-            <PackagePlus size={18} />
-          </div>
-          <div>
-            <div className="d-flex align-items-center gap-2">
-              <span className="fw-bold" style={{ fontSize: '16px', color: '#0f172a' }}>
-                PUT Process — Scan Part Number
-              </span>
-              <span
-                style={{
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  padding: '2px 8px',
-                  borderRadius: '9999px',
-                  background: 'rgba(56, 189, 248, 0.15)',
-                  color: '#0369a1',
-                  border: '1px solid rgba(56, 189, 248, 0.35)',
-                  letterSpacing: '0.5px',
-                }}
-              >
-                INBOUND
-              </span>
-            </div>
-            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
-              {huId && compartmentNumber
-                ? `Loading into Slot #${compartmentNumber < 10 ? '0' + compartmentNumber : compartmentNumber} • Bin ${huId}`
-                : 'Verify Kanban board status, PV test results, and generate text order'}
-            </div>
-          </div>
+            INBOUND
+          </span>
         </div>
-      }
-      maxWidth="680px"
-    >
-      <div className="put-modal-content">
+        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
+          {huId && compartmentNumber
+            ? `Target: Slot #${compartmentNumber < 10 ? '0' + compartmentNumber : compartmentNumber} • Bin ${huId}`
+            : 'Verify Kanban board status, PV test results, and generate text order'}
+        </div>
+      </div>
+    </div>
+  );
+
+  const bodyContent = (
+    <div className="put-modal-content">
         <style jsx>{`
           .put-modal-content {
             display: flex;
             flex-direction: column;
-            gap: 1.25rem;
+            gap: 0.75rem;
           }
 
           .scanner-box {
@@ -330,9 +340,9 @@ export const ScanModal: React.FC<ScanModalProps> = ({
           .logs-wrapper {
             border: 1px solid #e2e8f0;
             border-radius: 10px;
-            padding: 1rem;
+            padding: 0.75rem;
             background: #ffffff;
-            max-height: 360px;
+            max-height: 280px;
             overflow-y: auto;
             box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
           }
@@ -444,6 +454,62 @@ export const ScanModal: React.FC<ScanModalProps> = ({
           </div>
         )}
       </div>
+  );
+
+  if (embedded) {
+    if (!isOpen) return null;
+
+    return (
+      <div
+        className="embedded-scan-panel shadow-sm bg-white"
+        style={{
+          borderRadius: '12px',
+          border: '1.5px solid #cbd5e1',
+          display: 'flex',
+          flexDirection: 'column',
+          maxHeight: '100%',
+          overflow: 'hidden',
+          background: '#ffffff',
+          boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.08), 0 2px 6px -1px rgba(0, 0, 0, 0.04)',
+        }}
+      >
+        <div
+          className="d-flex align-items-center justify-content-between p-2 px-3 border-bottom"
+          style={{ background: '#f8fafc' }}
+        >
+          {titleContent}
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn btn-sm btn-light border-0 text-muted p-1 rounded-circle"
+            style={{
+              width: '26px',
+              height: '26px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            title="Close scan panel"
+          >
+            <X size={15} />
+          </button>
+        </div>
+
+        <div className="p-3" style={{ overflowY: 'auto' }}>
+          {bodyContent}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={titleContent}
+      maxWidth="680px"
+    >
+      {bodyContent}
     </Modal>
   );
 };

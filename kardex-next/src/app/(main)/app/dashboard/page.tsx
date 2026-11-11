@@ -6,7 +6,6 @@ import { PartScanLogsModal } from '@/components/dashboard/PartScanLogsModal';
 import { ScanModal } from '@/components/dashboard/ScanModal';
 import { ScanAndStoreModal } from '@/components/dashboard/ScanAndStoreModal';
 import { HUPutModal } from '@/components/dashboard/HUPutModal';
-import { HUPickDashboardModal } from '@/components/dashboard/HUPickDashboardModal';
 import { DateRangePicker } from '@/components/shared/DateRangePicker';
 import { Pagination } from '@/components/shared/Pagination';
 import { Loader } from '@/components/shared/Loader';
@@ -51,7 +50,6 @@ export default function DashboardPage() {
 
   // Modals
   const [isHUPutModalOpen, setIsHUPutModalOpen] = useState(false);
-  const [isHUPickModalOpen, setIsHUPickModalOpen] = useState(false);
   const [isPutModalOpen, setIsPutModalOpen] = useState(false);
   const [isPickModalOpen, setIsPickModalOpen] = useState(false);
   const [viewLogPutId, setViewLogPutId] = useState<number | null>(null);
@@ -892,15 +890,6 @@ export default function DashboardPage() {
       <HUPutModal
         isOpen={isHUPutModalOpen}
         onClose={() => setIsHUPutModalOpen(false)}
-        onSuccess={() => {
-          fetchCounts();
-          fetchPuts(1);
-        }}
-      />
-
-      <HUPickDashboardModal
-        isOpen={isHUPickModalOpen}
-        onClose={() => setIsHUPickModalOpen(false)}
         onSuccess={() => {
           fetchCounts();
           fetchPuts(1);

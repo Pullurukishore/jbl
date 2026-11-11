@@ -35,6 +35,9 @@ async function clearAllData() {
         console.log('Clearing Files history...');
         await db.files.destroy({ where: {}, truncate: false });
 
+        console.log('Resetting Handling Unit sequence counters...');
+        await db.handling_unit.update({ put_order_seq: 0 }, { where: {} });
+
         console.log('--- Cleanup Finished ---');
         console.log('Note: Users were not deleted. IDs will restart depending on your database engine.');
         process.exit(0);

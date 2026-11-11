@@ -52,10 +52,10 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         /* Molded ESD Industrial Tote Outer Casing */
         .esd-tote-container {
           background: linear-gradient(180deg, #111827 0%, #0b0f19 50%, #030712 100%);
-          border: 4px solid #1f293d;
-          border-radius: 18px;
-          padding: 20px 22px;
-          box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.7),
+          border: 3px solid #1f293d;
+          border-radius: 14px;
+          padding: 8px 12px;
+          box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.7),
                       inset 0 1px 1px rgba(255, 255, 255, 0.08),
                       inset 0 -2px 4px rgba(0, 0, 0, 0.9);
           position: relative;
@@ -70,15 +70,15 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           justify-content: space-between;
           background: #080d1a;
           border: 1px solid #1e293b;
-          border-radius: 12px;
-          padding: 8px 16px;
-          margin-bottom: 16px;
+          border-radius: 8px;
+          padding: 4px 10px;
+          margin-bottom: 6px;
           box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.6);
         }
 
         .handle-grip-recess {
-          width: 44px;
-          height: 14px;
+          width: 36px;
+          height: 10px;
           background: #030712;
           border: 1px solid #334155;
           border-radius: 9999px;
@@ -88,25 +88,25 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         .tote-spec-label {
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 6px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 11.5px;
+          font-size: 10.5px;
           font-weight: 700;
           color: #94a3b8;
-          letter-spacing: 1px;
+          letter-spacing: 0.5px;
           text-transform: uppercase;
         }
 
         .esd-badge {
           display: inline-flex;
           align-items: center;
-          gap: 4px;
+          gap: 3px;
           background: rgba(234, 179, 8, 0.15);
           color: #facc15;
           border: 1px solid rgba(234, 179, 8, 0.35);
-          padding: 2px 7px;
-          border-radius: 4px;
-          font-size: 10px;
+          padding: 1px 5px;
+          border-radius: 3px;
+          font-size: 9px;
           font-weight: 800;
           letter-spacing: 0.5px;
         }
@@ -114,9 +114,9 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         .tote-telemetry {
           display: flex;
           align-items: center;
-          gap: 14px;
+          gap: 10px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 700;
         }
 
@@ -124,50 +124,45 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           color: #34d399;
           display: flex;
           align-items: center;
-          gap: 6px;
+          gap: 4px;
         }
 
         .telemetry-empty {
           color: #64748b;
           display: flex;
           align-items: center;
-          gap: 6px;
+          gap: 4px;
         }
 
         .indicator-dot {
-          width: 7px;
-          height: 7px;
+          width: 6px;
+          height: 6px;
           border-radius: 50%;
         }
 
         /* Recessed Internal Socket Deck */
         .socket-deck {
           background: #040711;
-          border: 2px solid #1a2234;
-          border-radius: 14px;
-          padding: 16px;
-          box-shadow: inset 0 8px 24px rgba(0, 0, 0, 0.85);
+          border: 1.5px solid #1a2234;
+          border-radius: 10px;
+          padding: 6px;
+          box-shadow: inset 0 6px 18px rgba(0, 0, 0, 0.85);
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-          gap: 14px;
-        }
-
-        @media (min-width: 1024px) {
-          .socket-deck {
-            grid-template-columns: repeat(5, 1fr);
-          }
+          grid-template-columns: repeat(5, 1fr);
+          gap: 6px;
         }
 
         /* Individual Physical Socket Pocket */
         .socket-pocket {
-          border-radius: 10px;
-          min-height: 140px;
-          padding: 10px 12px;
+          border-radius: 6px;
+          min-height: 70px;
+          max-height: 76px;
+          padding: 4px 6px;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
           position: relative;
-          transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+          transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
           overflow: hidden;
         }
 
@@ -175,7 +170,7 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         .socket-pocket.occupied {
           background: linear-gradient(180deg, #091e16 0%, #04140e 55%, #020b08 100%);
           border: 1.5px solid rgba(16, 185, 129, 0.5);
-          box-shadow: 0 0 16px rgba(16, 185, 129, 0.12),
+          box-shadow: 0 0 10px rgba(16, 185, 129, 0.12),
                       inset 0 1px 0 rgba(110, 231, 183, 0.2),
                       inset 0 -2px 4px rgba(0, 0, 0, 0.8);
           cursor: default;
@@ -183,23 +178,23 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
 
         .socket-pocket.occupied:hover {
           border-color: #10b981;
-          box-shadow: 0 0 22px rgba(16, 185, 129, 0.25),
+          box-shadow: 0 0 16px rgba(16, 185, 129, 0.25),
                       inset 0 1px 0 rgba(110, 231, 183, 0.35);
-          transform: translateY(-2px);
+          transform: translateY(-1px);
         }
 
         /* PCB Gold Edge Contacts at top of card */
         .pcb-edge-contacts {
           display: flex;
           justify-content: center;
-          gap: 3px;
-          margin-bottom: 6px;
+          gap: 2px;
+          margin-bottom: 2px;
           opacity: 0.75;
         }
 
         .pcb-pin {
-          width: 4px;
-          height: 6px;
+          width: 3px;
+          height: 4px;
           background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
           border-radius: 1px 1px 0 0;
           box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -210,68 +205,74 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin-bottom: 6px;
+          margin-bottom: 2px;
         }
 
         .slot-badge-occupied {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 11px;
+          font-size: 9.5px;
           font-weight: 800;
           color: #34d399;
           background: rgba(6, 78, 59, 0.7);
           border: 1px solid rgba(16, 185, 129, 0.4);
-          padding: 2px 7px;
-          border-radius: 5px;
+          padding: 1px 5px;
+          border-radius: 4px;
           letter-spacing: 0.5px;
         }
 
         .status-led-green {
-          width: 8px;
-          height: 8px;
+          width: 6px;
+          height: 6px;
           border-radius: 50%;
           background: #34d399;
-          box-shadow: 0 0 10px #34d399, 0 0 4px #10b981;
+          box-shadow: 0 0 8px #34d399, 0 0 3px #10b981;
         }
 
         /* PCB Module Chip Center */
         .pcb-module-body {
           background: rgba(6, 78, 59, 0.35);
           border: 1px solid rgba(16, 185, 129, 0.3);
-          border-radius: 7px;
-          padding: 8px 6px;
+          border-radius: 4px;
+          padding: 2px 4px;
           text-align: center;
-          margin: 4px 0;
+          margin: 1px 0;
           position: relative;
         }
 
         .pcb-module-body::before {
           content: '';
           position: absolute;
-          top: 3px;
-          left: 4px;
-          width: 5px;
-          height: 5px;
+          top: 2px;
+          left: 3px;
+          width: 3px;
+          height: 3px;
           border-radius: 50%;
           background: rgba(52, 211, 153, 0.4);
         }
 
         .serial-code-text {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 12px;
+          font-size: 10.5px;
           font-weight: 800;
           color: #6ee7b7;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.3px;
           word-break: break-all;
-          line-height: 1.25;
+          line-height: 1.15;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .material-code-text {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 10px;
+          font-size: 8.5px;
           font-weight: 700;
           color: #10b981;
-          margin-top: 3px;
-          letter-spacing: 0.5px;
+          margin-top: 1px;
+          letter-spacing: 0.3px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         /* PCB Lower Footer */
@@ -280,74 +281,79 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           align-items: center;
           justify-content: space-between;
           border-top: 1px solid rgba(6, 78, 59, 0.6);
-          padding-top: 5px;
+          padding-top: 2px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 9.5px;
+          font-size: 8px;
           color: #34d399;
           font-weight: 700;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.3px;
         }
 
         /* PICKED SOCKET STYLES */
         .socket-pocket.picked {
           background: linear-gradient(180deg, #1e1b13 0%, #17130b 100%);
           border: 1.5px solid #d97706;
-          box-shadow: 0 4px 14px rgba(217, 119, 6, 0.25), inset 0 1px 2px rgba(251, 191, 36, 0.2);
+          box-shadow: 0 2px 8px rgba(217, 119, 6, 0.25), inset 0 1px 2px rgba(251, 191, 36, 0.2);
         }
 
         .socket-pocket.picked:hover:not(.disabled) {
           border-color: #f59e0b;
-          transform: translateY(-2px);
-          box-shadow: 0 6px 18px rgba(245, 158, 11, 0.35);
+          transform: translateY(-1px);
         }
 
         .slot-badge-picked {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 10.5px;
+          font-size: 9.5px;
           font-weight: 800;
           color: #fbbf24;
           background: rgba(120, 53, 15, 0.7);
           border: 1px solid rgba(245, 158, 11, 0.4);
-          padding: 2px 6px;
-          border-radius: 5px;
-          letter-spacing: 0.5px;
+          padding: 1px 5px;
+          border-radius: 4px;
+          letter-spacing: 0.3px;
         }
 
         .status-led-amber {
-          width: 8px;
-          height: 8px;
+          width: 6px;
+          height: 6px;
           border-radius: 50%;
           background: #fbbf24;
-          box-shadow: 0 0 10px #fbbf24, 0 0 4px #d97706;
+          box-shadow: 0 0 8px #fbbf24, 0 0 3px #d97706;
         }
 
         .pcb-module-body-picked {
           background: rgba(120, 53, 15, 0.35);
           border: 1px solid rgba(245, 158, 11, 0.3);
-          border-radius: 7px;
-          padding: 8px 6px;
+          border-radius: 4px;
+          padding: 2px 4px;
           text-align: center;
-          margin: 4px 0;
+          margin: 1px 0;
           position: relative;
         }
 
         .serial-code-text-picked {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 12px;
+          font-size: 10.5px;
           font-weight: 800;
           color: #fde68a;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.3px;
           word-break: break-all;
-          line-height: 1.25;
+          line-height: 1.15;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .material-code-text-picked {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 10px;
+          font-size: 8.5px;
           font-weight: 700;
           color: #fbbf24;
-          margin-top: 3px;
-          letter-spacing: 0.5px;
+          margin-top: 1px;
+          letter-spacing: 0.3px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .pocket-footer-picked {
@@ -355,55 +361,54 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           align-items: center;
           justify-content: space-between;
           border-top: 1px solid rgba(120, 53, 15, 0.6);
-          padding-top: 5px;
+          padding-top: 2px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 9.5px;
+          font-size: 8px;
           color: #fbbf24;
           font-weight: 700;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.3px;
         }
 
         /* NEXT EMPTY TARGET SOCKET */
         .socket-pocket.next-target {
           background: linear-gradient(180deg, #0f1c38 0%, #091326 100%);
-          border: 2px dashed #3b82f6;
-          box-shadow: 0 0 18px rgba(59, 130, 246, 0.22),
-                      inset 0 0 12px rgba(59, 130, 246, 0.12);
+          border: 1.5px dashed #3b82f6;
+          box-shadow: 0 0 12px rgba(59, 130, 246, 0.22),
+                      inset 0 0 8px rgba(59, 130, 246, 0.12);
           cursor: pointer;
           animation: pulseBorder 2.5s infinite;
         }
 
         @keyframes pulseBorder {
           0%, 100% { border-color: #3b82f6; }
-          50% { border-color: #60a5fa; box-shadow: 0 0 22px rgba(59, 130, 246, 0.4); }
+          50% { border-color: #60a5fa; box-shadow: 0 0 16px rgba(59, 130, 246, 0.35); }
         }
 
         .socket-pocket.next-target:hover {
           background: linear-gradient(180deg, #172a54 0%, #0d1e3d 100%);
           border-color: #93c5fd;
-          transform: translateY(-3px) scale(1.02);
-          box-shadow: 0 0 26px rgba(59, 130, 246, 0.45);
+          transform: translateY(-1px);
         }
 
         .slot-badge-target {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 11px;
+          font-size: 9.5px;
           font-weight: 800;
           color: #93c5fd;
           background: rgba(30, 58, 138, 0.7);
           border: 1px solid rgba(59, 130, 246, 0.5);
-          padding: 2px 7px;
-          border-radius: 5px;
+          padding: 1px 5px;
+          border-radius: 4px;
         }
 
         .target-indicator-text {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 9.5px;
+          font-size: 8px;
           font-weight: 800;
           color: #60a5fa;
           display: flex;
           align-items: center;
-          gap: 4px;
+          gap: 2px;
         }
 
         .scan-action-center {
@@ -411,13 +416,13 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          padding: 8px 0;
-          gap: 5px;
+          padding: 2px 0;
+          gap: 2px;
         }
 
         .scan-icon-circle {
-          width: 32px;
-          height: 32px;
+          width: 22px;
+          height: 22px;
           border-radius: 50%;
           background: rgba(59, 130, 246, 0.2);
           border: 1px solid rgba(59, 130, 246, 0.4);
@@ -429,13 +434,13 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         }
 
         .socket-pocket.next-target:hover .scan-icon-circle {
-          transform: scale(1.15);
+          transform: scale(1.1);
           background: rgba(59, 130, 246, 0.35);
           color: #ffffff;
         }
 
         .scan-action-title {
-          font-size: 12px;
+          font-size: 9.5px;
           font-weight: 700;
           color: #bfdbfe;
         }
@@ -445,9 +450,9 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           align-items: center;
           justify-content: space-between;
           border-top: 1px solid rgba(30, 58, 138, 0.6);
-          padding-top: 5px;
+          padding-top: 2px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 9.5px;
+          font-size: 8px;
           color: #60a5fa;
           font-weight: 700;
         }
@@ -456,26 +461,25 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         .socket-pocket.empty-standard {
           background: linear-gradient(180deg, #090e1c 0%, #060914 100%);
           border: 1px solid #1e293b;
-          box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.7);
+          box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.7);
           cursor: pointer;
         }
 
         .socket-pocket.empty-standard:hover:not(.disabled) {
           border-color: #475569;
           background: linear-gradient(180deg, #0e162b 0%, #090e1c 100%);
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.05);
+          transform: translateY(-1px);
         }
 
         .slot-badge-empty {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 11px;
+          font-size: 9.5px;
           font-weight: 700;
           color: #64748b;
           background: #0f172a;
           border: 1px solid #1e293b;
-          padding: 2px 7px;
-          border-radius: 5px;
+          padding: 1px 5px;
+          border-radius: 4px;
         }
 
         .empty-slot-guide {
@@ -483,23 +487,23 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          padding: 10px 0;
-          gap: 4px;
+          padding: 2px 0;
+          gap: 1px;
         }
 
         .guide-crosshair {
           color: #334155;
-          font-size: 16px;
+          font-size: 12px;
           transition: all 0.2s ease;
         }
 
         .socket-pocket.empty-standard:hover .guide-crosshair {
           color: #94a3b8;
-          transform: scale(1.15);
+          transform: scale(1.1);
         }
 
         .empty-slot-text {
-          font-size: 11.5px;
+          font-size: 9.5px;
           font-weight: 600;
           color: #475569;
           transition: color 0.2s ease;
@@ -514,9 +518,9 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           align-items: center;
           justify-content: space-between;
           border-top: 1px solid #111827;
-          padding-top: 5px;
+          padding-top: 2px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 9.5px;
+          font-size: 8px;
           color: #475569;
           font-weight: 600;
         }
@@ -524,9 +528,9 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         /* CURRENTLY ACTIVE SCAN MODAL TARGET */
         .socket-pocket.scanning-active {
           background: linear-gradient(180deg, #1e3a8a 0%, #172554 100%);
-          border: 2px solid #60a5fa;
-          box-shadow: 0 0 24px rgba(96, 165, 250, 0.5), inset 0 0 10px rgba(96, 165, 250, 0.3);
-          transform: translateY(-2px);
+          border: 1.5px solid #60a5fa;
+          box-shadow: 0 0 16px rgba(96, 165, 250, 0.5), inset 0 0 8px rgba(96, 165, 250, 0.3);
+          transform: translateY(-1px);
         }
 
         /* LOCKED STATE (IN KARDEX) */
@@ -545,13 +549,13 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin-top: 16px;
-          padding: 8px 14px;
+          margin-top: 6px;
+          padding: 4px 10px;
           background: #080d1a;
           border: 1px solid #1e293b;
-          border-radius: 10px;
+          border-radius: 8px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 10px;
+          font-size: 9.5px;
           color: #64748b;
         }
       `}</style>
@@ -730,17 +734,17 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
                     <span className="slot-badge-target">
                       #{comp.compartment_number < 10 ? `0${comp.compartment_number}` : comp.compartment_number}
                     </span>
-                    <Radio size={14} className="text-light" />
+                    <Radio size={11} className="text-light" />
                   </div>
                   <div className="scan-action-center">
                     <div className="scan-icon-circle">
-                      <Cpu size={16} />
+                      <Cpu size={11} />
                     </div>
                     <span className="scan-action-title">Scanning...</span>
                   </div>
                   <div className="pocket-footer-target">
-                    <span>AWAITING INPUT</span>
                     <span>ACTIVE</span>
+                    <span>READY</span>
                   </div>
                 </>
               )}
@@ -753,19 +757,19 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
                       #{comp.compartment_number < 10 ? `0${comp.compartment_number}` : comp.compartment_number}
                     </span>
                     <span className="target-indicator-text">
-                      <Zap size={10} /> NEXT TARGET
+                      <Zap size={8} /> NEXT
                     </span>
                   </div>
 
                   <div className="scan-action-center">
                     <div className="scan-icon-circle">
-                      <Plus size={16} />
+                      <Plus size={11} />
                     </div>
-                    <span className="scan-action-title">Click to Scan</span>
+                    <span className="scan-action-title">Click</span>
                   </div>
 
                   <div className="pocket-footer-target">
-                    <span>EMPTY SOCKET</span>
+                    <span>EMPTY</span>
                     <span>READY</span>
                   </div>
                 </>

@@ -98,10 +98,10 @@ exports.getLayout = asyncHandler(async (req, res) => {
             { model: db.bin_type },
             {
                 model: db.compartment,
-                include: [{ model: db.put, required: false }],
-                order: [['compartment_number', 'ASC']]
+                include: [{ model: db.put, required: false }]
             }
-        ]
+        ],
+        order: [[db.compartment, 'compartment_number', 'ASC']]
     });
     if (!hu) return res.status(404).json({ error: 'Handling unit not found.' });
     return res.status(200).json(hu);
@@ -450,21 +450,26 @@ exports.sendToKardex = asyncHandler(async (req, res) => {
     });
     if (!hu) return res.status(404).json({ error: 'Handling unit not found.' });
 
-    const occupiedCompartments = (hu.compartments || []).filter(c => c.status === 'OCCUPIED');
+    const occupiedCompartments = (hu.compartments || [])
+        .filter(c => c.status === 'OCCUPIED')
+        .sort((a, b) => a.compartment_number - b.compartment_number);
     if (occupiedCompartments.length === 0) {
         return res.status(400).json({ error: 'No occupied compartments. Cannot send empty HU to Kardex.' });
     }
-    if (hu.storage_status === 'IN_KARDEX' && hu.transaction_status === 'PENDING') {
-        return res.status(409).json({ error: 'Already sent to Kardex, awaiting confirmation.' });
-    }
 
-    // Build file content
-    const lines = occupiedCompartments.map(c =>
-        `${hu.hu_id};${hu.hu_id}@${c.compartment_number};${c.material_name || ''};1;${hu.bin_type ? hu.bin_type.bin_name : ''};${c.serial_number || ''}`
-    );
-    const fileContent = lines.join('\n');
+    // Starting sequence for this bin (starts at 1, 2, 3...)
+    const startSeq = hu.put_order_seq || 0;
+    const endSeq = startSeq + occupiedCompartments.length;
+
+    // Build file content: each row gets a unique sequential order number (<BIN>-PUT-1, <BIN>-PUT-2...)
+    const lines = occupiedCompartments.map((c, i) => {
+        const itemSeq = startSeq + i + 1;
+        const lineOrderNumber = `${hu.hu_id}-PUT-${itemSeq}`;
+        return `${lineOrderNumber};${hu.hu_id}@${c.compartment_number};${c.material_name || ''};1;${hu.bin_type ? hu.bin_type.bin_name : ''};${c.serial_number || ''}`;
+    });
+    const fileContent = lines.join('\r\n');
     const timestamp = Date.now();
-    const fileName = `PUT_${hu.hu_id}_${timestamp}.txt`;
+    const fileName = `PUT_${hu.hu_id}_${startSeq + 1}_${timestamp}.txt`;
     const dirPath = process.env.Put_Text_File_Path || path.join('uploads', 'files', 'put');
     fs.mkdirSync(dirPath, { recursive: true });
     const filePath = path.join(dirPath, fileName);
@@ -490,8 +495,9 @@ exports.sendToKardex = asyncHandler(async (req, res) => {
 
     await hu.update({
         storage_status: 'IN_KARDEX',
-        transaction_status: 'PENDING',
-        last_transaction: 'PUT'
+        transaction_status: 'SUCCESSFUL',
+        last_transaction: 'PUT',
+        put_order_seq: endSeq
     });
 
     // Update all associated put records for this HU
@@ -503,8 +509,14 @@ exports.sendToKardex = asyncHandler(async (req, res) => {
         );
     }
 
+    const orderRange = occupiedCompartments.length === 1 
+        ? `${hu.hu_id}-PUT-${startSeq + 1}` 
+        : `${hu.hu_id}-PUT-${startSeq + 1} to ${hu.hu_id}-PUT-${endSeq}`;
+
     return res.status(200).json({
         message: 'HU sent to Kardex successfully.',
+        orderNumber: orderRange,
+        orderRange,
         file: { name: fileName, path: uploadFilePath, id: fileRecord.id },
         lineCount: lines.length
     });
@@ -836,11 +848,6 @@ exports.pickScanGet = asyncHandler(async (req, res) => {
             return res.end();
         }
 
-        if (hu.storage_status === 'IN_KARDEX') {
-            sendEvent({ activity: 'FETCH_DETAILS', status: 'FAILED', message: `Handling unit is locked inside Kardex PPS. Retrieve it to floor first.` });
-            return res.end();
-        }
-
         // Find compartment by compartmentNumber or by serialNumber
         let compartment = null;
         if (compartmentNumber) {
@@ -924,12 +931,21 @@ exports.pickScanGet = asyncHandler(async (req, res) => {
             return res.end();
         }
 
-        // Generate Kardex pick order text file for audit
-        const genFileName = `kardex_pick_${Date.now()}_${Math.random().toString(36).substr(2, 7)}.txt`;
+        // Calculate 2-digit sequential order run for this model (e.g. SFG001970-PICK-01, SFG001970-PICK-02...)
+        const existingPickCount = await db.files.count({
+            where: {
+                name: { [Op.like]: `PICK_${modelNumber}_%` }
+            }
+        });
+        const pickSeq = String(existingPickCount + 1).padStart(2, '0');
+        const pickOrderNumber = `${modelNumber}-PICK-${pickSeq}`;
+
+        // Generate Kardex pick order text file in model-centric format: <MODEL>-PICK-<01>|serial|model|1
+        const genFileName = `PICK_${modelNumber}_${pickSeq}_${Date.now()}.txt`;
         const dirPath = process.env.Pick_Text_File_Path || path.join('uploads', 'files', 'pick');
         fs.mkdirSync(dirPath, { recursive: true });
         const filePath = path.join(dirPath, genFileName);
-        const fileContent = `Pick_Order|${serial_number}|${modelNumber}|1`;
+        const fileContent = `${pickOrderNumber}|${serial_number}|${modelNumber}|1`;
         fs.writeFileSync(filePath, fileContent, 'ascii');
 
         const uploadDir = path.join('uploads', 'files', 'pick');
@@ -1029,13 +1045,24 @@ exports.sendPickToKardex = asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'No picked parts found in this Handling Unit to send to Kardex.' });
     }
 
-    const lastPick = await db.pick.findOne({ order: [['id', 'DESC']] });
-    const nextId = (lastPick?.id || 0) + 1;
-
-    // Build Kardex Pick Order content: Pick_Order<id>|serial|model|1
-    const lines = pickedPuts.map((pt, i) =>
-        `Pick_Order${nextId + i}|${pt.serial_number}|${pt.model_number}|1`
-    );
+    // Build Kardex Pick Order content: <MODEL>-PICK-<01>|serial|model|1
+    // Keep consistent order number per model in the HU batch so all items share the single pick order
+    const modelOrderMap = new Map();
+    const lines = [];
+    for (const pt of pickedPuts) {
+        const mNum = pt.model_number || 'MODEL';
+        if (!modelOrderMap.has(mNum)) {
+            const existingPickCount = await db.files.count({
+                where: {
+                    name: { [Op.like]: `PICK_${mNum}_%` }
+                }
+            });
+            const pickSeq = String(existingPickCount + 1).padStart(2, '0');
+            modelOrderMap.set(mNum, `${mNum}-PICK-${pickSeq}`);
+        }
+        const pickOrderNumber = modelOrderMap.get(mNum);
+        lines.push(`${pickOrderNumber}|${pt.serial_number}|${mNum}|1`);
+    }
     const fileContent = lines.join('\r\n');
     const timestamp = Date.now();
     const fileName = `KARDEX_PICK_${hu.hu_id}_${timestamp}.txt`;

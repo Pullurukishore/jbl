@@ -1,23 +1,31 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Modal } from '@/components/shared/Modal';
 import { apiGet } from '@/lib/api';
 import { HandlingUnit } from '@/types/hu';
 import { RegisterBinModal } from '@/components/bins/RegisterBinModal';
 import { SendToKardexModal } from '@/components/bins/SendToKardexModal';
+import { HUStatusBadge } from '@/components/bins/HUStatusBadge';
+import { StorageStatusBadge } from '@/components/bins/StorageStatusBadge';
 import {
   PackagePlus,
   Send,
   Eye,
   Boxes,
   Plus,
-  RefreshCw,
   AlertCircle,
+  CheckCircle2,
+  Barcode,
+  Loader2,
+  ArrowRight,
+  Layers,
+  ChevronRight,
+  Sparkles,
   Search,
-  ChevronDown,
-  Check,
+  X,
+  Info,
 } from 'lucide-react';
 
 interface HUPutModalProps {
@@ -32,335 +40,738 @@ export const HUPutModal: React.FC<HUPutModalProps> = ({
   onSuccess,
 }) => {
   const router = useRouter();
-  const [draftBins, setDraftBins] = useState<HandlingUnit[]>([]);
+  const [binInput, setBinInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [selectedHu, setSelectedHu] = useState<HandlingUnit | null>(null);
-
-  // Searchable Dropdown state
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [warning, setWarning] = useState('');
+  const [validatedHu, setValidatedHu] = useState<HandlingUnit | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Sub-modals
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [isSendToKardexOpen, setIsSendToKardexOpen] = useState(false);
 
-  const fetchDraftBins = async () => {
+  useEffect(() => {
+    if (isOpen) {
+      setBinInput('');
+      setError('');
+      setWarning('');
+      setValidatedHu(null);
+      setLoading(false);
+      setTimeout(() => inputRef.current?.focus(), 150);
+    }
+  }, [isOpen]);
+
+  const handleLookup = async (idToSearch?: string) => {
+    const rawId = (idToSearch !== undefined ? idToSearch : binInput).trim();
+    if (!rawId) {
+      setError('Please scan or enter a Bin ID (e.g. H1, H2, B01).');
+      setValidatedHu(null);
+      inputRef.current?.focus();
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
-      const data = await apiGet<HandlingUnit[]>('/hu/draft');
-      setDraftBins(data || []);
-      if (data && data.length > 0) {
-        setSelectedHu((prev) => {
-          if (prev) {
-            const found = data.find((b) => b.hu_id === prev.hu_id);
-            return found || data[0];
-          }
-          return data[0];
-        });
-      } else {
-        setSelectedHu(null);
+      setWarning('');
+      const data = await apiGet<HandlingUnit>(`/hu/${encodeURIComponent(rawId)}/layout`);
+
+      if (!data) {
+        throw new Error('Handling unit not found.');
+      }
+
+      setValidatedHu(data);
+
+      if (data.storage_status === 'IN_KARDEX') {
+        setWarning(
+          `Bin "${data.hu_id}" is currently stored IN KARDEX (PPS Station: ${
+            data.bin_type?.bin_name || 'CON_BINA'
+          }). To retrieve parts from this bin, please use HU Pick.`
+        );
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to load draft handling units');
+      setValidatedHu(null);
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('not found') || msg.includes('404')) {
+        setError(`Bin "${rawId}" was not found in the system. Check the label or register it below.`);
+      } else {
+        setError(msg || `Failed to check bin "${rawId}". Please try again.`);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchDraftBins();
-      setIsDropdownOpen(false);
-      setSearchTerm('');
-    }
-  }, [isOpen]);
-
-  // Click outside to close dropdown
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsDropdownOpen(false);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      // If already validated and user hits Enter again, open it directly!
+      if (validatedHu && validatedHu.hu_id.toLowerCase() === binInput.trim().toLowerCase()) {
+        handleOpenBinDetail();
+      } else {
+        handleLookup();
       }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const filteredBins = useMemo(() => {
-    if (!searchTerm.trim()) return draftBins;
-    const q = searchTerm.toLowerCase().trim();
-    return draftBins.filter((b) => {
-      const matchId = b.hu_id.toLowerCase().includes(q);
-      const matchType = b.bin_type?.name?.toLowerCase().includes(q);
-      const matchPps = b.bin_type?.bin_name?.toLowerCase().includes(q);
-      return matchId || matchType || matchPps;
-    });
-  }, [draftBins, searchTerm]);
-
-  const handleOpenBinDetail = () => {
-    if (!selectedHu) return;
-    onClose();
-    router.push(`/app/bins/${selectedHu.hu_id}`);
+    }
   };
 
-  const occupiedCount = (selectedHu?.compartments || []).filter(
+  const handleOpenBinDetail = () => {
+    if (!validatedHu) return;
+    onClose();
+    router.push(`/app/bins/${validatedHu.hu_id}`);
+  };
+
+  const occupiedCount = (validatedHu?.compartments || []).filter(
     (c) => c.status === 'OCCUPIED'
   ).length;
+
+  const totalSlots =
+    validatedHu?.compartments?.length || validatedHu?.bin_type?.compartment_count || 15;
+  const pct = totalSlots > 0 ? Math.round((occupiedCount / totalSlots) * 100) : 0;
+  const canSendToKardex =
+    validatedHu &&
+    (validatedHu.storage_status === 'DRAFT' || validatedHu.storage_status === 'OUTSIDE_KARDEX') &&
+    occupiedCount > 0;
 
   return (
     <>
       <Modal
         isOpen={isOpen && !isRegisterOpen && !isSendToKardexOpen}
         onClose={onClose}
-        title="Handling Unit PUT Workflow"
-        maxWidth="620px"
+        title={
+          <div className="d-flex align-items-center gap-2">
+            <div
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '9px',
+                background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 3px 8px rgba(37, 99, 235, 0.28)',
+                flexShrink: 0,
+              }}
+            >
+              <PackagePlus size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: '16.5px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.2px' }}>
+                Handling Unit PUT Workflow
+              </div>
+              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
+                Scan or enter a Bin ID to put adapters into compartments
+              </div>
+            </div>
+          </div>
+        }
+        maxWidth="580px"
       >
-        <div>
-          {/* Subtitle & Refresh Header */}
-          <div className="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom">
-            <p className="text-muted mb-0" style={{ fontSize: '13px' }}>
-              Select a floor handling unit to scan adapters or send directly to Kardex PPS.
+        <div className="hu-put-modal-content">
+          <style jsx>{`
+            .hu-put-modal-content {
+              display: flex;
+              flex-direction: column;
+              gap: 1.15rem;
+              padding: 4px 0;
+            }
+
+            /* Subheader Bar */
+            .workflow-intro-bar {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              padding-bottom: 0.75rem;
+              border-bottom: 1px solid #f1f5f9;
+            }
+
+            .intro-text {
+              font-size: 12.5px;
+              color: #64748b;
+              margin: 0;
+            }
+
+            .btn-new-bin-shortcut {
+              background: #f8fafc;
+              border: 1px solid #cbd5e1;
+              color: #2563eb;
+              padding: 5px 12px;
+              border-radius: 7px;
+              font-size: 12px;
+              font-weight: 700;
+              display: inline-flex;
+              align-items: center;
+              gap: 5px;
+              cursor: pointer;
+              transition: all 0.15s ease;
+            }
+
+            .btn-new-bin-shortcut:hover {
+              background: #eff6ff;
+              border-color: #93c5fd;
+              color: #1d4ed8;
+            }
+
+            /* Scan / Input Box */
+            .scan-section-wrap {
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+            }
+
+            .scan-label-row {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              font-size: 12px;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              color: #475569;
+            }
+
+            .live-scan-badge {
+              display: inline-flex;
+              align-items: center;
+              gap: 5px;
+              font-size: 11px;
+              font-weight: 700;
+              color: #059669;
+              background: #ecfdf5;
+              border: 1px solid #a7f3d0;
+              padding: 2px 8px;
+              border-radius: 9999px;
+            }
+
+            .pulse-dot-green {
+              width: 6px;
+              height: 6px;
+              border-radius: 50%;
+              background: #10b981;
+              animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            }
+
+            .scan-input-group {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              width: 100%;
+            }
+
+            .scan-input-container {
+              position: relative;
+              flex-grow: 1;
+              display: flex;
+              align-items: center;
+            }
+
+            .scan-affix-icon {
+              position: absolute;
+              left: 14px;
+              color: #2563eb;
+              pointer-events: none;
+            }
+
+            .scan-input-field {
+              width: 100%;
+              padding: 11px 40px 11px 44px;
+              font-size: 16px;
+              font-weight: 700;
+              font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+              letter-spacing: 0.6px;
+              border: 2px solid #cbd5e1;
+              border-radius: 10px;
+              background: #ffffff;
+              color: #0f172a;
+              outline: none;
+              transition: all 0.2s ease;
+            }
+
+            .scan-input-field:focus {
+              border-color: #2563eb;
+              box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+            }
+
+            .clear-input-btn {
+              position: absolute;
+              right: 12px;
+              background: transparent;
+              border: none;
+              color: #94a3b8;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              padding: 2px;
+            }
+
+            .clear-input-btn:hover {
+              color: #0f172a;
+            }
+
+            .btn-lookup-action {
+              background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+              border: 1px solid #1d4ed8;
+              color: #ffffff;
+              padding: 11px 20px;
+              border-radius: 10px;
+              font-size: 13.5px;
+              font-weight: 700;
+              display: inline-flex;
+              align-items: center;
+              gap: 7px;
+              cursor: pointer;
+              transition: all 0.2s ease;
+              box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+              white-space: nowrap;
+              flex-shrink: 0;
+            }
+
+            .btn-lookup-action:hover:not(:disabled) {
+              transform: translateY(-1px);
+              box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+            }
+
+            .btn-lookup-action:disabled {
+              opacity: 0.6;
+              cursor: not-allowed;
+            }
+
+            /* Error and Warning Alert Boxes */
+            .alert-box-error {
+              background: #fef2f2;
+              border: 1.5px solid #fecaca;
+              border-radius: 10px;
+              padding: 12px 14px;
+              color: #991b1b;
+              font-size: 13px;
+              display: flex;
+              align-items: flex-start;
+              justify-content: space-between;
+              gap: 10px;
+            }
+
+            .alert-box-warning {
+              background: #fffbeb;
+              border: 1.5px solid #fde68a;
+              border-radius: 10px;
+              padding: 12px 14px;
+              color: #92400e;
+              font-size: 13px;
+              display: flex;
+              align-items: flex-start;
+              gap: 10px;
+            }
+
+            /* Validated Bin Success Card */
+            .validated-bin-card {
+              background: #f8fafc;
+              border: 1.5px solid #bbf7d0;
+              border-radius: 12px;
+              padding: 14px 16px;
+              display: flex;
+              flex-direction: column;
+              gap: 12px;
+              box-shadow: 0 2px 8px rgba(16, 185, 129, 0.08);
+            }
+
+            .val-card-header {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+            }
+
+            .val-id-row {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+            }
+
+            .val-hu-badge {
+              font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+              font-size: 14px;
+              font-weight: 800;
+              background: #2563eb;
+              color: #ffffff;
+              padding: 4px 10px;
+              border-radius: 6px;
+              letter-spacing: 0.5px;
+            }
+
+            .val-type-text {
+              font-size: 14px;
+              font-weight: 700;
+              color: #0f172a;
+            }
+
+            .val-pps-badge {
+              font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+              font-size: 11px;
+              font-weight: 700;
+              background: #e2e8f0;
+              color: #334155;
+              padding: 2px 7px;
+              border-radius: 4px;
+            }
+
+            .val-card-metrics {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 8px;
+              background: #ffffff;
+              border: 1px solid #e2e8f0;
+              border-radius: 8px;
+              padding: 10px 12px;
+            }
+
+            .val-metric-col {
+              display: flex;
+              flex-direction: column;
+              gap: 2px;
+            }
+
+            .val-metric-lbl {
+              font-size: 11px;
+              font-weight: 700;
+              text-transform: uppercase;
+              color: #64748b;
+            }
+
+            .val-metric-val {
+              font-size: 13.5px;
+              font-weight: 800;
+              color: #0f172a;
+            }
+
+            /* Mini Progress */
+            .val-progress-track {
+              height: 6px;
+              background: #e2e8f0;
+              border-radius: 9999px;
+              overflow: hidden;
+              margin-top: 4px;
+            }
+
+            .val-progress-fill {
+              height: 100%;
+              border-radius: 9999px;
+              background: linear-gradient(90deg, #2563eb 0%, #10b981 100%);
+              transition: width 0.3s ease;
+            }
+
+            /* Modal Footer Buttons */
+            .footer-actions-row {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              padding-top: 0.75rem;
+              border-top: 1px solid #f1f5f9;
+              gap: 10px;
+              flex-wrap: wrap;
+            }
+
+            .btn-modal-cancel {
+              background: #ffffff;
+              border: 1.5px solid #cbd5e1;
+              color: #475569;
+              padding: 8px 16px;
+              border-radius: 8px;
+              font-size: 13px;
+              font-weight: 600;
+              cursor: pointer;
+              transition: all 0.15s ease;
+            }
+
+            .btn-modal-cancel:hover {
+              background: #f8fafc;
+              color: #0f172a;
+              border-color: #94a3b8;
+            }
+
+            .btn-open-bin-primary {
+              background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+              border: 1px solid #1d4ed8;
+              color: #ffffff;
+              padding: 8px 20px;
+              border-radius: 8px;
+              font-size: 13.5px;
+              font-weight: 700;
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              cursor: pointer;
+              transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+              box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+            }
+
+            .btn-open-bin-primary:hover {
+              background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+              transform: translateY(-1px);
+              box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+            }
+
+            .btn-send-kardex-direct {
+              background: #ecfdf5;
+              border: 1.5px solid #a7f3d0;
+              color: #047857;
+              padding: 8px 16px;
+              border-radius: 8px;
+              font-size: 13px;
+              font-weight: 700;
+              display: inline-flex;
+              align-items: center;
+              gap: 6px;
+              cursor: pointer;
+              transition: all 0.15s ease;
+            }
+
+            .btn-send-kardex-direct:hover {
+              background: #d1fae5;
+              border-color: #6ee7b7;
+              transform: translateY(-1px);
+            }
+
+            @keyframes pulse {
+              0%, 100% {
+                opacity: 1;
+              }
+              50% {
+                opacity: 0.4;
+              }
+            }
+
+            @keyframes spin {
+              to {
+                transform: rotate(360deg);
+              }
+            }
+            .spin-inline {
+              animation: spin 0.8s linear infinite;
+            }
+          `}</style>
+
+          {/* Subheader Bar with Quick Register Link */}
+          <div className="workflow-intro-bar">
+            <p className="intro-text">
+              Directly scan or enter the physical Handling Unit barcode below.
             </p>
             <button
-              className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
-              onClick={fetchDraftBins}
-              disabled={loading}
-              title="Refresh draft bins"
+              type="button"
+              className="btn-new-bin-shortcut"
+              onClick={() => setIsRegisterOpen(true)}
+              title="Register a new physical bin"
             >
-              <RefreshCw size={13} className={loading ? 'spin-animation' : ''} />
-              Refresh
+              <Plus size={14} />
+              <span>Register New Bin</span>
             </button>
           </div>
 
-          {error && (
-            <div className="alert alert-danger py-2 px-3 d-flex align-items-center gap-2 mb-3" style={{ fontSize: '13px' }}>
-              <AlertCircle size={16} />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {loading ? (
-            <div className="text-center py-5">
-              <div className="spinner-border text-primary" role="status" />
-              <div className="mt-2 text-muted" style={{ fontSize: '13px' }}>
-                Loading draft handling units...
+          {/* Scan or Enter Field */}
+          <div className="scan-section-wrap">
+            <div className="scan-label-row">
+              <span>Scan or Enter Handling Unit (Bin) ID</span>
+              <div className="live-scan-badge">
+                <span className="pulse-dot-green" />
+                <span>Ready for Barcode Scanner</span>
               </div>
             </div>
-          ) : draftBins.length === 0 ? (
-            <div className="text-center py-4 px-3 bg-light rounded-3 border">
-              <Boxes size={38} className="text-muted mb-2" />
-              <h6 className="fw-bold text-dark mb-1">No Draft Bins Available</h6>
-              <p className="text-muted mb-3" style={{ fontSize: '13px' }}>
-                All handling units are currently stored in Kardex or none have been registered yet.
-              </p>
+
+            <div className="scan-input-group">
+              <div className="scan-input-container">
+                <Barcode size={20} className="scan-affix-icon" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className="scan-input-field"
+                  placeholder="Scan barcode or type Bin ID (e.g. H1, H2)..."
+                  value={binInput}
+                  onChange={(e) => {
+                    setBinInput(e.target.value);
+                    if (error) setError('');
+                    if (warning) setWarning('');
+                  }}
+                  onKeyDown={handleKeyDown}
+                  autoComplete="off"
+                  disabled={loading}
+                />
+                {binInput && (
+                  <button
+                    type="button"
+                    className="clear-input-btn"
+                    onClick={() => {
+                      setBinInput('');
+                      setValidatedHu(null);
+                      setError('');
+                      setWarning('');
+                      inputRef.current?.focus();
+                    }}
+                    title="Clear input"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+
               <button
-                className="btn btn-primary d-inline-flex align-items-center gap-2"
-                onClick={() => setIsRegisterOpen(true)}
+                type="button"
+                className="btn-lookup-action"
+                onClick={() => handleLookup()}
+                disabled={loading || !binInput.trim()}
               >
-                <Plus size={15} /> Register New Bin
+                {loading ? (
+                  <>
+                    <Loader2 size={16} className="spin-inline" />
+                    <span>Checking...</span>
+                  </>
+                ) : (
+                  <>
+                    <Search size={16} />
+                    <span>Check Bin</span>
+                  </>
+                )}
               </button>
             </div>
-          ) : (
-            <div>
-              {/* Searchable Combobox Selection */}
-              <div className="mb-4 position-relative" ref={dropdownRef}>
-                <label className="form-label fw-bold" style={{ fontSize: '12px', color: '#475569' }}>
-                  SELECT ACTIVE HANDLING UNIT (BIN)
-                </label>
+          </div>
 
-                <div className="d-flex gap-2">
-                  {/* Combobox Trigger Field */}
-                  <div className="position-relative flex-grow-1">
-                    <button
-                      type="button"
-                      className="form-control text-start d-flex align-items-center justify-content-between"
-                      style={{
-                        padding: '9px 12px',
-                        background: '#ffffff',
-                        borderColor: isDropdownOpen ? '#3b82f6' : '#cbd5e1',
-                        boxShadow: isDropdownOpen ? '0 0 0 3px rgba(59, 130, 246, 0.15)' : 'none',
-                        cursor: 'pointer',
-                        minHeight: '42px',
-                      }}
-                      onClick={() => setIsDropdownOpen((prev) => !prev)}
-                    >
-                      {selectedHu ? (
-                        <div className="d-flex align-items-center gap-2 overflow-hidden">
-                          <span
-                            className="badge bg-primary font-monospace"
-                            style={{ fontSize: '12px', padding: '3px 8px' }}
-                          >
-                            {selectedHu.hu_id}
-                          </span>
-                          <span className="text-dark fw-semibold text-truncate" style={{ fontSize: '13px' }}>
-                            {selectedHu.bin_type?.name || 'Bin'}
-                          </span>
-                          <span className="text-muted" style={{ fontSize: '12px' }}>
-                            ({(selectedHu.compartments || []).filter((c) => c.status === 'OCCUPIED').length}/
-                            {selectedHu.compartments?.length || selectedHu.bin_type?.compartment_count || 15} Loaded)
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-muted" style={{ fontSize: '13px' }}>
-                          Select or search a bin...
-                        </span>
-                      )}
-                      <ChevronDown size={16} className="text-muted flex-shrink-0 ms-2" />
-                    </button>
+          {/* Error Message Box with Option to Register */}
+          {error && (
+            <div className="alert-box-error">
+              <div className="d-flex align-items-center gap-2">
+                <AlertCircle size={18} className="flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+              {binInput.trim() && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1 flex-shrink-0 fw-bold"
+                  style={{ fontSize: '11.5px', borderRadius: '6px' }}
+                  onClick={() => setIsRegisterOpen(true)}
+                >
+                  <Plus size={13} />
+                  <span>Register &quot;{binInput.trim().toUpperCase()}&quot;</span>
+                </button>
+              )}
+            </div>
+          )}
 
-                    {/* Dropdown Menu Panel */}
-                    {isDropdownOpen && (
-                      <div
-                        className="dropdown-menu show shadow-lg w-100 p-2 position-absolute"
-                        style={{
-                          top: '100%',
-                          left: 0,
-                          zIndex: 1050,
-                          marginTop: '4px',
-                          borderRadius: '10px',
-                          border: '1.5px solid #cbd5e1',
-                          maxHeight: '260px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          background: '#ffffff',
-                        }}
-                      >
-                        {/* Search Input Box */}
-                        <div className="position-relative mb-2">
-                          <Search
-                            size={14}
-                            className="position-absolute"
-                            style={{ left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}
-                          />
-                          <input
-                            type="text"
-                            className="form-control form-control-sm"
-                            placeholder="Type to search bin ID or type..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            autoFocus
-                            style={{ paddingLeft: '32px', fontSize: '12.5px' }}
-                          />
-                        </div>
+          {/* Warning Message Box */}
+          {warning && (
+            <div className="alert-box-warning">
+              <AlertCircle size={18} className="flex-shrink-0" />
+              <span>{warning}</span>
+            </div>
+          )}
 
-                        {/* Bins List */}
-                        <div className="overflow-auto flex-grow-1" style={{ maxHeight: '190px' }}>
-                          {filteredBins.length === 0 ? (
-                            <div className="text-center py-3 text-muted" style={{ fontSize: '12.5px' }}>
-                              No matching bins found
-                            </div>
-                          ) : (
-                            filteredBins.map((bin) => {
-                              const occ = (bin.compartments || []).filter((c) => c.status === 'OCCUPIED').length;
-                              const tot = bin.compartments?.length || bin.bin_type?.compartment_count || 15;
-                              const isSelected = selectedHu?.hu_id === bin.hu_id;
-
-                              return (
-                                <button
-                                  key={bin.id}
-                                  type="button"
-                                  className={`dropdown-item d-flex align-items-center justify-content-between p-2 rounded-2 ${
-                                    isSelected ? 'bg-primary-subtle text-primary fw-bold' : ''
-                                  }`}
-                                  style={{ cursor: 'pointer', fontSize: '13px' }}
-                                  onClick={() => {
-                                    setSelectedHu(bin);
-                                    setIsDropdownOpen(false);
-                                    setSearchTerm('');
-                                  }}
-                                >
-                                  <div className="d-flex align-items-center gap-2">
-                                    <span
-                                      className="font-monospace fw-bold"
-                                      style={{
-                                        fontSize: '12px',
-                                        background: isSelected ? '#2563eb' : '#f1f5f9',
-                                        color: isSelected ? '#ffffff' : '#1e293b',
-                                        padding: '2px 7px',
-                                        borderRadius: '4px',
-                                      }}
-                                    >
-                                      {bin.hu_id}
-                                    </span>
-                                    <span>{bin.bin_type?.name || 'Bin'}</span>
-                                    <span className="text-muted" style={{ fontSize: '11.5px' }}>
-                                      ({occ}/{tot} Loaded)
-                                    </span>
-                                  </div>
-
-                                  {isSelected && <Check size={15} className="text-primary flex-shrink-0" />}
-                                </button>
-                              );
-                            })
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Register New Bin Shortcut */}
-                  <button
-                    className="btn btn-outline-primary d-flex align-items-center gap-1 flex-shrink-0"
-                    onClick={() => setIsRegisterOpen(true)}
-                    title="Register a new handling unit"
-                    style={{ fontWeight: 600, fontSize: '13px' }}
-                  >
-                    <Plus size={15} /> New Bin
-                  </button>
+          {/* Validated Bin Success Card */}
+          {validatedHu && !error && (
+            <div className="validated-bin-card">
+              <div className="val-card-header">
+                <div className="val-id-row">
+                  <CheckCircle2 size={18} className="text-success" />
+                  <span className="val-hu-badge">{validatedHu.hu_id}</span>
+                  <span className="val-type-text">{validatedHu.bin_type?.name || 'Bin'}</span>
+                  <span className="val-pps-badge">PPS: {validatedHu.bin_type?.bin_name || 'CON_BINA'}</span>
+                </div>
+                <div className="d-flex align-items-center gap-2">
+                  <StorageStatusBadge status={validatedHu.storage_status} />
+                  <HUStatusBadge status={validatedHu.hu_status} />
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="d-flex align-items-center justify-content-between gap-2 pt-3 border-top">
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary"
-                  onClick={onClose}
-                >
-                  Cancel
-                </button>
-
-                <div className="d-flex align-items-center gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-outline-primary d-flex align-items-center gap-2"
-                    onClick={handleOpenBinDetail}
-                    disabled={!selectedHu}
-                  >
-                    <Eye size={16} /> Open Bin & Scan Parts
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn btn-primary d-flex align-items-center gap-2"
-                    onClick={() => setIsSendToKardexOpen(true)}
-                    disabled={!selectedHu || occupiedCount === 0}
-                    title={occupiedCount === 0 ? 'Load at least one part into bin before sending' : 'Send bin to Kardex PPS'}
-                  >
-                    <Send size={16} /> Send Bin to Kardex PPS
-                  </button>
+              {/* Metrics Grid */}
+              <div className="val-card-metrics">
+                <div className="val-metric-col">
+                  <span className="val-metric-lbl">Total Compartments</span>
+                  <span className="val-metric-val">{totalSlots} Slots</span>
+                </div>
+                <div className="val-metric-col">
+                  <span className="val-metric-lbl">Current Load</span>
+                  <span className="val-metric-val" style={{ color: occupiedCount > 0 ? '#16a34a' : '#64748b' }}>
+                    {occupiedCount} / {totalSlots} Loaded
+                  </span>
+                </div>
+                <div className="val-metric-col">
+                  <span className="val-metric-lbl">Fill Capacity</span>
+                  <span className="val-metric-val">{pct}%</span>
+                  <div className="val-progress-track">
+                    <div className="val-progress-fill" style={{ width: `${pct}%` }} />
+                  </div>
                 </div>
               </div>
             </div>
           )}
+
+          {/* Footer Actions */}
+          <div className="footer-actions-row">
+            <button type="button" className="btn-modal-cancel" onClick={onClose}>
+              Cancel
+            </button>
+
+            <div className="d-flex align-items-center gap-2">
+              {validatedHu && canSendToKardex && (
+                <button
+                  type="button"
+                  className="btn-send-kardex-direct"
+                  onClick={() => setIsSendToKardexOpen(true)}
+                  title="Send bin with loaded parts to Kardex PPS shuttle"
+                >
+                  <Send size={14} />
+                  <span>Send Bin to Kardex PPS</span>
+                </button>
+              )}
+
+              {validatedHu ? (
+                <button
+                  type="button"
+                  className="btn-open-bin-primary"
+                  onClick={handleOpenBinDetail}
+                  title="Open bin layout to scan and fill adapters"
+                >
+                  <Barcode size={16} />
+                  <span>Open Bin & Scan Parts</span>
+                  <ChevronRight size={15} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-open-bin-primary"
+                  onClick={() => handleLookup()}
+                  disabled={loading || !binInput.trim()}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 size={15} className="spin-inline" />
+                      <span>Validating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowRight size={15} />
+                      <span>Validate Bin</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </Modal>
 
-      {/* Register New Bin Submodal */}
+      {/* Register New Bin Submodal with initial ID passed */}
       <RegisterBinModal
         isOpen={isRegisterOpen}
+        initialHuId={binInput.trim()}
         onClose={() => setIsRegisterOpen(false)}
         onSuccess={() => {
           setIsRegisterOpen(false);
-          fetchDraftBins();
+          const currentId = binInput.trim();
+          if (currentId) {
+            handleLookup(currentId);
+          }
         }}
       />
 
       {/* Send to Kardex Submodal */}
-      {selectedHu && isSendToKardexOpen && (
+      {validatedHu && isSendToKardexOpen && (
         <SendToKardexModal
           isOpen={isSendToKardexOpen}
           onClose={() => setIsSendToKardexOpen(false)}
@@ -369,7 +780,7 @@ export const HUPutModal: React.FC<HUPutModalProps> = ({
             onClose();
             onSuccess();
           }}
-          hu={selectedHu}
+          hu={validatedHu}
         />
       )}
     </>
