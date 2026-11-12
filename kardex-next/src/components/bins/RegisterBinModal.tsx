@@ -55,10 +55,10 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
     try {
       setLoading(true);
       const res = await apiGet<BinType[]>('/hu/bin-types');
-      const types = res || [];
+      const types = (res || []).filter((t) => t.compartment_count === 30);
       setBinTypes(types);
-      // Auto-select first type if only 1 is available
-      if (types.length === 1 && !binTypeId) {
+      // Auto-select the 30-compartment tray specification
+      if (types.length > 0) {
         setBinTypeId(types[0].id);
       }
     } catch (err: any) {
@@ -466,7 +466,7 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
                 </div>
               ) : binTypes.length === 0 ? (
                 <div className="p-3 bg-light rounded-3 border text-center text-muted" style={{ fontSize: '13px' }}>
-                  No bin types found. Standard 15-compartment profile will be created.
+                  No 30-compartment bin type found. Please ensure the 30-compartment profile exists.
                 </div>
               ) : (
                 <div className="type-cards-grid">

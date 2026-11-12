@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { Calendar, Filter, RotateCcw, ArrowRight } from 'lucide-react';
+import { Calendar, Filter, RotateCcw } from 'lucide-react';
 
 interface DateRangePickerProps {
   onApply: (startDate: Date | null, endDate: Date | null) => void;
@@ -75,8 +75,13 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     <div className="filter-bar-wrapper">
       <style jsx>{`
         .filter-bar-wrapper {
-          display: flex;
+          display: inline-flex;
           align-items: center;
+          background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 4px 6px 4px 4px;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 10px rgba(15, 23, 42, 0.03);
           gap: 8px;
           flex-wrap: wrap;
         }
@@ -84,19 +89,18 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
         .preset-group {
           display: inline-flex;
           align-items: center;
-          background: #ffffff;
+          background: #f1f5f9;
           padding: 3px;
-          border-radius: 8px;
+          border-radius: 9px;
           border: 1px solid #e2e8f0;
-          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
           gap: 2px;
         }
 
         .preset-btn {
-          padding: 4px 10px;
-          border-radius: 6px;
+          padding: 5px 11px;
+          border-radius: 7px;
           font-size: 12px;
-          font-weight: 500;
+          font-weight: 600;
           color: #64748b;
           background: transparent;
           border: none;
@@ -107,67 +111,83 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
 
         .preset-btn:hover {
           color: #0f172a;
-          background: #f1f5f9;
+          background: rgba(255, 255, 255, 0.75);
         }
 
         .preset-btn.active {
-          background: #2563eb;
+          background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
           color: #ffffff;
-          font-weight: 600;
-          box-shadow: 0 1px 3px rgba(37, 99, 235, 0.25);
+          font-weight: 700;
+          box-shadow: 0 2px 6px rgba(37, 99, 235, 0.28);
+        }
+
+        .toolbar-divider {
+          width: 1px;
+          height: 22px;
+          background: #e2e8f0;
+          flex-shrink: 0;
         }
 
         .date-range-box {
           display: inline-flex;
           align-items: center;
-          background: #ffffff;
-          padding: 3px 5px 3px 10px;
-          border-radius: 8px;
-          border: 1px solid #e2e8f0;
-          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
           gap: 6px;
-          transition: border-color 0.2s, box-shadow 0.2s;
-        }
-
-        .date-range-box:hover,
-        .date-range-box:focus-within {
-          border-color: #cbd5e1;
-          box-shadow: 0 2px 5px rgba(0, 0, 0, 0.06);
         }
 
         .cal-icon-wrapper {
+          width: 28px;
+          height: 28px;
+          border-radius: 8px;
+          background: #eff6ff;
+          color: #2563eb;
+          border: 1px solid rgba(37, 99, 235, 0.15);
           display: flex;
           align-items: center;
           justify-content: center;
-          color: #64748b;
+          flex-shrink: 0;
         }
 
         :global(.custom-range-input) {
-          border: none !important;
-          background: transparent !important;
-          font-size: 12.5px !important;
-          font-weight: 500 !important;
+          border: 1px solid #e2e8f0 !important;
+          background: #ffffff !important;
+          border-radius: 7px !important;
+          font-size: 12px !important;
+          font-weight: 600 !important;
           color: #1e293b !important;
-          padding: 4px 4px !important;
-          width: 88px !important;
+          padding: 5px 8px !important;
+          width: 96px !important;
           outline: none !important;
           box-shadow: none !important;
           text-align: center !important;
           cursor: pointer !important;
+          transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+        }
+
+        :global(.custom-range-input:hover) {
+          border-color: #cbd5e1 !important;
+        }
+
+        :global(.custom-range-input:focus) {
+          border-color: #3b82f6 !important;
+          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15) !important;
         }
 
         :global(.custom-range-input::placeholder) {
           color: #94a3b8 !important;
-          font-weight: 400 !important;
+          font-weight: 500 !important;
         }
 
         :global(.react-datepicker-popper) {
           z-index: 1050 !important;
         }
 
-        .range-arrow {
+        .range-sep {
+          font-size: 11px;
+          font-weight: 700;
           color: #94a3b8;
-          flex-shrink: 0;
+          text-transform: uppercase;
+          letter-spacing: 0.3px;
+          padding: 0 1px;
         }
 
         .btn-filter-action {
@@ -177,30 +197,30 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
           color: #ffffff;
           border: none;
-          padding: 5px 12px;
-          border-radius: 6px;
+          padding: 6px 13px;
+          border-radius: 8px;
           font-size: 12px;
-          font-weight: 600;
+          font-weight: 700;
           cursor: pointer;
-          box-shadow: 0 1px 3px rgba(37, 99, 235, 0.2);
-          transition: all 0.2s ease;
+          box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+          transition: all 0.18s ease;
           white-space: nowrap;
         }
 
         .btn-filter-action:hover {
           background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
-          transform: translateY(-0.5px);
-          box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 10px rgba(37, 99, 235, 0.32);
         }
 
         .btn-clear-action {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          width: 26px;
-          height: 26px;
-          border-radius: 6px;
-          background: #f8fafc;
+          width: 28px;
+          height: 28px;
+          border-radius: 8px;
+          background: #ffffff;
           border: 1px solid #e2e8f0;
           color: #64748b;
           cursor: pointer;
@@ -208,7 +228,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
         }
 
         .btn-clear-action:hover {
-          background: #fee2e2;
+          background: #fef2f2;
           color: #ef4444;
           border-color: #fecaca;
         }
@@ -216,35 +236,24 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
 
       {/* Preset Quick Filters */}
       <div className="preset-group">
-        <button
-          type="button"
-          className={`preset-btn ${activePreset === 'all' ? 'active' : ''}`}
-          onClick={() => handlePreset('all')}
-        >
-          All Time
-        </button>
-        <button
-          type="button"
-          className={`preset-btn ${activePreset === 'today' ? 'active' : ''}`}
-          onClick={() => handlePreset('today')}
-        >
-          Today
-        </button>
-        <button
-          type="button"
-          className={`preset-btn ${activePreset === '7d' ? 'active' : ''}`}
-          onClick={() => handlePreset('7d')}
-        >
-          7 Days
-        </button>
-        <button
-          type="button"
-          className={`preset-btn ${activePreset === '30d' ? 'active' : ''}`}
-          onClick={() => handlePreset('30d')}
-        >
-          30 Days
-        </button>
+        {[
+          { key: 'all' as const, label: 'All Time' },
+          { key: 'today' as const, label: 'Today' },
+          { key: '7d' as const, label: '7 Days' },
+          { key: '30d' as const, label: '30 Days' },
+        ].map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            className={`preset-btn ${activePreset === item.key ? 'active' : ''}`}
+            onClick={() => handlePreset(item.key)}
+          >
+            {item.label}
+          </button>
+        ))}
       </div>
+
+      <div className="toolbar-divider d-none d-md-block" />
 
       {/* Custom Date Range Picker */}
       <div className="date-range-box">
@@ -266,7 +275,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           className="custom-range-input"
         />
 
-        <ArrowRight size={12} className="range-arrow" />
+        <span className="range-sep">to</span>
 
         <DatePicker
           selected={endDate}

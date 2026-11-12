@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { apiPost } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import { HandlingUnit, StorageStatus, HUStatus, HUListResponse, HUStats } from '@/types/hu';
 import { HUStatusBadge } from '@/components/bins/HUStatusBadge';
-import { StorageStatusBadge } from '@/components/bins/StorageStatusBadge';
 import { RegisterBinModal } from '@/components/bins/RegisterBinModal';
 import { Loader } from '@/components/shared/Loader';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -39,6 +40,8 @@ const PAGE_SIZE = 20;
 type SortOption = 'HU_ASC' | 'HU_DESC' | 'CAPACITY_DESC' | 'CAPACITY_ASC' | 'STATUS';
 
 export default function HUPutPage() {
+  const router = useRouter();
+  const { canPut, isLoading: authLoading } = useAuth();
   const [hus, setHus] = useState<HandlingUnit[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -102,8 +105,12 @@ export default function HUPutPage() {
   );
 
   useEffect(() => {
+    if (!authLoading && !canPut) {
+      router.replace('/error/403');
+      return;
+    }
     fetchHUs(1, storageFilter, huStatusFilter, searchQuery);
-  }, [storageFilter, huStatusFilter]);
+  }, [authLoading, canPut, router, storageFilter, huStatusFilter]);
 
   // Debounced search
   useEffect(() => {
@@ -831,11 +838,11 @@ export default function HUPutPage() {
         </div>
       </div>
 
-      {/* 6 Interactive Stats Cards */}
+      {/* Interactive Stats Cards */}
       <div className="stats-grid">
         {/* Total Put Units */}
         <div
-          className={`interactive-stat-card ${storageFilter === 'ALL' && huStatusFilter === 'ALL' ? 'active-stat' : ''}`}
+          className={`interactive-stat-card ${huStatusFilter === 'ALL' ? 'active-stat' : ''}`}
           onClick={() => {
             setStorageFilter('ALL');
             setHuStatusFilter('ALL');
@@ -850,66 +857,6 @@ export default function HUPutPage() {
           </div>
           <div className="stat-icon-well" style={{ background: '#f1f5f9', color: '#475569' }}>
             <Boxes size={20} />
-          </div>
-        </div>
-
-        {/* Draft (Floor) */}
-        <div
-          className={`interactive-stat-card ${storageFilter === 'DRAFT' ? 'active-stat' : ''}`}
-          onClick={() => {
-            setStorageFilter('DRAFT');
-            setHuStatusFilter('ALL');
-          }}
-          title="Click to filter draft bins on shop floor ready for put"
-        >
-          <div className="stat-meta">
-            <span className="stat-label">Draft (Floor)</span>
-            <span className="stat-value" style={{ color: '#2563eb' }}>
-              {stats.draft}
-            </span>
-          </div>
-          <div className="stat-icon-well" style={{ background: '#eff6ff', color: '#2563eb' }}>
-            <PackagePlus size={20} />
-          </div>
-        </div>
-
-        {/* Outside Kardex */}
-        <div
-          className={`interactive-stat-card ${storageFilter === 'OUTSIDE_KARDEX' ? 'active-stat' : ''}`}
-          onClick={() => {
-            setStorageFilter('OUTSIDE_KARDEX');
-            setHuStatusFilter('ALL');
-          }}
-          title="Click to filter bins currently outside Kardex"
-        >
-          <div className="stat-meta">
-            <span className="stat-label">Outside Kardex</span>
-            <span className="stat-value" style={{ color: '#d97706' }}>
-              {stats.outsideKardex}
-            </span>
-          </div>
-          <div className="stat-icon-well" style={{ background: '#fef3c7', color: '#b45309' }}>
-            <Layers size={20} />
-          </div>
-        </div>
-
-        {/* In Kardex */}
-        <div
-          className={`interactive-stat-card ${storageFilter === 'IN_KARDEX' ? 'active-stat' : ''}`}
-          onClick={() => {
-            setStorageFilter('IN_KARDEX');
-            setHuStatusFilter('ALL');
-          }}
-          title="Click to filter bins stored in Kardex"
-        >
-          <div className="stat-meta">
-            <span className="stat-label">In Kardex</span>
-            <span className="stat-value" style={{ color: '#059669' }}>
-              {stats.inKardex}
-            </span>
-          </div>
-          <div className="stat-icon-well" style={{ background: '#ecfdf5', color: '#059669' }}>
-            <CheckCircle2 size={20} />
           </div>
         </div>
 
@@ -972,38 +919,6 @@ export default function HUPutPage() {
         {/* Table Toolbar */}
         <div className="table-toolbar">
           <div className="toolbar-left-cluster">
-            {/* Storage Status Tabs with live count tags */}
-            <div className="filter-tab-pill-group">
-              <button
-                className={`filter-tab-pill ${storageFilter === 'ALL' ? 'active' : ''}`}
-                onClick={() => setStorageFilter('ALL')}
-              >
-                <span>All Units</span>
-                <span className="tab-badge">{stats.total || totalItems}</span>
-              </button>
-              <button
-                className={`filter-tab-pill ${storageFilter === 'DRAFT' ? 'active' : ''}`}
-                onClick={() => setStorageFilter('DRAFT')}
-              >
-                <span>Draft (Floor)</span>
-                <span className="tab-badge">{stats.draft}</span>
-              </button>
-              <button
-                className={`filter-tab-pill ${storageFilter === 'OUTSIDE_KARDEX' ? 'active' : ''}`}
-                onClick={() => setStorageFilter('OUTSIDE_KARDEX')}
-              >
-                <span>Outside Kardex</span>
-                <span className="tab-badge">{stats.outsideKardex}</span>
-              </button>
-              <button
-                className={`filter-tab-pill ${storageFilter === 'IN_KARDEX' ? 'active' : ''}`}
-                onClick={() => setStorageFilter('IN_KARDEX')}
-              >
-                <span>In Kardex</span>
-                <span className="tab-badge">{stats.inKardex}</span>
-              </button>
-            </div>
-
             {/* HU Fill Status Filter */}
             <select
               className="select-filter-control"
@@ -1098,12 +1013,6 @@ export default function HUPutPage() {
                     <div className="d-flex align-items-center gap-1">
                       <CheckCircle2 size={13} className="text-muted" />
                       <span>HU Status</span>
-                    </div>
-                  </th>
-                  <th>
-                    <div className="d-flex align-items-center gap-1">
-                      <Archive size={13} className="text-muted" />
-                      <span>Storage Location</span>
                     </div>
                   </th>
                   <th>
@@ -1225,11 +1134,6 @@ export default function HUPutPage() {
                         <HUStatusBadge status={hu.hu_status} />
                       </td>
 
-                      {/* Storage Location Badge */}
-                      <td>
-                        <StorageStatusBadge status={hu.storage_status} />
-                      </td>
-
                       {/* Last Activity & Status */}
                       <td>
                         <div className="d-flex flex-column gap-1">
@@ -1245,26 +1149,15 @@ export default function HUPutPage() {
                       {/* Operator Actions Cluster */}
                       <td>
                         <div className="d-flex align-items-center justify-content-end gap-2">
-                          {isInKardex ? (
-                            <Link
-                              href={`/app/bins/${hu.hu_id}`}
-                              className="btn-view-kardex"
-                              title="Stored in Kardex shuttle — click to view layout"
-                            >
-                              <Eye size={14} />
-                              <span>View Layout</span>
-                            </Link>
-                          ) : (
-                            <Link
-                              href={`/app/bins/${hu.hu_id}`}
-                              className="btn-scan-fill"
-                              title="Open bin to scan parts and fill compartments"
-                            >
-                              <PackagePlus size={15} />
-                              <span>Fill / Scan</span>
-                              <ChevronRight size={14} />
-                            </Link>
-                          )}
+                          <Link
+                            href={`/app/bins/${hu.hu_id}`}
+                            className="btn-scan-fill"
+                            title="Open bin to scan parts and fill compartments"
+                          >
+                            <PackagePlus size={15} />
+                            <span>Fill / Scan</span>
+                            <ChevronRight size={14} />
+                          </Link>
                         </div>
                       </td>
                     </tr>

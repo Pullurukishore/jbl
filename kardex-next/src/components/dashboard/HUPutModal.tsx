@@ -6,12 +6,10 @@ import { Modal } from '@/components/shared/Modal';
 import { apiGet } from '@/lib/api';
 import { HandlingUnit } from '@/types/hu';
 import { RegisterBinModal } from '@/components/bins/RegisterBinModal';
-import { SendToKardexModal } from '@/components/bins/SendToKardexModal';
 import { HUStatusBadge } from '@/components/bins/HUStatusBadge';
 import { StorageStatusBadge } from '@/components/bins/StorageStatusBadge';
 import {
   PackagePlus,
-  Send,
   Eye,
   Boxes,
   Plus,
@@ -23,7 +21,6 @@ import {
   Layers,
   ChevronRight,
   Sparkles,
-  Search,
   X,
   Info,
 } from 'lucide-react';
@@ -49,7 +46,6 @@ export const HUPutModal: React.FC<HUPutModalProps> = ({
 
   // Sub-modals
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
-  const [isSendToKardexOpen, setIsSendToKardexOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -81,15 +77,8 @@ export const HUPutModal: React.FC<HUPutModalProps> = ({
         throw new Error('Handling unit not found.');
       }
 
-      setValidatedHu(data);
-
-      if (data.storage_status === 'IN_KARDEX') {
-        setWarning(
-          `Bin "${data.hu_id}" is currently stored IN KARDEX (PPS Station: ${
-            data.bin_type?.bin_name || 'CON_BINA'
-          }). To retrieve parts from this bin, please use HU Pick.`
-        );
-      }
+      onClose();
+      router.push(`/app/bins/${data.hu_id}`);
     } catch (err: any) {
       setValidatedHu(null);
       const msg = err.message || '';
@@ -106,19 +95,8 @@ export const HUPutModal: React.FC<HUPutModalProps> = ({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      // If already validated and user hits Enter again, open it directly!
-      if (validatedHu && validatedHu.hu_id.toLowerCase() === binInput.trim().toLowerCase()) {
-        handleOpenBinDetail();
-      } else {
-        handleLookup();
-      }
+      handleLookup();
     }
-  };
-
-  const handleOpenBinDetail = () => {
-    if (!validatedHu) return;
-    onClose();
-    router.push(`/app/bins/${validatedHu.hu_id}`);
   };
 
   const occupiedCount = (validatedHu?.compartments || []).filter(
@@ -128,15 +106,11 @@ export const HUPutModal: React.FC<HUPutModalProps> = ({
   const totalSlots =
     validatedHu?.compartments?.length || validatedHu?.bin_type?.compartment_count || 15;
   const pct = totalSlots > 0 ? Math.round((occupiedCount / totalSlots) * 100) : 0;
-  const canSendToKardex =
-    validatedHu &&
-    (validatedHu.storage_status === 'DRAFT' || validatedHu.storage_status === 'OUTSIDE_KARDEX') &&
-    occupiedCount > 0;
 
   return (
     <>
       <Modal
-        isOpen={isOpen && !isRegisterOpen && !isSendToKardexOpen}
+        isOpen={isOpen && !isRegisterOpen}
         onClose={onClose}
         title={
           <div className="d-flex align-items-center gap-2">
@@ -611,25 +585,6 @@ export const HUPutModal: React.FC<HUPutModalProps> = ({
                   </button>
                 )}
               </div>
-
-              <button
-                type="button"
-                className="btn-lookup-action"
-                onClick={() => handleLookup()}
-                disabled={loading || !binInput.trim()}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 size={16} className="spin-inline" />
-                    <span>Checking...</span>
-                  </>
-                ) : (
-                  <>
-                    <Search size={16} />
-                    <span>Check Bin</span>
-                  </>
-                )}
-              </button>
             </div>
           </div>
 
@@ -708,49 +663,26 @@ export const HUPutModal: React.FC<HUPutModalProps> = ({
             </button>
 
             <div className="d-flex align-items-center gap-2">
-              {validatedHu && canSendToKardex && (
-                <button
-                  type="button"
-                  className="btn-send-kardex-direct"
-                  onClick={() => setIsSendToKardexOpen(true)}
-                  title="Send bin with loaded parts to Kardex PPS shuttle"
-                >
-                  <Send size={14} />
-                  <span>Send Bin to Kardex PPS</span>
-                </button>
-              )}
-
-              {validatedHu ? (
-                <button
-                  type="button"
-                  className="btn-open-bin-primary"
-                  onClick={handleOpenBinDetail}
-                  title="Open bin layout to scan and fill adapters"
-                >
-                  <Barcode size={16} />
-                  <span>Open Bin & Scan Parts</span>
-                  <ChevronRight size={15} />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="btn-open-bin-primary"
-                  onClick={() => handleLookup()}
-                  disabled={loading || !binInput.trim()}
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 size={15} className="spin-inline" />
-                      <span>Validating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <ArrowRight size={15} />
-                      <span>Validate Bin</span>
-                    </>
-                  )}
-                </button>
-              )}
+              <button
+                type="button"
+                className="btn-open-bin-primary"
+                onClick={() => handleLookup()}
+                disabled={loading || !binInput.trim()}
+                title="Open bin layout to scan and fill adapters"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 size={15} className="spin-inline" />
+                    <span>Opening...</span>
+                  </>
+                ) : (
+                  <>
+                    <Barcode size={16} />
+                    <span>Open Bin & Scan Parts</span>
+                    <ChevronRight size={15} />
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
@@ -769,20 +701,6 @@ export const HUPutModal: React.FC<HUPutModalProps> = ({
           }
         }}
       />
-
-      {/* Send to Kardex Submodal */}
-      {validatedHu && isSendToKardexOpen && (
-        <SendToKardexModal
-          isOpen={isSendToKardexOpen}
-          onClose={() => setIsSendToKardexOpen(false)}
-          onSuccess={() => {
-            setIsSendToKardexOpen(false);
-            onClose();
-            onSuccess();
-          }}
-          hu={validatedHu}
-        />
-      )}
     </>
   );
 };

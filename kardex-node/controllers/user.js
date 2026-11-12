@@ -4,10 +4,31 @@ const bcrypt = require('bcryptjs');
 const { Op, where } = require('sequelize');
 
 
+const VALID_ACCESS_TYPES = ['PUT_ONLY', 'PICK_ONLY', 'BOTH'];
+
+function normalizeAccessType(role, accessType) {
+    if (role === 'ADMIN') return 'BOTH';
+    return VALID_ACCESS_TYPES.includes(accessType) ? accessType : 'BOTH';
+}
+
 exports.createUser = asyncHandler(async (req, res) => {
     try {
-        const user = await db.user.create({ ...req.body, created_by: req.user?.id, updated_by: req.user?.id });
-        res.status(201).json(user);
+        const role = req.body.role || 'USER';
+        const access_type = normalizeAccessType(role, req.body.access_type);
+        const hashedPassword = req.body.password
+            ? await bcrypt.hash(req.body.password, 10)
+            : req.body.password;
+        const user = await db.user.create({
+            ...req.body,
+            password: hashedPassword,
+            role,
+            access_type,
+            created_by: req.user?.id,
+            updated_by: req.user?.id
+        });
+        const result = user.get({ plain: true });
+        delete result.password;
+        res.status(201).json(result);
     } catch (err) {
         res.status(400).json({ error: err.message });
     }
@@ -16,7 +37,11 @@ exports.createUser = asyncHandler(async (req, res) => {
 exports.changePassword = asyncHandler(async (req, res) => {
     try {
         const { id, password } = req.body;
-        await db.user.update({ password, updated_by: req.user?.id }, { where: { id } });
+        if (!id || !password) {
+            return res.status(400).json({ success: false, error: 'id and password are required.' });
+        }
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await db.user.update({ password: hashedPassword, updated_by: req.user?.id }, { where: { id } });
         res.status(201).json({ success: true });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -27,7 +52,15 @@ exports.updateUser = asyncHandler(async (req, res) => {
     try {
         const user = await db.user.findByPk(req.params.id);
         if (!user) return res.status(404).json({ error: 'User not found' });
-        await user.update({ ...req.body, password: user.password, updated_by: req.user?.id });
+        const role = req.body.role || user.role;
+        const access_type = normalizeAccessType(role, req.body.access_type || user.access_type);
+        await user.update({
+            ...req.body,
+            role,
+            access_type,
+            password: user.password,
+            updated_by: req.user?.id
+        });
         res.status(200).json(user);
     } catch (err) {
         res.status(400).json({ error: err.message });

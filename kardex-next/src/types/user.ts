@@ -1,8 +1,11 @@
+export type AccessType = 'PUT_ONLY' | 'PICK_ONLY' | 'BOTH';
+
 export interface User {
   id: number;
   first_name: string;
   last_name: string;
   role: 'ADMIN' | 'USER';
+  access_type?: AccessType;
   user_id: string;
   email: string | null;
   created_by: string;
@@ -27,6 +30,7 @@ export interface CreateUserPayload {
   first_name: string;
   last_name: string;
   role: 'ADMIN' | 'USER';
+  access_type?: AccessType;
   user_id: string;
   email?: string;
   password: string;
@@ -36,6 +40,7 @@ export interface UpdateUserPayload {
   first_name?: string;
   last_name?: string;
   role?: 'ADMIN' | 'USER';
+  access_type?: AccessType;
   user_id?: string;
   email?: string;
 }

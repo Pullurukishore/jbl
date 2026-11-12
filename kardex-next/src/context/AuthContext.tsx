@@ -9,6 +9,8 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  canPut: boolean;
+  canPick: boolean;
   isLoading: boolean;
   logout: () => void;
   refreshAuth: () => void;
@@ -19,6 +21,8 @@ const AuthContext = createContext<AuthContextType>({
   token: null,
   isAuthenticated: false,
   isAdmin: false,
+  canPut: false,
+  canPick: false,
   isLoading: true,
   logout: () => {},
   refreshAuth: () => {},
@@ -43,13 +47,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(false);
   }, []);
 
+  const isAdmin = user?.role === 'ADMIN';
+  const accessType = user?.access_type || 'BOTH';
+  const canPut = isAdmin || accessType === 'PUT_ONLY' || accessType === 'BOTH';
+  const canPick = isAdmin || accessType === 'PICK_ONLY' || accessType === 'BOTH';
+
   return (
     <AuthContext.Provider
       value={{
         user,
         token,
         isAuthenticated: isAuth,
-        isAdmin: user?.role === 'ADMIN',
+        isAdmin,
+        canPut,
+        canPick,
         isLoading,
         logout: authLogout,
         refreshAuth,

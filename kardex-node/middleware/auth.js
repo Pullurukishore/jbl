@@ -39,7 +39,17 @@ exports.authMiddleware = asyncHandler(async (req, res, next) => {
                 if (!decoded?.id) {
                     return next(new ErrorResponse(`Session Is Terminated`, 401));
                 }
-                req.user = decoded;
+                const dbUser = await db.user.findByPk(decoded.id, {
+                    attributes: ['id', 'role', 'access_type', 'user_id', 'first_name', 'last_name']
+                });
+                if (!dbUser) {
+                    return next(new ErrorResponse(`Session Is Terminated`, 401));
+                }
+                req.user = {
+                    ...decoded,
+                    role: dbUser.role,
+                    access_type: dbUser.role === 'ADMIN' ? 'BOTH' : (dbUser.access_type || 'BOTH')
+                };
                 return next();
             }
         });
@@ -58,3 +68,21 @@ exports.authorize = (...roles) => {
         next();
     }
 }
+
+exports.requireAccess = (operation) => {
+    return (req, res, next) => {
+        if (req.user?.role === 'ADMIN') {
+            return next();
+        }
+        const access = req.user?.access_type || 'BOTH';
+        const allowed =
+            access === 'BOTH' ||
+            (operation === 'PUT' && access === 'PUT_ONLY') ||
+            (operation === 'PICK' && access === 'PICK_ONLY');
+
+        if (!allowed) {
+            return next(new ErrorResponse(`Access denied: ${operation} permission required.`, 403));
+        }
+        next();
+    };
+};

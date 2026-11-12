@@ -11,6 +11,7 @@ import { Pagination } from '@/components/shared/Pagination';
 import { Loader } from '@/components/shared/Loader';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { apiPost, apiDownloadFile, downloadBlob } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import { DashboardCounts, Put, PaginatedResponse } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import {
@@ -33,6 +34,7 @@ import {
 import * as XLSX from 'xlsx';
 
 export default function DashboardPage() {
+  const { canPut, canPick } = useAuth();
   const [counts, setCounts] = useState<DashboardCounts | null>(null);
   const [countsLoading, setCountsLoading] = useState(true);
 
@@ -375,39 +377,98 @@ export default function DashboardPage() {
           border-bottom: 1.5px solid #e2e8f0;
           margin-bottom: 0;
         }
+        .all-metrics-one-line {
+          display: grid;
+          grid-template-columns: repeat(9, minmax(0, 1fr));
+          gap: 10px;
+          margin-top: 4px;
+          margin-bottom: 18px;
+        }
+        @media (max-width: 1279px) {
+          .all-metrics-one-line {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+        }
+        @media (max-width: 575px) {
+          .all-metrics-one-line {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
         .hu-stat-card {
-          background: #ffffff;
-          border-radius: 8px;
-          border: 1.5px solid #d0d5dd;
-          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 3px 8px rgba(0, 0, 0, 0.08);
-          padding: 14px 16px;
-          min-height: 90px;
+          background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+          border-radius: 12px;
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 10px rgba(15, 23, 42, 0.03);
+          padding: 12px 13px 11px;
+          min-height: 98px;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
-          transition: transform 0.15s ease, box-shadow 0.15s ease;
+          transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.18s ease, border-color 0.18s ease;
+          min-width: 0;
+          position: relative;
+          overflow: hidden;
         }
         .hu-stat-card:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+          transform: translateY(-2px);
+          border-color: #cbd5e1;
+          box-shadow: 0 10px 20px -6px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.05);
+        }
+        .hu-stat-accent-bar {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 3px;
+          opacity: 0.9;
+        }
+        .hu-stat-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 6px;
         }
         .hu-stat-label {
-          font-size: 12px;
-          font-weight: 600;
-          color: #64748b;
-          text-transform: uppercase;
-          letter-spacing: 0.4px;
-        }
-        .hu-stat-sub {
           font-size: 11px;
-          color: #94a3b8;
-          margin-top: 1px;
+          font-weight: 700;
+          color: #475569;
+          letter-spacing: 0.1px;
+          line-height: 1.2;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .hu-stat-icon {
+          width: 28px;
+          height: 28px;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          border: 1px solid rgba(15, 23, 42, 0.05);
+        }
+        .hu-stat-body {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          margin-top: 8px;
         }
         .hu-stat-value {
-          font-size: 26px;
+          font-size: 24px;
           font-weight: 800;
-          line-height: 1;
-          margin-top: 8px;
+          line-height: 1.05;
+          letter-spacing: -0.5px;
+          font-variant-numeric: tabular-nums;
+        }
+        .hu-stat-sub {
+          font-size: 10.5px;
+          font-weight: 600;
+          color: #94a3b8;
+          line-height: 1.2;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
       `}</style>
 
@@ -427,83 +488,162 @@ export default function DashboardPage() {
         />
 
         <div className="d-flex align-items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            className="scan-action-btn scan-btn-put"
-            onClick={() => setIsHUPutModalOpen(true)}
-            title="Handling Unit PUT: Select floor bin to scan parts or send to Kardex"
-          >
-            <div className="scan-icon-pill put-pill">
-              <PackagePlus size={16} />
-            </div>
-            <span className="scan-btn-title">Handling Unit PUT</span>
-            <span className="scan-type-badge put-badge">PUT</span>
-          </button>
+          {canPut && (
+            <button
+              type="button"
+              className="scan-action-btn scan-btn-put"
+              onClick={() => setIsHUPutModalOpen(true)}
+              title="Handling Unit PUT: Select floor bin to scan parts or send to Kardex"
+            >
+              <div className="scan-icon-pill put-pill">
+                <PackagePlus size={16} />
+              </div>
+              <span className="scan-btn-title">Handling Unit PUT</span>
+              <span className="scan-type-badge put-badge">PUT</span>
+            </button>
+          )}
 
-          <button
-            type="button"
-            className="scan-action-btn scan-btn-pick"
-            onClick={() => setIsPickModalOpen(true)}
-            title="Scan & Pick: Verify serials and generate Kardex pick order"
-          >
-            <div className="scan-icon-pill pick-pill">
-              <PackageMinus size={16} />
-            </div>
-            <span className="scan-btn-title">Scan & Pick</span>
-            <span className="scan-type-badge pick-badge">PICK</span>
-          </button>
+          {canPick && (
+            <button
+              type="button"
+              className="scan-action-btn scan-btn-pick"
+              onClick={() => setIsPickModalOpen(true)}
+              title="Scan & Pick: Verify serials and generate Kardex pick order"
+            >
+              <div className="scan-icon-pill pick-pill">
+                <PackageMinus size={16} />
+              </div>
+              <span className="scan-btn-title">Scan & Pick</span>
+              <span className="scan-type-badge pick-badge">PICK</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 3 Analytics Stat Cards - Uniform Size & Height */}
-      <div className="row mt-1 mb-3 g-3">
-        <div className="col-12 col-md-4">
-          <div className="card shadow-sm stat-metric-card p-3 h-100 d-flex flex-column justify-content-between">
-            <div className="d-flex justify-content-between align-items-center mb-2">
-              <small>Serial Numbers Scanned</small>
-              <div className="stat-icon-pill bg-sky-light">
-                <Scan size={16} />
+      {/* All Analytics + Handling Unit Overview Cards in One Line */}
+      <div className="all-metrics-one-line">
+        {[
+          {
+            label: 'Serial Scans',
+            value: countsLoading ? '...' : counts?.validScanCount || 0,
+            sub: 'verified scans',
+            color: '#0f172a',
+            accent: 'linear-gradient(90deg, #0284c7, #38bdf8)',
+            iconBg: '#e0f2fe',
+            iconColor: '#0284c7',
+            icon: <Scan size={14} />,
+          },
+          {
+            label: 'Total Parts',
+            value: countsLoading ? '...' : totalPartsCount,
+            sub: 'tracked units',
+            color: '#0f172a',
+            accent: 'linear-gradient(90deg, #059669, #34d399)',
+            iconBg: '#ecfdf5',
+            iconColor: '#059669',
+            icon: <Package size={14} />,
+          },
+          {
+            label: 'Total Bins',
+            value: countsLoading ? '—' : counts?.totalHUs ?? 0,
+            sub: 'registered',
+            color: '#0f172a',
+            accent: 'linear-gradient(90deg, #334155, #64748b)',
+            iconBg: '#f1f5f9',
+            iconColor: '#334155',
+            icon: <Layers size={14} />,
+          },
+          {
+            label: 'Draft',
+            value: countsLoading ? '—' : counts?.draftHUs ?? 0,
+            sub: 'on shop floor',
+            color: '#475569',
+            accent: 'linear-gradient(90deg, #64748b, #94a3b8)',
+            iconBg: '#f1f5f9',
+            iconColor: '#64748b',
+            icon: <FileText size={14} />,
+          },
+          {
+            label: 'In Kardex',
+            value: countsLoading ? '—' : counts?.inKardexHUs ?? 0,
+            sub: 'in shuttle',
+            color: '#2563eb',
+            accent: 'linear-gradient(90deg, #2563eb, #60a5fa)',
+            iconBg: '#dbeafe',
+            iconColor: '#2563eb',
+            icon: <Archive size={14} />,
+          },
+          {
+            label: 'Empty',
+            value: countsLoading ? '—' : counts?.emptyHUs ?? 0,
+            sub: '0% loaded',
+            color: '#16a34a',
+            accent: 'linear-gradient(90deg, #16a34a, #4ade80)',
+            iconBg: '#dcfce7',
+            iconColor: '#16a34a',
+            icon: <Box size={14} />,
+          },
+          {
+            label: 'Partial',
+            value: countsLoading ? '—' : counts?.partialHUs ?? 0,
+            sub: 'partially filled',
+            color: '#d97706',
+            accent: 'linear-gradient(90deg, #d97706, #fbbf24)',
+            iconBg: '#fef3c7',
+            iconColor: '#d97706',
+            icon: <PackageSearch size={14} />,
+          },
+          {
+            label: 'Full',
+            value: countsLoading ? '—' : counts?.fullHUs ?? 0,
+            sub: '100% capacity',
+            color: '#059669',
+            accent: 'linear-gradient(90deg, #059669, #10b981)',
+            iconBg: '#d1fae5',
+            iconColor: '#059669',
+            icon: <CheckCircle2 size={14} />,
+          },
+          {
+            label: 'Date Range',
+            value: startDate ? startDate.toLocaleDateString() : 'All Time',
+            sub: endDate ? `to ${endDate.toLocaleDateString()}` : 'to Now',
+            isDate: true,
+            color: '#0f172a',
+            accent: 'linear-gradient(90deg, #f59e0b, #fbbf24)',
+            iconBg: '#fef3c7',
+            iconColor: '#d97706',
+            icon: <Calendar size={14} />,
+          },
+        ].map((card) => (
+          <div key={card.label} className="hu-stat-card">
+            <div className="hu-stat-accent-bar" style={{ background: card.accent }} />
+            <div className="hu-stat-header">
+              <div className="hu-stat-label" title={card.label}>
+                {card.label}
+              </div>
+              <div
+                className="hu-stat-icon"
+                style={{ backgroundColor: card.iconBg, color: card.iconColor }}
+              >
+                {card.icon}
               </div>
             </div>
-            <h3 className="mb-0 text-dark fw-bold" style={{ fontSize: '28px', lineHeight: 1.2 }}>
-              {countsLoading ? '...' : counts?.validScanCount || 0}
-            </h3>
-          </div>
-        </div>
-
-        <div className="col-12 col-md-4">
-          <div className="card shadow-sm stat-metric-card p-3 h-100 d-flex flex-column justify-content-between">
-            <div className="d-flex justify-content-between align-items-center mb-2">
-              <small>Total Parts</small>
-              <div className="stat-icon-pill bg-emerald-light">
-                <Package size={16} />
+            <div className="hu-stat-body">
+              <div
+                className="hu-stat-value"
+                style={{
+                  color: card.color,
+                  fontSize: card.isDate ? '16px' : '24px',
+                  lineHeight: card.isDate ? '1.35' : '1.05',
+                }}
+                title={String(card.value)}
+              >
+                {card.value}
               </div>
-            </div>
-            <h3 className="mb-0 text-dark fw-bold" style={{ fontSize: '28px', lineHeight: 1.2 }}>
-              {countsLoading ? '...' : totalPartsCount}
-            </h3>
-          </div>
-        </div>
-
-        <div className="col-12 col-md-4">
-          <div className="card shadow-sm stat-metric-card p-3 h-100 d-flex flex-column justify-content-between">
-            <div className="d-flex justify-content-between align-items-center mb-2">
-              <small>Date Range</small>
-              <div className="stat-icon-pill bg-amber-light">
-                <Calendar size={16} />
-              </div>
-            </div>
-            <div className="d-flex align-items-center" style={{ minHeight: '34px' }}>
-              <span className="text-dark fw-bold" style={{ fontSize: '15px' }}>
-                {startDate ? startDate.toLocaleDateString() : 'All Time'}
-              </span>
-              <span className="text-muted mx-2 fw-semibold" style={{ fontSize: '13px' }}>—</span>
-              <span className="text-dark fw-bold" style={{ fontSize: '15px' }}>
-                {endDate ? endDate.toLocaleDateString() : 'Now'}
-              </span>
+              <div className="hu-stat-sub">{card.sub}</div>
             </div>
           </div>
-        </div>
+        ))}
       </div>
 
       {/* Visual Analytics Row */}
@@ -616,91 +756,6 @@ export default function DashboardPage() {
                 <h3 className="text-success fw-bold mb-0">
                   {countsLoading ? '...' : counts?.availablePartsCount || 0}
                 </h3>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════════
-          HANDLING UNIT OVERVIEW SECTION
-      ═══════════════════════════════════════════════════════════════════ */}
-      <div className="card table-card mb-4">
-        <div className="hu-section-title mb-3">
-          <Layers size={18} />
-          Handling Unit Overview
-        </div>
-
-        <div className="row g-3">
-          {/* Total Bins */}
-          <div className="col-6 col-md-4 col-lg-2">
-            <div className="hu-stat-card">
-              <div>
-                <div className="hu-stat-label">Total Bins</div>
-              </div>
-              <div className="hu-stat-value" style={{ color: '#0f172a' }}>
-                {countsLoading ? '—' : counts?.totalHUs ?? 0}
-              </div>
-            </div>
-          </div>
-
-          {/* In Kardex */}
-          <div className="col-6 col-md-4 col-lg-2">
-            <div className="hu-stat-card">
-              <div>
-                <div className="hu-stat-label">In Kardex</div>
-              </div>
-              <div className="hu-stat-value" style={{ color: '#2563eb' }}>
-                {countsLoading ? '—' : counts?.inKardexHUs ?? 0}
-              </div>
-            </div>
-          </div>
-
-          {/* Draft */}
-          <div className="col-6 col-md-4 col-lg-2">
-            <div className="hu-stat-card">
-              <div>
-                <div className="hu-stat-label">Draft</div>
-              </div>
-              <div className="hu-stat-value" style={{ color: '#64748b' }}>
-                {countsLoading ? '—' : counts?.draftHUs ?? 0}
-              </div>
-            </div>
-          </div>
-
-          {/* Empty in Kardex */}
-          <div className="col-6 col-md-4 col-lg-2">
-            <div className="hu-stat-card">
-              <div>
-                <div className="hu-stat-label">Empty</div>
-                <div className="hu-stat-sub">Ready for Reuse</div>
-              </div>
-              <div className="hu-stat-value" style={{ color: '#16a34a' }}>
-                {countsLoading ? '—' : counts?.emptyHUs ?? 0}
-              </div>
-            </div>
-          </div>
-
-          {/* Partially Filled */}
-          <div className="col-6 col-md-4 col-lg-2">
-            <div className="hu-stat-card">
-              <div>
-                <div className="hu-stat-label">Partially Filled</div>
-              </div>
-              <div className="hu-stat-value" style={{ color: '#d97706' }}>
-                {countsLoading ? '—' : counts?.partialHUs ?? 0}
-              </div>
-            </div>
-          </div>
-
-          {/* Full in Kardex */}
-          <div className="col-6 col-md-4 col-lg-2">
-            <div className="hu-stat-card">
-              <div>
-                <div className="hu-stat-label">Full</div>
-              </div>
-              <div className="hu-stat-value" style={{ color: '#059669' }}>
-                {countsLoading ? '—' : counts?.fullHUs ?? 0}
               </div>
             </div>
           </div>

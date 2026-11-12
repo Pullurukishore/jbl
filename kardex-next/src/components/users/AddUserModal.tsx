@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Modal } from '@/components/shared/Modal';
-import { apiPost, apiPut } from '@/lib/api';
-import { User, CreateUserPayload } from '@/types';
+import { apiPost } from '@/lib/api';
+import { User, CreateUserPayload, AccessType } from '@/types';
+import { PackagePlus, PackageMinus, Layers, ShieldCheck } from 'lucide-react';
 
 interface AddUserModalProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'ADMIN' | 'USER'>('USER');
+  const [accessType, setAccessType] = useState<AccessType>('BOTH');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -38,6 +40,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         setEmail(userToEdit.email || '');
         setPassword('');
         setRole(userToEdit.role || 'USER');
+        setAccessType(userToEdit.role === 'ADMIN' ? 'BOTH' : userToEdit.access_type || 'BOTH');
       } else {
         setFirstName('');
         setLastName('');
@@ -45,6 +48,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         setEmail('');
         setPassword('');
         setRole('USER');
+        setAccessType('BOTH');
       }
       setErrorMsg('');
     }
@@ -57,6 +61,8 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       return;
     }
 
+    const effectiveAccess: AccessType = role === 'ADMIN' ? 'BOTH' : accessType;
+
     try {
       setLoading(true);
       setErrorMsg('');
@@ -68,6 +74,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
           user_id: userId,
           email,
           role,
+          access_type: effectiveAccess,
         });
 
         if (password) {
@@ -84,6 +91,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
           email,
           password,
           role,
+          access_type: effectiveAccess,
         };
         await apiPost('/user/create', payload);
       }
@@ -148,6 +156,68 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
             opacity: 0.65;
             cursor: not-allowed;
           }
+
+          .access-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+          }
+
+          .access-card {
+            border: 1.5px solid #e2e8f0;
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 10px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-align: left;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+          }
+
+          .access-card:hover {
+            border-color: #cbd5e1;
+            background: #f8fafc;
+          }
+
+          .access-card.selected {
+            border-color: #2563eb;
+            background: #eff6ff;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.16);
+          }
+
+          .access-card-title {
+            font-size: 12.5px;
+            font-weight: 700;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          }
+
+          .access-card.selected .access-card-title {
+            color: #1d4ed8;
+          }
+
+          .access-card-sub {
+            font-size: 11px;
+            color: #64748b;
+            line-height: 1.25;
+          }
+
+          .admin-access-note {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            color: #1e40af;
+            border-radius: 9px;
+            padding: 9px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
         `}</style>
 
         {errorMsg && <div className="error-box">{errorMsg}</div>}
@@ -190,12 +260,62 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
             <select
               className="form-select"
               value={role}
-              onChange={(e) => setRole(e.target.value as 'ADMIN' | 'USER')}
+              onChange={(e) => {
+                const nextRole = e.target.value as 'ADMIN' | 'USER';
+                setRole(nextRole);
+                if (nextRole === 'ADMIN') setAccessType('BOTH');
+              }}
             >
-              <option value="USER">USER</option>
+              <option value="USER">USER (Operator)</option>
               <option value="ADMIN">ADMIN</option>
             </select>
           </div>
+        </div>
+
+        <div>
+          <label className="form-label">Operation Access</label>
+          {role === 'ADMIN' ? (
+            <div className="admin-access-note">
+              <ShieldCheck size={16} />
+              <span>Administrators automatically have full PUT &amp; PICK access.</span>
+            </div>
+          ) : (
+            <div className="access-grid">
+              {[
+                {
+                  key: 'PUT_ONLY' as const,
+                  title: 'PUT Only',
+                  sub: 'Scan & load bins into Kardex',
+                  icon: <PackagePlus size={14} />,
+                },
+                {
+                  key: 'PICK_ONLY' as const,
+                  title: 'PICK Only',
+                  sub: 'Scan & pick parts from Kardex',
+                  icon: <PackageMinus size={14} />,
+                },
+                {
+                  key: 'BOTH' as const,
+                  title: 'PUT & PICK',
+                  sub: 'Full PUT and PICK operations',
+                  icon: <Layers size={14} />,
+                },
+              ].map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  className={`access-card ${accessType === opt.key ? 'selected' : ''}`}
+                  onClick={() => setAccessType(opt.key)}
+                >
+                  <div className="access-card-title">
+                    {opt.icon}
+                    <span>{opt.title}</span>
+                  </div>
+                  <div className="access-card-sub">{opt.sub}</div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div>

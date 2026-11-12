@@ -478,21 +478,6 @@ export const ScanModal: React.FC<ScanModalProps> = ({
           style={{ background: '#f8fafc' }}
         >
           {titleContent}
-          <button
-            type="button"
-            onClick={onClose}
-            className="btn btn-sm btn-light border-0 text-muted p-1 rounded-circle"
-            style={{
-              width: '26px',
-              height: '26px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            title="Close scan panel"
-          >
-            <X size={15} />
-          </button>
         </div>
 
         <div className="p-3" style={{ overflowY: 'auto' }}>

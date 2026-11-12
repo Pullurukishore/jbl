@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { apiPost, apiGet } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import { HandlingUnit, StorageStatus, HUStatus, HUListResponse, HUStats, BinType } from '@/types/hu';
 import { HUStatusBadge } from '@/components/bins/HUStatusBadge';
-import { StorageStatusBadge } from '@/components/bins/StorageStatusBadge';
 import { RegisterBinModal } from '@/components/bins/RegisterBinModal';
 import { Loader } from '@/components/shared/Loader';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -37,6 +37,7 @@ const PAGE_SIZE = 20;
 type SortOption = 'HU_ASC' | 'HU_DESC' | 'CAPACITY_DESC' | 'CAPACITY_ASC' | 'DATE_DESC';
 
 export default function BinsMasterPage() {
+  const { canPut } = useAuth();
   const [hus, setHus] = useState<HandlingUnit[]>([]);
   const [binTypes, setBinTypes] = useState<BinType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -773,59 +774,19 @@ export default function BinsMasterPage() {
             <RefreshCw size={14} className={loading ? 'spin-animation' : ''} />
             Refresh
           </button>
-          <button className="btn-register-primary" onClick={() => setIsRegisterOpen(true)}>
-            <PackagePlus size={16} /> Register New Bin
-          </button>
-        </div>
-      </div>
-
-      {/* Bin Types & System Specifications Banner */}
-      <div className="specs-banner">
-        <div className="specs-left">
-          <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
-            Supported Tray Specifications:
-          </span>
-          {binTypes.length > 0 ? (
-            binTypes.map((t) => (
-              <span key={t.id} className="spec-badge-chip">
-                <Tag size={13} className="text-primary" />
-                <span>{t.name}</span>
-                <span className="text-muted">({t.compartment_count} Compartments)</span>
-                <span className="badge bg-secondary font-monospace" style={{ fontSize: '10.5px' }}>
-                  PPS: {t.bin_name}
-                </span>
-              </span>
-            ))
-          ) : (
-            <span className="spec-badge-chip">
-              <Tag size={13} className="text-primary" />
-              <span>Type-A (15 Compartments)</span>
-              <span className="badge bg-secondary font-monospace" style={{ fontSize: '10.5px' }}>
-                PPS: CON_BINA
-              </span>
-            </span>
+          {canPut && (
+            <button className="btn-register-primary" onClick={() => setIsRegisterOpen(true)}>
+              <PackagePlus size={16} /> Register New Bin
+            </button>
           )}
         </div>
-
-        <div className="d-flex align-items-center gap-2">
-          <span className="text-muted" style={{ fontSize: '12.5px' }}>
-            Ready to deploy another physical bin?
-          </span>
-          <button
-            className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1"
-            onClick={() => setIsRegisterOpen(true)}
-            style={{ fontWeight: 700, borderRadius: '7px' }}
-          >
-            <PackagePlus size={14} /> Add Bin
-          </button>
-        </div>
       </div>
 
-      {/* 6 Interactive Stats Cards */}
+      {/* Interactive Stats Cards */}
       <div className="stats-grid">
         {/* Total Bins */}
         <div
-          className={`interactive-stat-card ${storageFilter === 'ALL' && huStatusFilter === 'ALL' ? 'active-stat' : ''}`}
+          className={`interactive-stat-card ${huStatusFilter === 'ALL' ? 'active-stat' : ''}`}
           onClick={() => {
             setStorageFilter('ALL');
             setHuStatusFilter('ALL');
@@ -840,66 +801,6 @@ export default function BinsMasterPage() {
           </div>
           <div className="stat-icon-well" style={{ background: '#f1f5f9', color: '#475569' }}>
             <Boxes size={20} />
-          </div>
-        </div>
-
-        {/* In Kardex */}
-        <div
-          className={`interactive-stat-card ${storageFilter === 'IN_KARDEX' ? 'active-stat' : ''}`}
-          onClick={() => {
-            setStorageFilter('IN_KARDEX');
-            setHuStatusFilter('ALL');
-          }}
-          title="Click to filter bins currently stored in Kardex"
-        >
-          <div className="stat-meta">
-            <span className="stat-label">In Kardex</span>
-            <span className="stat-value" style={{ color: '#2563eb' }}>
-              {stats.inKardex}
-            </span>
-          </div>
-          <div className="stat-icon-well" style={{ background: '#eff6ff', color: '#2563eb' }}>
-            <CheckCircle2 size={20} />
-          </div>
-        </div>
-
-        {/* Draft (Floor) */}
-        <div
-          className={`interactive-stat-card ${storageFilter === 'DRAFT' ? 'active-stat' : ''}`}
-          onClick={() => {
-            setStorageFilter('DRAFT');
-            setHuStatusFilter('ALL');
-          }}
-          title="Click to filter draft bins on shop floor"
-        >
-          <div className="stat-meta">
-            <span className="stat-label">Draft (Floor)</span>
-            <span className="stat-value" style={{ color: '#64748b' }}>
-              {stats.draft}
-            </span>
-          </div>
-          <div className="stat-icon-well" style={{ background: '#f8fafc', color: '#64748b' }}>
-            <Layers size={20} />
-          </div>
-        </div>
-
-        {/* Outside Kardex */}
-        <div
-          className={`interactive-stat-card ${storageFilter === 'OUTSIDE_KARDEX' ? 'active-stat' : ''}`}
-          onClick={() => {
-            setStorageFilter('OUTSIDE_KARDEX');
-            setHuStatusFilter('ALL');
-          }}
-          title="Click to filter bins outside Kardex"
-        >
-          <div className="stat-meta">
-            <span className="stat-label">Outside Kardex</span>
-            <span className="stat-value" style={{ color: '#d97706' }}>
-              {stats.outsideKardex}
-            </span>
-          </div>
-          <div className="stat-icon-well" style={{ background: '#fef3c7', color: '#b45309' }}>
-            <Layers size={20} />
           </div>
         </div>
 
@@ -962,38 +863,6 @@ export default function BinsMasterPage() {
         {/* Table Toolbar */}
         <div className="table-toolbar">
           <div className="toolbar-left-cluster">
-            {/* Storage Status Tabs with Count Badges */}
-            <div className="filter-tab-pill-group">
-              <button
-                className={`filter-tab-pill ${storageFilter === 'ALL' ? 'active' : ''}`}
-                onClick={() => setStorageFilter('ALL')}
-              >
-                <span>All Bins</span>
-                <span className="tab-badge">{stats.total || totalItems}</span>
-              </button>
-              <button
-                className={`filter-tab-pill ${storageFilter === 'IN_KARDEX' ? 'active' : ''}`}
-                onClick={() => setStorageFilter('IN_KARDEX')}
-              >
-                <span>In Kardex</span>
-                <span className="tab-badge">{stats.inKardex}</span>
-              </button>
-              <button
-                className={`filter-tab-pill ${storageFilter === 'DRAFT' ? 'active' : ''}`}
-                onClick={() => setStorageFilter('DRAFT')}
-              >
-                <span>Draft (Floor)</span>
-                <span className="tab-badge">{stats.draft}</span>
-              </button>
-              <button
-                className={`filter-tab-pill ${storageFilter === 'OUTSIDE_KARDEX' ? 'active' : ''}`}
-                onClick={() => setStorageFilter('OUTSIDE_KARDEX')}
-              >
-                <span>Outside Kardex</span>
-                <span className="tab-badge">{stats.outsideKardex}</span>
-              </button>
-            </div>
-
             {/* HU Fill Status Filter */}
             <select
               className="select-filter-control"
@@ -1094,12 +963,6 @@ export default function BinsMasterPage() {
                     <div className="d-flex align-items-center gap-1">
                       <CheckCircle2 size={13} className="text-muted" />
                       <span>HU Status</span>
-                    </div>
-                  </th>
-                  <th>
-                    <div className="d-flex align-items-center gap-1">
-                      <Archive size={13} className="text-muted" />
-                      <span>Storage Location</span>
                     </div>
                   </th>
                   <th>
@@ -1220,11 +1083,6 @@ export default function BinsMasterPage() {
                         <HUStatusBadge status={hu.hu_status} />
                       </td>
 
-                      {/* Storage Location */}
-                      <td>
-                        <StorageStatusBadge status={hu.storage_status} />
-                      </td>
-
                       {/* Registered By & Date */}
                       <td>
                         <div className="d-flex flex-column gap-1">
@@ -1244,13 +1102,6 @@ export default function BinsMasterPage() {
                             <Eye size={13} />
                             <span>View Layout</span>
                           </Link>
-
-                          {hu.storage_status !== 'IN_KARDEX' && (
-                            <Link href="/app/hu-put" className="btn-hu-put-shortcut" title="Open HU Put to scan parts into this bin">
-                              <PackagePlus size={13} />
-                              <span>HU Put</span>
-                            </Link>
-                          )}
                         </div>
                       </td>
                     </tr>

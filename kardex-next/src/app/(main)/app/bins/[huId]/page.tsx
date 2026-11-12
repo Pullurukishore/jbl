@@ -4,12 +4,11 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { apiGet, apiPost } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import { HandlingUnit, Compartment } from '@/types/hu';
 import { HUStatusBadge } from '@/components/bins/HUStatusBadge';
-import { StorageStatusBadge } from '@/components/bins/StorageStatusBadge';
 import { CompartmentGrid } from '@/components/bins/CompartmentGrid';
 import { ScanModal } from '@/components/dashboard/ScanModal';
-import { ScanPickModal } from '@/components/bins/ScanPickModal';
 import { SendToKardexModal } from '@/components/bins/SendToKardexModal';
 import { Modal } from '@/components/shared/Modal';
 import { Loader } from '@/components/shared/Loader';
@@ -36,6 +35,7 @@ interface HUDetailPageProps {
 export default function HUDetailPage({ params }: HUDetailPageProps) {
   const { huId } = React.use(params);
   const router = useRouter();
+  const { canPut } = useAuth();
 
   const [hu, setHu] = useState<HandlingUnit | null>(null);
   const [loading, setLoading] = useState(true);
@@ -120,7 +120,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
 
   // Auto-open scan panel and target the lowest numbered empty slot (#1, #2...) by default on page load
   useEffect(() => {
-    if (hu && hu.storage_status !== 'IN_KARDEX' && !userDismissedScan) {
+    if (hu && !userDismissedScan) {
       if (selectedCompartment === null) {
         const firstEmpty = compartments.find((c) => c.status === 'EMPTY');
         if (firstEmpty) {
@@ -140,14 +140,13 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
 
   const handleSelectEmpty = (compartmentNumber: number) => {
     if (!hu) return;
-    if (hu.storage_status === 'IN_KARDEX') return; // locked while inside Kardex
     setUserDismissedScan(false);
     setSelectedCompartment(compartmentNumber);
     setIsScanModalOpen(true);
   };
 
   const handleQuickNextEmpty = () => {
-    if (!hu || hu.storage_status === 'IN_KARDEX') return;
+    if (!hu) return;
     const firstEmpty = compartments.find((c) => c.status === 'EMPTY');
     if (firstEmpty) {
       handleSelectEmpty(firstEmpty.compartment_number);
@@ -263,9 +262,9 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
   const totalCount = compartments.length;
   const emptyCount = totalCount - occupiedCount - pickedCount;
   const fillPct = totalCount > 0 ? Math.round((occupiedCount / totalCount) * 100) : 0;
-  const isLocked = hu.storage_status === 'IN_KARDEX';
+  const isLocked = !canPut;
   const isFloorBin = hu.storage_status === 'DRAFT' || hu.storage_status === 'OUTSIDE_KARDEX';
-  const canSendToKardex = occupiedCount > 0;
+  const canSendToKardex = canPut && occupiedCount > 0;
 
   return (
     <div className="hu-detail-fullscreen">
@@ -602,9 +601,9 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
       <div className="top-command-bar">
         {/* Left: Navigation, HU ID, Spec Badges */}
         <div className="cmd-left">
-          <Link href="/app/hu-put" className="btn-nav-chip" title="Back to HU Put">
+          <Link href={canPut ? '/app/hu-put' : '/app/bins'} className="btn-nav-chip" title={canPut ? 'Back to HU Put' : 'Back to Bins'}>
             <ArrowLeft size={13} />
-            <span>HU Put</span>
+            <span>{canPut ? 'HU Put' : 'Bins'}</span>
           </Link>
 
           <div className="hu-id-box">
@@ -625,7 +624,6 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
           </span>
 
           <HUStatusBadge status={hu.hu_status} />
-          <StorageStatusBadge status={hu.storage_status} />
         </div>
 
         {/* Center: Inline Allocation Progress Meter */}
@@ -657,32 +655,6 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
               style={{ fontSize: '11.5px', padding: '4px 10px', borderRadius: '7px' }}
             >
               <PackagePlus size={13} /> Scan Part
-            </button>
-          )}
-
-          {occupiedCount > 0 && (
-            <button
-              className="btn btn-sm btn-warning text-dark fw-bold d-flex align-items-center gap-1"
-              onClick={() => {
-                setSelectedPickCompartment(null);
-                setIsScanPickModalOpen(true);
-              }}
-              style={{ fontSize: '11.5px', padding: '4px 10px', borderRadius: '7px' }}
-              title="Scan and pick parts one-by-one"
-            >
-              <PackageMinus size={13} /> Pick Part (One-by-One)
-            </button>
-          )}
-
-          {pickedCount > 0 && (
-            <button
-              className="btn btn-sm btn-warning text-dark d-flex align-items-center gap-1 fw-bold"
-              onClick={handleSendPickToKardex}
-              disabled={sendingPick}
-              style={{ fontSize: '11.5px', padding: '4px 10px', borderRadius: '7px' }}
-            >
-              {sendingPick ? <Loader2 size={13} className="spin-animation" /> : <Send size={13} />}
-              Send Pick ({pickedCount})
             </button>
           )}
 
@@ -767,7 +739,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         <div
           className="layout-card"
           style={{
-            flex: isScanModalOpen ? '1 1 58%' : '1 1 100%',
+            flex: canPut && isScanModalOpen ? '1 1 58%' : '1 1 100%',
             minWidth: 0,
           }}
         >
@@ -847,11 +819,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
             <CompartmentGrid
               compartments={filteredCompartments}
               onSelectEmpty={isLocked ? undefined : handleSelectEmpty}
-              onSelectOccupied={(comp) => {
-                setSelectedPickCompartment(comp.compartment_number);
-                setIsScanPickModalOpen(true);
-              }}
-              selectedCompartment={isScanModalOpen ? selectedCompartment : null}
+              selectedCompartment={canPut && isScanModalOpen ? selectedCompartment : null}
               huId={hu.hu_id}
               binName={hu.bin_type?.bin_name || 'CON_BINA'}
               binType={hu.bin_type?.name}
@@ -859,8 +827,8 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
           )}
         </div>
 
-        {/* Right Side: Existing Working PUT Process Scan & Live Validation Panel */}
-        {isScanModalOpen && (
+        {/* Right Side: Permanent PUT Process Scan & Live Validation Panel */}
+        {canPut && isScanModalOpen && (
           <div
             className="scan-panel-col"
             style={{
@@ -868,15 +836,12 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
               maxWidth: '480px',
               width: '100%',
               minWidth: '350px',
+              marginTop: '48px',
             }}
           >
             <ScanModal
               isOpen={isScanModalOpen}
-              onClose={() => {
-                setIsScanModalOpen(false);
-                setSelectedCompartment(null);
-                setUserDismissedScan(true);
-              }}
+              onClose={() => {}}
               onSuccess={handleScanSuccess}
               huId={hu.hu_id}
               compartmentNumber={selectedCompartment}
@@ -885,22 +850,6 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
           </div>
         )}
       </div>
-
-      {/* One-by-One Pick Scan Modal with Live MES Validations */}
-      {hu && isScanPickModalOpen && (
-        <ScanPickModal
-          isOpen={isScanPickModalOpen}
-          onClose={() => {
-            setIsScanPickModalOpen(false);
-            setSelectedPickCompartment(null);
-          }}
-          onSuccess={() => {
-            fetchLayout();
-          }}
-          hu={hu}
-          initialCompartmentNumber={selectedPickCompartment}
-        />
-      )}
 
       {/* Send to Kardex Modal */}
       {isSendToKardexOpen && (

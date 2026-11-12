@@ -8,7 +8,6 @@ import {
   PieChart,
   Users,
   Power,
-  Package,
   PackagePlus,
   Boxes,
 } from 'lucide-react';
@@ -16,7 +15,7 @@ import {
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, isAuthenticated, isAdmin, isLoading, logout } = useAuth();
+  const { user, isAuthenticated, isAdmin, canPut, isLoading, logout } = useAuth();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -47,12 +46,12 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
         /* Top Header Navbar Bar */
         .app-header-navbar {
-          background: rgba(255, 255, 255, 0.98);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          border-bottom: 1.5px solid #e2e8f0;
-          padding: 8px 24px;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.02);
+          background: rgba(255, 255, 255, 0.96);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+          border-bottom: 1px solid #e2e8f0;
+          padding: 10px 24px;
+          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 14px rgba(15, 23, 42, 0.03);
           position: sticky;
           top: 0;
           z-index: 1000;
@@ -72,37 +71,37 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           align-items: center;
           background: #f1f5f9;
           border: 1px solid #e2e8f0;
-          border-radius: 9999px;
-          padding: 4px;
+          border-radius: 11px;
+          padding: 3px;
           gap: 3px;
         }
 
         :global(a.dock-nav-link) {
-          font-size: 13px !important;
+          font-size: 12.5px !important;
           font-weight: 600 !important;
           color: #64748b !important;
           text-decoration: none !important;
-          padding: 6px 16px !important;
-          border-radius: 9999px !important;
+          padding: 6px 14px !important;
+          border-radius: 8px !important;
           display: inline-flex !important;
           align-items: center !important;
           gap: 7px !important;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+          transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
           border: 1px solid transparent !important;
           user-select: none !important;
         }
 
         :global(a.dock-nav-link:hover) {
           color: #0f172a !important;
-          background: rgba(255, 255, 255, 0.7) !important;
+          background: rgba(255, 255, 255, 0.8) !important;
           text-decoration: none !important;
         }
 
         :global(a.dock-nav-link.active) {
-          color: #1d4ed8 !important;
-          background: #ffffff !important;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04) !important;
-          border-color: #e2e8f0 !important;
+          color: #ffffff !important;
+          background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+          box-shadow: 0 2px 6px rgba(37, 99, 235, 0.28) !important;
+          border-color: transparent !important;
           font-weight: 700 !important;
           text-decoration: none !important;
         }
@@ -111,32 +110,32 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         .operator-card-pill {
           display: inline-flex;
           align-items: center;
-          background: #ffffff;
-          border: 1.5px solid #e2e8f0;
-          border-radius: 9999px;
-          padding: 4px 6px 4px 5px;
+          background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+          border: 1px solid #e2e8f0;
+          border-radius: 11px;
+          padding: 4px 6px 4px 6px;
           gap: 10px;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.03);
           transition: all 0.2s ease;
         }
 
         .operator-card-pill:hover {
           border-color: #cbd5e1;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+          box-shadow: 0 4px 10px rgba(15, 23, 42, 0.07);
         }
 
         .operator-avatar {
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
+          width: 30px;
+          height: 30px;
+          border-radius: 8px;
           background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
           color: #ffffff;
           display: flex;
           align-items: center;
           justify-content: center;
           font-weight: 800;
-          font-size: 13px;
-          box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+          font-size: 12.5px;
+          box-shadow: 0 2px 6px rgba(37, 99, 235, 0.28);
           flex-shrink: 0;
         }
 
@@ -158,7 +157,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         }
 
         .operator-role {
-          font-size: 10px;
+          font-size: 9.5px;
           font-weight: 800;
           color: #2563eb;
           letter-spacing: 0.5px;
@@ -167,16 +166,16 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
         .btn-power-logout {
           background: #fef2f2;
-          border: 1px solid #fee2e2;
+          border: 1px solid #fecaca;
           color: #ef4444;
-          width: 30px;
-          height: 30px;
-          border-radius: 50%;
+          width: 28px;
+          height: 28px;
+          border-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
           margin-left: 2px;
         }
 
@@ -184,8 +183,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           background: #ef4444;
           color: #ffffff;
           border-color: #ef4444;
-          transform: scale(1.08);
-          box-shadow: 0 2px 8px rgba(239, 68, 68, 0.35);
+          transform: translateY(-1px);
+          box-shadow: 0 3px 8px rgba(239, 68, 68, 0.3);
         }
       `}</style>
 
@@ -198,21 +197,23 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               href="/app/dashboard"
               className={`dock-nav-link ${pathname === '/app/dashboard' ? 'active' : ''}`}
             >
-              <PieChart size={15} /> Dashboard
+              <PieChart size={14} /> Dashboard
             </Link>
 
-            <Link
-              href="/app/hu-put"
-              className={`dock-nav-link ${pathname.startsWith('/app/hu-put') ? 'active' : ''}`}
-            >
-              <PackagePlus size={15} /> HU Put
-            </Link>
+            {canPut && (
+              <Link
+                href="/app/hu-put"
+                className={`dock-nav-link ${pathname.startsWith('/app/hu-put') ? 'active' : ''}`}
+              >
+                <PackagePlus size={14} /> HU Put
+              </Link>
+            )}
 
             <Link
               href="/app/bins"
               className={`dock-nav-link ${pathname === '/app/bins' ? 'active' : ''}`}
             >
-              <Boxes size={15} /> Bins
+              <Boxes size={14} /> Bins
             </Link>
 
             {isAdmin && (
@@ -220,7 +221,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 href="/app/users"
                 className={`dock-nav-link ${pathname === '/app/users' ? 'active' : ''}`}
               >
-                <Users size={15} /> User List
+                <Users size={14} /> User List
               </Link>
             )}
           </nav>

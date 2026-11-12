@@ -457,19 +457,17 @@ exports.sendToKardex = asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'No occupied compartments. Cannot send empty HU to Kardex.' });
     }
 
-    // Starting sequence for this bin (starts at 1, 2, 3...)
-    const startSeq = hu.put_order_seq || 0;
-    const endSeq = startSeq + occupiedCompartments.length;
+    // Sequence number for this bin PUT order batch (starts at 1, 2, 3...)
+    const nextSeq = (hu.put_order_seq || 0) + 1;
+    const orderNumber = `${hu.hu_id}-PUT-${nextSeq}`;
 
-    // Build file content: each row gets a unique sequential order number (<BIN>-PUT-1, <BIN>-PUT-2...)
-    const lines = occupiedCompartments.map((c, i) => {
-        const itemSeq = startSeq + i + 1;
-        const lineOrderNumber = `${hu.hu_id}-PUT-${itemSeq}`;
-        return `${lineOrderNumber};${hu.hu_id}@${c.compartment_number};${c.material_name || ''};1;${hu.bin_type ? hu.bin_type.bin_name : ''};${c.serial_number || ''}`;
+    // Build file content: all rows in this PUT batch share the same order number (<BIN>-PUT-1)
+    const lines = occupiedCompartments.map((c) => {
+        return `${orderNumber};${hu.hu_id}@${c.compartment_number};${c.material_name || ''};1;${hu.bin_type ? hu.bin_type.bin_name : ''};${c.serial_number || ''}`;
     });
     const fileContent = lines.join('\r\n');
     const timestamp = Date.now();
-    const fileName = `PUT_${hu.hu_id}_${startSeq + 1}_${timestamp}.txt`;
+    const fileName = `PUT_${hu.hu_id}_${nextSeq}_${timestamp}.txt`;
     const dirPath = process.env.Put_Text_File_Path || path.join('uploads', 'files', 'put');
     fs.mkdirSync(dirPath, { recursive: true });
     const filePath = path.join(dirPath, fileName);
@@ -497,7 +495,7 @@ exports.sendToKardex = asyncHandler(async (req, res) => {
         storage_status: 'IN_KARDEX',
         transaction_status: 'SUCCESSFUL',
         last_transaction: 'PUT',
-        put_order_seq: endSeq
+        put_order_seq: nextSeq
     });
 
     // Update all associated put records for this HU
@@ -509,14 +507,10 @@ exports.sendToKardex = asyncHandler(async (req, res) => {
         );
     }
 
-    const orderRange = occupiedCompartments.length === 1 
-        ? `${hu.hu_id}-PUT-${startSeq + 1}` 
-        : `${hu.hu_id}-PUT-${startSeq + 1} to ${hu.hu_id}-PUT-${endSeq}`;
-
     return res.status(200).json({
         message: 'HU sent to Kardex successfully.',
-        orderNumber: orderRange,
-        orderRange,
+        orderNumber,
+        orderRange: orderNumber,
         file: { name: fileName, path: uploadFilePath, id: fileRecord.id },
         lineCount: lines.length
     });
