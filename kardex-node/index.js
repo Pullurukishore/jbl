@@ -32,6 +32,7 @@ const userRoutes = require('./routes/user');
 const fileRoutes = require('./routes/file');
 const authRoutes = require('./routes/auth');
 const huRoutes = require('./routes/hu');
+const materialRoutes = require('./routes/material');
 const { create } = require('xmlbuilder2');
 
 //Request logger
@@ -110,6 +111,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/file', fileRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/hu', huRoutes);
+app.use('/api/material', materialRoutes);
 
 
 

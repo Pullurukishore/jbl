@@ -6,3 +6,4 @@ export * from './pick';
 export * from './put';
 export * from './user';
 export * from './hu';
+export * from './material';

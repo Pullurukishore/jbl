@@ -10,6 +10,7 @@ import {
   Power,
   PackagePlus,
   Boxes,
+  Layers,
 } from 'lucide-react';
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
@@ -214,6 +215,13 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               className={`dock-nav-link ${pathname === '/app/bins' ? 'active' : ''}`}
             >
               <Boxes size={14} /> Bins
+            </Link>
+
+            <Link
+              href="/app/materials"
+              className={`dock-nav-link ${pathname.startsWith('/app/materials') ? 'active' : ''}`}
+            >
+              <Layers size={14} /> Materials
             </Link>
 
             {isAdmin && (
