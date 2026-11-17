@@ -56,6 +56,19 @@ exports.registerHU = asyncHandler(async (req, res) => {
 
     let hu;
     if (existing && existing.storage_status === 'DRAFT') {
+        // Unlink any put records referencing these compartments before destroying to prevent foreign key constraint violation
+        const oldComps = await db.compartment.findAll({
+            where: { handling_unit_id: existing.id },
+            attributes: ['id']
+        });
+        const oldCompIds = oldComps.map(c => c.id);
+        if (oldCompIds.length > 0) {
+            await db.put.update(
+                { compartment_id: null },
+                { where: { compartment_id: { [Op.in]: oldCompIds } } }
+            ).catch(() => {});
+        }
+
         // Delete old compartments and re-register
         await db.compartment.destroy({ where: { handling_unit_id: existing.id } });
         await existing.update({

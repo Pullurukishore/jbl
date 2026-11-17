@@ -5,6 +5,14 @@ if (!buffer.SlowBuffer) {
   buffer.SlowBuffer.prototype = {};
 }
 
+// Global crash protection against unhandled database/network promise rejections
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Database/Async Rejection:', reason?.message || reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err?.message || err);
+});
+
 const express = require('express');
 const zip = require('express-easy-zip');
 const dotenv = require('dotenv');
@@ -141,6 +149,16 @@ db.sequelize.sync()
             await qi.addColumn('put', 'handling_unit_id', { type: db.Sequelize.INTEGER, allowNull: true }).catch(() => {});
           }
         }
+      }
+
+      // Safe non-blocking index creation to prevent CPU spikes & full-table scan crashes
+      if (db.sequelize.getDialect() === 'postgres') {
+        await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_put_serial ON "put" (serial_number);').catch(() => {});
+        await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_put_model ON "put" (model_number);').catch(() => {});
+        await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_put_pick_status ON "put" (pick_status);').catch(() => {});
+        await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_comp_hu_id ON "compartment" (handling_unit_id);').catch(() => {});
+        await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_comp_serial ON "compartment" (serial_number);').catch(() => {});
+        await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_hu_huid ON "handling_unit" (hu_id);').catch(() => {});
       }
     } catch (e) {
       console.warn('Auto column sync warning:', e.message);

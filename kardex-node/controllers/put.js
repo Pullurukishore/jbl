@@ -848,6 +848,9 @@ exports.searchAll = asyncHandler(async (req, res) => {
 
         // Validate sort input
 
+        // Clean search string to prevent SQL injection & syntax crashes in raw literals
+        const cleanSearch = String(search || '').replace(/'/g, "''");
+
         // Dynamic search conditions for all columns
         const searchConditions = {
             // Apply date range filter if both dates are provided
@@ -870,12 +873,12 @@ exports.searchAll = asyncHandler(async (req, res) => {
                             db.sequelize.literal(
                                 `(SELECT COUNT(*) FROM ${uTable} u
                               WHERE u.id${castText} = ${pTable}.scanned_by 
-                              AND (u.first_name LIKE '%${search}%' 
-                              OR u.last_name LIKE '%${search}%')) > 0`
+                              AND (u.first_name LIKE '%${cleanSearch}%' 
+                              OR u.last_name LIKE '%${cleanSearch}%')) > 0`
                             ),
                             ...(search.includes(' ')
                                 ? (() => {
-                                    const [firstName, lastName] = search.split(' ');
+                                    const [firstName, lastName] = search.split(' ').map(s => String(s || '').replace(/'/g, "''"));
                                     return [
                                         db.sequelize.literal(
                                             `(SELECT COUNT(*) FROM ${uTable} u
@@ -936,6 +939,8 @@ exports.searchAll = asyncHandler(async (req, res) => {
         if (!isExport) {
             query.offset = pageNumber * pageSize;
             query.limit = pageSize;
+        } else {
+            query.limit = Math.min(Number(size) || 10000, 10000);
         }
 
         // Query the database with search, pagination, and sorting
