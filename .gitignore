@@ -37,9 +37,24 @@ logs/
 npm-debug.log*
 
 # # Misc
-uploads/
+uploads/*
+!uploads/**/.gitkeep
+kardex-node/uploads/*
+!kardex-node/uploads/**/.gitkeep
 /tmp/
 backups/
 *.dump
 *.sql
+
+# Kardex machine generated transaction & error files
+text-file/put/IN/*
+text-file/put/Success/*
+text-file/put/Error/*
+text-file/pick/IN/*
+text-file/pick/Success/*
+text-file/pick/Error/*
+text-file/*.txt
+text-file/**/*.err
+!text-file/**/.gitkeep
+
 
