@@ -24,7 +24,6 @@ const PUT_STEPS = [
   { key: 'FIND_MODEL', label: '5. Parse & Find Model' },
   { key: 'MODEL_FOUND/NOTFOUND', label: '6. Verify Model Availability' },
   { key: 'CHECKING_AVAILABILITY', label: '7. Check Open GR Quantity' },
-  { key: 'FILE_GENERATED', label: '8. Generate Put Order Text File' },
 ];
 
 export const ScanModal: React.FC<ScanModalProps> = ({
@@ -113,7 +112,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
             setIsProcessing(false);
           }
 
-          if (data.activity === 'FILE_GENERATED' && data.status === 'SUCCESS') {
+          if ((data.activity === 'CHECKING_AVAILABILITY' || data.activity === 'FILE_GENERATED') && data.status === 'SUCCESS') {
             setIsProcessing(false);
             setIsCompleted(true);
             onSuccess(serialNumber.trim());
@@ -412,7 +411,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                   PUT Process Completed Successfully!
                 </div>
                 <div style={{ fontSize: '12px', color: '#15803d' }}>
-                  Order text file generated for serial <span className="fw-bold">{serialNumber}</span>.
+                  Serial <span className="fw-bold">{serialNumber}</span> verified and processed successfully.
                 </div>
               </div>
             </div>

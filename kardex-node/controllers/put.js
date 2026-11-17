@@ -17,7 +17,7 @@ let cachedPoResults = null;
 
 exports.createPut = asyncHandler(async (req, res) => {
     const startTime = moment().format('MM/DD/YYYY hh:mm:ss A');
-    const progressTimeline = ['FETCH_DETAILS', 'CHECK_STATUS', 'PASS_FAIL', 'FIND_CSV', 'FIND_MODEL', 'MODEL_FOUND/NOTFOUND', 'CHECKING_AVAILABILITY', 'FILE_GENERATED'];
+    const progressTimeline = ['FETCH_DETAILS', 'CHECK_STATUS', 'PASS_FAIL', 'FIND_CSV', 'FIND_MODEL', 'MODEL_FOUND/NOTFOUND', 'CHECKING_AVAILABILITY'];
     let activeProgressStep = 0;
     const serialNumber = req.params?.serialNumber?.trim();
     const process_id = uuid4();
@@ -467,24 +467,11 @@ exports.createPut = asyncHandler(async (req, res) => {
         }, res));
         activeProgressStep++;
 
-        logs.push(await createAndSendLog({
-            entity_number: serialNumber,
-            activity: 'CHECKING_AVAILABILITY',
-            status: 'SUCCESS',
-            logged_by: req.user?.id,
-            log_type: 'PUT_PROCESS',
-            user_first_name: req.user?.first_name,
-            user_last_name: req.user?.last_name,
-            user_id: req.user?.user_id,
-            process_id
-        }, res));
-        activeProgressStep++;
-
         res.write("data: " + JSON.stringify({
             entity_number: serialNumber,
-            activity: 'FILE_GENERATED',
+            activity: 'CHECKING_AVAILABILITY',
             status: 'IN_PROGRESS',
-            message: 'Updating Kanban board history & generating order text file...',
+            message: 'Updating Kanban board history & allocating inventory...',
             completed: false,
             process_id
         }) + "\n\n");
@@ -501,7 +488,7 @@ exports.createPut = asyncHandler(async (req, res) => {
         if (updateResponse?.isError) {
             logs.push(await createAndSendLog({
                 entity_number: birthProcess?.SerialNumber,
-                activity: 'FILE_GENERATED',
+                activity: 'CHECKING_AVAILABILITY',
                 status: 'FAILED',
                 message: `Board History Update Failed. ${updateResponse?.error?.message ? `(${updateResponse?.error?.message})` : ''}`,
                 logged_by: req.user?.id,
@@ -517,7 +504,7 @@ exports.createPut = asyncHandler(async (req, res) => {
         if (updateResponse !== 'Pass') {
             logs.push(await createAndSendLog({
                 entity_number: birthProcess?.SerialNumber,
-                activity: 'FILE_GENERATED',
+                activity: 'CHECKING_AVAILABILITY',
                 status: 'FAILED',
                 message: `Board History Update Failed. ${updateResponse ? `(${updateResponse})` : ''}`,
                 logged_by: req.user?.id,
@@ -529,8 +516,6 @@ exports.createPut = asyncHandler(async (req, res) => {
             }, res));
             return res.end();
         }
-
-
 
         /**Latest Source CSV File upload */
         let savedCsvFile = null;
@@ -562,41 +547,6 @@ exports.createPut = asyncHandler(async (req, res) => {
         /**Latest Source CSV File upload */
 
         const isBinScan = !!req.query?.hu_id;
-        let newFile = null;
-
-        // Generate individual text file ONLY for standalone dashboard scans.
-        // For bin scans, the consolidated PUT file is generated when clicking "Send to Kardex".
-        if (!isBinScan) {
-            const genFileName = `kardex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.txt`;
-            const filePath = path.join(process.env.Put_Text_File_Path, genFileName);
-
-            if (!fs.existsSync(process.env.Put_Text_File_Path)) {
-                fs.mkdirSync(process.env.Put_Text_File_Path, { recursive: true });
-            }
-
-            const lastEntry = await db.put.findOne({
-                order: [['id', 'DESC']],
-            });
-            const formattedDate = moment().format('DD.MM.YYYY HH:mm:ss');
-            const fileTextContent = `Put_Order${(lastEntry?.id || 0) + 1}|${birthProcess?.SerialNumber}|${birthProcess?.Number}|${formattedDate}|1`;
-            fs.writeFileSync(filePath, fileTextContent, 'ascii');
-            const uploadDir = path.join('uploads', 'files', 'put');
-            if (!fs.existsSync(uploadDir)) {
-                fs.mkdirSync(uploadDir, { recursive: true });
-            }
-            const uploadFilePath = path.join(uploadDir, genFileName);
-            fs.writeFileSync(uploadFilePath, fileTextContent, 'ascii');
-            const fileStats = fs.statSync(uploadFilePath);
-
-            newFile = await db.files.create({
-                name: genFileName,
-                size: fileStats.size,
-                type: 'text/plain',
-                path: uploadFilePath,
-                created_by: req.user?.id,
-                updated_by: req.user?.id
-            });
-        }
 
         let putEntry = existingPart;
         if (putEntry?.id) {
@@ -604,7 +554,7 @@ exports.createPut = asyncHandler(async (req, res) => {
                 process_status: testProcess,
                 pick_status: 'AVAILABLE',
                 po_file_id: savedCsvFile?.id,
-                text_file_id: newFile ? newFile.id : putEntry.text_file_id,
+                text_file_id: putEntry.text_file_id,
                 pick_id: null,
                 scanned_by: req?.user?.id,
                 text_file_downloaded: false
@@ -619,11 +569,11 @@ exports.createPut = asyncHandler(async (req, res) => {
                 po_file_id: savedCsvFile?.id,
                 model_number: birthProcess?.Number,
                 scanned_by: req?.user?.id,
-                text_file_id: newFile ? newFile.id : null,
+                text_file_id: null,
                 pick_status: 'AVAILABLE'
             });
         }
-        // Link to Handling Unit & Compartment BEFORE sending FILE_GENERATED event to eliminate race condition
+        // Link to Handling Unit & Compartment BEFORE sending completion event to eliminate race condition
         if (req.query?.hu_id) {
             try {
                 const hu = await db.handling_unit.findOne({ where: { hu_id: req.query.hu_id } });
@@ -668,11 +618,11 @@ exports.createPut = asyncHandler(async (req, res) => {
 
         const successMessage = isBinScan
             ? `Serial Number ${birthProcess?.SerialNumber} verified and allocated to Bin ${req.query.hu_id}.`
-            : `File ${newFile?.name || ''} generated and Serial Number processed successfully.`;
+            : `Serial Number ${birthProcess?.SerialNumber} verified and processed successfully.`;
 
         logs.push(await createAndSendLog({
             entity_number: birthProcess?.SerialNumber,
-            activity: 'FILE_GENERATED',
+            activity: 'CHECKING_AVAILABILITY',
             status: 'SUCCESS',
             message: successMessage,
             success: true,
