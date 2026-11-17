@@ -25,6 +25,8 @@ import {
   Barcode,
   PackagePlus,
   PackageMinus,
+  FileText,
+  X,
 } from 'lucide-react';
 
 interface HUDetailPageProps {
@@ -58,7 +60,6 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
   const [pickingSlot, setPickingSlot] = useState(false);
   const [sendingPick, setSendingPick] = useState(false);
   const [pickSendSuccess, setPickSendSuccess] = useState<string | null>(null);
-  const [kardexPutSuccess, setKardexPutSuccess] = useState<string | null>(null);
 
   const handleSendPickToKardex = async () => {
     if (!hu) return;
@@ -665,20 +666,6 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
       </div>
 
       {/* Confirmation Notifications */}
-      {kardexPutSuccess && (
-        <div className="alert-bar-success">
-          <CheckCircle2 size={16} />
-          <div className="d-flex align-items-center justify-content-between w-100">
-            <span>{kardexPutSuccess}</span>
-            <button
-              className="btn btn-sm btn-link text-success p-0 ms-2 text-decoration-none"
-              onClick={() => setKardexPutSuccess(null)}
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      )}
       {pickSendSuccess && (
         <div className="alert-bar-success">
           <CheckCircle2 size={16} />
@@ -827,9 +814,8 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         <SendToKardexModal
           isOpen={isSendToKardexOpen}
           onClose={() => setIsSendToKardexOpen(false)}
-          onSuccess={(orderNumber) => {
+          onSuccess={() => {
             setIsSendToKardexOpen(false);
-            setKardexPutSuccess(`Handling Unit ${hu.hu_id} Sent to Kardex Successfully! ${orderNumber ? `(Order: ${orderNumber})` : ''}`);
             fetchLayout(true);
           }}
           hu={hu}
