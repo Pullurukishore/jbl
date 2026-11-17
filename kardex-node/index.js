@@ -122,7 +122,29 @@ app.use(errorHandler);
 const db = require('./models');
 
 db.sequelize.sync()
-  .then(() => {
+  .then(async () => {
+    try {
+      const qi = db.sequelize.getQueryInterface();
+      const putCols = await qi.describeTable('put').catch(() => null);
+      if (putCols) {
+        if (!putCols.compartment_id) {
+          if (db.sequelize.getDialect() === 'postgres') {
+            await db.sequelize.query('ALTER TABLE "put" ADD COLUMN IF NOT EXISTS "compartment_id" INTEGER;').catch(() => {});
+          } else {
+            await qi.addColumn('put', 'compartment_id', { type: db.Sequelize.INTEGER, allowNull: true }).catch(() => {});
+          }
+        }
+        if (!putCols.handling_unit_id) {
+          if (db.sequelize.getDialect() === 'postgres') {
+            await db.sequelize.query('ALTER TABLE "put" ADD COLUMN IF NOT EXISTS "handling_unit_id" INTEGER;').catch(() => {});
+          } else {
+            await qi.addColumn('put', 'handling_unit_id', { type: db.Sequelize.INTEGER, allowNull: true }).catch(() => {});
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Auto column sync warning:', e.message);
+    }
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
       console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`.yellow.bold);

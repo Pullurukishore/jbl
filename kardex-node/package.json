@@ -8,7 +8,8 @@
         "dev": "nodemon index",
         "start": "cross-env NODE_ENV=production node index",
         "clean-data": "node scripts/clean-all-data.js",
-        "clean-data:all": "node scripts/clean-all-data.js --all --seed-admin"
+        "clean-data:all": "node scripts/clean-all-data.js --all --seed-admin",
+        "create:bin": "node scripts/create-30-compartments.js"
     },
     "author": "Mayur Parve (mayur.parve@autoflowtech.com)",
     "license": "ISC",
