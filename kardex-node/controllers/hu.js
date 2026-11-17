@@ -463,7 +463,7 @@ exports.sendToKardex = asyncHandler(async (req, res) => {
 
     // Build file content: all rows in this PUT batch share the same order number (<BIN>-PUT-1)
     const lines = occupiedCompartments.map((c) => {
-        return `${orderNumber};${hu.hu_id}@${c.compartment_number};${c.material_name || ''};1;${hu.bin_type ? hu.bin_type.bin_name : ''};${c.serial_number || ''}`;
+        return `${orderNumber}|${hu.hu_id}@${c.compartment_number}|${c.material_name || ''}|1|${hu.bin_type ? hu.bin_type.bin_name : ''}|${c.serial_number || ''}`;
     });
     const fileContent = lines.join('\r\n');
     const timestamp = Date.now();
@@ -550,7 +550,7 @@ exports.generateHUPick = asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'HU is not currently in Kardex. Cannot generate HU pick.' });
     }
 
-    const fileContent = `${hu.hu_id};${hu.hu_id};5;1`;
+    const fileContent = `${hu.hu_id}|${hu.hu_id}|5|1`;
     const timestamp = Date.now();
     const fileName = `HU_PICK_${hu.hu_id}_${timestamp}.txt`;
     const dirPath = process.env.Pick_Text_File_Path || path.join('uploads', 'files', 'pick');
