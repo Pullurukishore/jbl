@@ -1146,7 +1146,12 @@ exports.sendPickToKardex = asyncHandler(async (req, res) => {
 
     // Finalize the picked compartments by clearing serials now that Kardex file is generated
     const compIds = pickedPuts.map(p => p.compartment_id).filter(Boolean);
-    if (compIds.length > 0) {
+    const pickedSerials = pickedPuts.map(p => p.serial_number).filter(Boolean);
+    const compConditions = [];
+    if (compIds.length > 0) compConditions.push({ id: { [Op.in]: compIds } });
+    if (pickedSerials.length > 0) compConditions.push({ handling_unit_id: hu.id, serial_number: { [Op.in]: pickedSerials } });
+
+    if (compConditions.length > 0) {
         await db.compartment.update({
             status: 'EMPTY',
             serial_number: null,
@@ -1154,7 +1159,7 @@ exports.sendPickToKardex = asyncHandler(async (req, res) => {
             allocated_at: null,
             allocated_by: null
         }, {
-            where: { id: { [Op.in]: compIds } }
+            where: { [Op.or]: compConditions }
         });
     }
 

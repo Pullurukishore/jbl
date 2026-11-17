@@ -1,6 +1,8 @@
 const axios = require('axios');
 const soap = require('soap');
 
+const API_TIMEOUT = parseInt(process.env.API_TIMEOUT_MS, 10) || 10000;
+
 let client;
 initializeSoapClient();
 
@@ -17,7 +19,7 @@ async function initializeSoapClient() {
             if (!fullSoapUrl.toLowerCase().includes('?wsdl')) {
                 fullSoapUrl = `${fullSoapUrl}?WSDL`;
             }
-            client = await soap.createClientAsync(fullSoapUrl);
+            client = await soap.createClientAsync(fullSoapUrl, { timeout: API_TIMEOUT });
             resolve(client);
         }
         catch (err) {
@@ -54,7 +56,7 @@ exports.getPVStatusCheck = async (serialNumber, processName) => {
 
     const clientTest = await getSoapClient();
     if (!clientTest) {
-        return { isError: true, error: { message: 'Cannot connect to soap client.' } }
+        return { isError: true, error: { message: 'Cannot connect to soap client.' } };
     }
     const bodyObject = {
         CustomerName: process.env.TISCustomer,
@@ -65,15 +67,30 @@ exports.getPVStatusCheck = async (serialNumber, processName) => {
         ProcessStep: processName,
     };
 
-    return new Promise(async (resolve, reject) => {
+    return new Promise(async (resolve) => {
+        let isDone = false;
+        const timer = setTimeout(() => {
+            if (!isDone) {
+                isDone = true;
+                resolve({ isError: true, error: { message: 'SOAP OKToTest request timeout.' } });
+            }
+        }, API_TIMEOUT);
+
         clientTest.OKToTestAsync(bodyObject).then((response) => {
-            resolve(response[0]?.OKToTestResult);
-        })
-            .catch((error) => {
-                resolve({ isError: true, error })
-            })
-    })
-}
+            if (!isDone) {
+                isDone = true;
+                clearTimeout(timer);
+                resolve(response[0]?.OKToTestResult);
+            }
+        }).catch((error) => {
+            if (!isDone) {
+                isDone = true;
+                clearTimeout(timer);
+                resolve({ isError: true, error });
+            }
+        });
+    });
+};
 
 exports.updateBoardHistory = async (data) => {
     if (process.env.IS_OFFLINE === 'true') {
@@ -82,7 +99,7 @@ exports.updateBoardHistory = async (data) => {
 
     const clientTest = await getSoapClient();
     if (!clientTest) {
-        return { isError: true, error: { message: 'Cannot connect to soap client.' } }
+        return { isError: true, error: { message: 'Cannot connect to soap client.' } };
     }
     let testString = `S${data.serialNumber}\n` +
         `C${process.env.TISCustomer}\n` +
@@ -97,16 +114,31 @@ exports.updateBoardHistory = async (data) => {
     const bodyObject = {
         TestData: testString,
         DataFormat: 'Generic',
-    }
-    return new Promise(async (resolve, reject) => {
+    };
+    return new Promise(async (resolve) => {
+        let isDone = false;
+        const timer = setTimeout(() => {
+            if (!isDone) {
+                isDone = true;
+                resolve({ isError: true, error: { message: 'SOAP ProcessTestData request timeout.' } });
+            }
+        }, API_TIMEOUT);
+
         clientTest.ProcessTestDataAsync(bodyObject).then((response) => {
-            resolve(response[0]?.ProcessTestDataResult);
-        })
-            .catch((error) => {
-                resolve({ isError: true, error })
-            })
-    })
-}
+            if (!isDone) {
+                isDone = true;
+                clearTimeout(timer);
+                resolve(response[0]?.ProcessTestDataResult);
+            }
+        }).catch((error) => {
+            if (!isDone) {
+                isDone = true;
+                clearTimeout(timer);
+                resolve({ isError: true, error });
+            }
+        });
+    });
+};
 
 // ==============================================================================
 // 5: GetBoardData (PRESENT / STAGING API)
@@ -125,7 +157,7 @@ exports.getBoardData = async (serialNumber) => {
     }
 
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-    return new Promise(async (resolve, reject) => {
+    return new Promise(async (resolve) => {
         const apiUrl = process.env.GetBoardDataApiUrl || process.env.BoardHistroyApiUrl;
         axios.post(apiUrl,
             {
@@ -133,7 +165,10 @@ exports.getBoardData = async (serialNumber) => {
                 serial: serialNumber,
                 useMultiPartBarCode: process.env.BoardHistroyMultiPartBarCode || '0',
                 lang: process.env.BoardHistroyMultiLang || '0',
-            }, { headers: { APIKey: process.env.BoardHistroyApiKey } }
+            }, {
+                headers: { APIKey: process.env.BoardHistroyApiKey },
+                timeout: API_TIMEOUT
+            }
         ).then((response) => {
             if (response && response.data && !Array.isArray(response.data)) {
                 response.data = [response.data];
@@ -162,12 +197,15 @@ exports.getUserByWindowsId = async (windowsId) => {
     }
 
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-    return new Promise(async (resolve, reject) => {
+    return new Promise(async (resolve) => {
         const apiUrl = process.env.GetUserByWindowApiUrl;
         axios.post(apiUrl,
             {
                 windowsId: windowsId
-            }, { headers: { APIKey: process.env.BoardHistroyApiKey } }
+            }, {
+                headers: { APIKey: process.env.BoardHistroyApiKey },
+                timeout: API_TIMEOUT
+            }
         ).then((response) => {
             resolve(response);
         }).catch((error) => {
@@ -192,13 +230,16 @@ exports.getPanelSerializeResult = async (panelBarcode) => {
     }
 
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-    return new Promise(async (resolve, reject) => {
+    return new Promise(async (resolve) => {
         const apiUrl = process.env.GetPanelSerializeApiUrl;
         axios.post(apiUrl,
             {
                 panelBarcode: panelBarcode,
                 custId: process.env.BoardHistroyCustomerId || '41'
-            }, { headers: { APIKey: process.env.BoardHistroyApiKey } }
+            }, {
+                headers: { APIKey: process.env.BoardHistroyApiKey },
+                timeout: API_TIMEOUT
+            }
         ).then((response) => {
             resolve(response);
         }).catch((error) => {
@@ -267,22 +308,24 @@ exports.getBoardHistory = async (serialNumber) => {
     }
 
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-    return new Promise(async (resolve, reject) => {
+    return new Promise(async (resolve) => {
         axios.post(process.env.BoardHistroyApiUrl,
             {
                 custId: process.env.BoardHistroyCustomerId,
                 serial: serialNumber,
                 useMultiPartBarCode: process.env.BoardHistroyMultiPartBarCode,
                 lang: process.env.BoardHistroyMultiLang,
-            }, { headers: { APIKey: process.env.BoardHistroyApiKey } }
+            }, {
+                headers: { APIKey: process.env.BoardHistroyApiKey },
+                timeout: API_TIMEOUT
+            }
         ).then((response) => {
             resolve(response);
-        })
-            .catch((error) => {
-                resolve({ isError: true, error })
-            })
-    })
-}
+        }).catch((error) => {
+            resolve({ isError: true, error });
+        });
+    });
+};
 
 // [OLD / REAL PROD] GetWipBySerial wrapper (calls https://inrjnm0iis13.corp.jabil.org:8082/... in prod)
 // In STG, this routes to GetBoardData URL configured in config.env
@@ -296,26 +339,27 @@ exports.getWipBySerialNumber = async (serialNumber) => {
     }
 
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-    return new Promise(async (resolve, reject) => {
+    return new Promise(async (resolve) => {
         axios.post(process.env.GetBySerialApiUrl,
             {
                 custId: process.env.BoardHistroyCustomerId,
                 serial: serialNumber,
                 useMultiPartBarCode: process.env.GetBySerialApiMultiPartBarCode,
                 lang: process.env.BoardHistroyMultiLang
-            }, { headers: { APIKey: process.env.GetBySerialApiKey } }
-        )
-            .then((response) => {
-                if (Array.isArray(response?.data) && response.data.length > 0) {
-                    const first = response.data[0];
-                    if (first && typeof first === 'object') {
-                        Object.assign(response.data, first);
-                    }
+            }, {
+                headers: { APIKey: process.env.GetBySerialApiKey },
+                timeout: API_TIMEOUT
+            }
+        ).then((response) => {
+            if (Array.isArray(response?.data) && response.data.length > 0) {
+                const first = response.data[0];
+                if (first && typeof first === 'object') {
+                    Object.assign(response.data, first);
                 }
-                resolve(response);
-            })
-            .catch((error) => {
-                resolve({ isError: true, error })
-            })
-    })
-}
+            }
+            resolve(response);
+        }).catch((error) => {
+            resolve({ isError: true, error });
+        });
+    });
+};

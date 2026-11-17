@@ -2,8 +2,6 @@ const asyncHandler = require('express-async-handler');
 const db = require('../models');
 const { Op } = require('sequelize');
 
-
-
 exports.getAllCounts = asyncHandler(async (req, res) => {
     try {
         const { startDate, endDate } = req.body;
@@ -17,65 +15,67 @@ exports.getAllCounts = asyncHandler(async (req, res) => {
             : null;
 
         if (!parsedStartDate || !parsedEndDate) {
-            return res.status(400).json({ error: 'No body sent' })
+            return res.status(400).json({ error: 'No body sent' });
         }
 
-        const validScanCount = await db.log.count({
-            where: {
-                log_type: 'PUT_PROCESS',
-                status: 'SUCCESS',
-                ...(parsedStartDate && { log_date_time: { [Op.gte]: parsedStartDate } }),
-                ...(parsedEndDate && { log_date_time: { [Op.lte]: parsedEndDate } })
-            },
-            distinct: true,
-            col: 'process_id'
-        });
-
-        const invalidScanCount = await db.log.count({
-            where: {
-                log_type: 'PUT_PROCESS',
-                status: 'FAILED',
-                ...(parsedStartDate && { log_date_time: { [Op.gte]: parsedStartDate } }),
-                ...(parsedEndDate && { log_date_time: { [Op.lte]: parsedEndDate } })
-            },
-            distinct: true,
-            col: 'process_id',
-        });
-
+        const [validScanCount, invalidScanCount] = await Promise.all([
+            db.log.count({
+                where: {
+                    log_type: 'PUT_PROCESS',
+                    status: 'SUCCESS',
+                    ...(parsedStartDate && { log_date_time: { [Op.gte]: parsedStartDate } }),
+                    ...(parsedEndDate && { log_date_time: { [Op.lte]: parsedEndDate } })
+                },
+                distinct: true,
+                col: 'process_id'
+            }),
+            db.log.count({
+                where: {
+                    log_type: 'PUT_PROCESS',
+                    status: 'FAILED',
+                    ...(parsedStartDate && { log_date_time: { [Op.gte]: parsedStartDate } }),
+                    ...(parsedEndDate && { log_date_time: { [Op.lte]: parsedEndDate } })
+                },
+                distinct: true,
+                col: 'process_id',
+            })
+        ]);
 
         const dateFilter = (parsedStartDate && parsedEndDate)
             ? { scanned_at: { [Op.gte]: parsedStartDate, [Op.lte]: parsedEndDate } }
             : {};
 
-        const availableParts = await db.put.findAll({
-            where: { pick_status: 'AVAILABLE', ...dateFilter }
-        });
+        const [
+            availablePartsCount,
+            pickedPartsCount,
+            holdPartsCount,
+            totalHUs,
+            inKardexHUs,
+            emptyHUs,
+            partialHUs,
+            fullHUs,
+            draftHUs
+        ] = await Promise.all([
+            db.put.count({ where: { pick_status: 'AVAILABLE', ...dateFilter } }),
+            db.put.count({ where: { pick_status: 'PICKED', ...dateFilter } }),
+            db.put.count({ where: { pick_status: 'HOLD', ...dateFilter } }),
+            db.handling_unit.count(),
+            db.handling_unit.count({ where: { storage_status: 'IN_KARDEX' } }),
+            db.handling_unit.count({ where: { hu_status: 'EMPTY', storage_status: 'IN_KARDEX' } }),
+            db.handling_unit.count({ where: { hu_status: 'PARTIALLY_FILLED' } }),
+            db.handling_unit.count({ where: { hu_status: 'FULL' } }),
+            db.handling_unit.count({ where: { storage_status: 'DRAFT' } })
+        ]);
 
-        const pickedParts = await db.put.findAll({
-            where: { pick_status: 'PICKED', ...dateFilter }
-        });
-
-        const holdParts = await db.put.findAll({
-            where: { pick_status: 'HOLD', ...dateFilter }
-        });
-
-        const totalPartsCount = availableParts.length + pickedParts.length + holdParts.length;
-
-        // HU Stats
-        const totalHUs = await db.handling_unit.count();
-        const inKardexHUs = await db.handling_unit.count({ where: { storage_status: 'IN_KARDEX' } });
-        const emptyHUs = await db.handling_unit.count({ where: { hu_status: 'EMPTY', storage_status: 'IN_KARDEX' } });
-        const partialHUs = await db.handling_unit.count({ where: { hu_status: 'PARTIALLY_FILLED' } });
-        const fullHUs = await db.handling_unit.count({ where: { hu_status: 'FULL' } });
-        const draftHUs = await db.handling_unit.count({ where: { storage_status: 'DRAFT' } });
+        const totalPartsCount = availablePartsCount + pickedPartsCount + holdPartsCount;
 
         res.json({
             validScanCount,
             invalidScanCount,
             totalPartsCount,
-            holdPartsCount: holdParts.length,
-            pickedPartsCount: pickedParts.length,
-            availablePartsCount: availableParts.length,
+            holdPartsCount,
+            pickedPartsCount,
+            availablePartsCount,
             totalHUs,
             inKardexHUs,
             emptyHUs,

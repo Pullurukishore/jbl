@@ -162,8 +162,12 @@ exports.createPick = asyncHandler(async (req, res) => {
             }) + "\n\n");
             if (typeof res.flush === 'function') res.flush();
 
-            // 1. PV Status Check (KANBAN-OUT)
-            const pvStatusResponse = await getPVStatusCheck(putEntry.serial_number, pickProcessStep);
+            // 1. Concurrent MES PV Status & WIP Hold Checks
+            const [pvStatusResponse, getWipSerialResponse] = await Promise.all([
+                getPVStatusCheck(putEntry.serial_number, pickProcessStep),
+                getWipBySerialNumber(putEntry.serial_number)
+            ]);
+
             if (pvStatusResponse?.isError) {
                 if (serialsQuery) {
                     logs.push(await createAndSendLog({
@@ -204,8 +208,7 @@ exports.createPick = asyncHandler(async (req, res) => {
                 continue;
             }
 
-            // 2. WIP Hold Check
-            const getWipSerialResponse = await getWipBySerialNumber(putEntry.serial_number);
+            // 2. Process WIP Hold Check Result
             if (getWipSerialResponse?.isError) {
                 if (serialsQuery) {
                     logs.push(await createAndSendLog({
