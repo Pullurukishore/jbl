@@ -28,12 +28,46 @@ const db = require('../models');
 
 // Parse command line arguments
 const args = process.argv.slice(2);
+const isHelp = args.includes('--help') || args.includes('-h');
 const isAll = args.includes('--all') || args.includes('--hard');
 const isForce = args.includes('--yes') || args.includes('-y') || args.includes('--force');
 const isDbOnly = args.includes('--db-only');
 const isFilesOnly = args.includes('--files-only');
-const includeUsers = args.includes('--include-users') || isAll;
-const seedAdmin = args.includes('--seed-admin') || isAll;
+const clearBins = args.includes('--bins') || args.includes('--clear-bins') || isAll;
+const includeUsers = args.includes('--include-users') || (isAll && !args.includes('--keep-users'));
+const seedAdmin = args.includes('--seed-admin') || (isAll && includeUsers);
+
+if (isHelp) {
+    console.log(`
+============================================================================
+              KARDEX REMSTAR - DATABASE & FILE CLEAN TOOL
+============================================================================
+Usage:
+  node scripts/clean-all-data.js [options]
+  .\\clean-data.ps1 [options]
+  clean-data.bat [options]
+
+Modes:
+  (default)            Reset inventory & transactions (Puts, Picks, Logs, Files)
+                       and reset Bins/Compartments to EMPTY. Keeps Bins and Users.
+  --bins               Wipe all Bins, Compartments, and Bin Types in addition to
+                       inventory, while preserving Users.
+  --all, --hard        Full database wipe (Truncates ALL tables including Bins & Users).
+                       Re-seeds default administrator (admin / admin123).
+
+Options:
+  --bins               Delete all bin definitions, compartments, and bin types.
+  --include-users      Delete user accounts as well.
+  --keep-users         Keep users when using --all.
+  --seed-admin         Re-create default admin account (admin / admin123).
+  --db-only            Clean database tables only (leave files on disk).
+  --files-only         Clean disk files only (leave database untouched).
+  -y, --yes, --force   Skip confirmation prompt (non-interactive mode).
+  -h, --help           Show this help information.
+============================================================================
+`);
+    process.exit(0);
+}
 
 // Directories to clean
 const textFileBase = path.join(__dirname, '..', '..', 'text-file');
@@ -143,6 +177,15 @@ async function cleanDatabase() {
             }
         }
 
+        // Re-seed essential bin types so new bins can be registered
+        console.log('\n  Re-seeding standard bin types (15, 20, 30 compartments)...');
+        await db.bin_type.bulkCreate([
+            { name: 'Type-A (15 Compartments)', compartment_count: 15, bin_name: 'CON_BINA', description: '15-compartment bin' },
+            { name: 'Type-B (20 Compartments)', compartment_count: 20, bin_name: 'CON_BINB', description: '20-compartment bin' },
+            { name: 'Type-C (30 Compartments)', compartment_count: 30, bin_name: 'CON_BINC', description: '30-compartment bin' }
+        ]);
+        console.log('  Standard bin types ready.');
+
         // Re-seed default admin user if requested
         if (includeUsers && seedAdmin) {
             console.log('\n  Re-creating default Administrator user...');
@@ -162,40 +205,75 @@ async function cleanDatabase() {
     } else {
         console.log(' Mode: RESET INVENTORY & TRANSACTIONS (Preserving Bins & Users)');
 
-        // 1. Delete logs
-        stats.logs = await db.log.destroy({ where: {} });
-        console.log(`  Cleared ${stats.logs} activity/transaction logs.`);
+        if (dialect === 'postgres') {
+            try {
+                await db.sequelize.query('TRUNCATE TABLE "log", "put", "pick", "files" RESTART IDENTITY CASCADE;');
+                console.log('  Cleared logs, puts, picks, files and restarted ID sequences.');
+            } catch (err) {
+                console.warn('  TRUNCATE failed, falling back to delete:', err.message);
+                stats.logs = await db.log.destroy({ where: {} });
+                stats.puts = await db.put.destroy({ where: {} });
+                stats.picks = await db.pick.destroy({ where: {} });
+                stats.files = await db.files.destroy({ where: {} });
+                console.log('  Cleared logs, puts, picks, and file records.');
+            }
+        } else {
+            // 1. Delete logs
+            stats.logs = await db.log.destroy({ where: {} });
+            console.log(`  Cleared ${stats.logs} activity/transaction logs.`);
 
-        // 2. Delete puts (serialized material inventory)
-        stats.puts = await db.put.destroy({ where: {} });
-        console.log(`  Cleared ${stats.puts} PUT inventory items.`);
+            // 2. Delete puts (serialized material inventory)
+            stats.puts = await db.put.destroy({ where: {} });
+            console.log(`  Cleared ${stats.puts} PUT inventory items.`);
 
-        // 3. Delete picks
-        stats.picks = await db.pick.destroy({ where: {} });
-        console.log(`  Cleared ${stats.picks} PICK order records.`);
+            // 3. Delete picks
+            stats.picks = await db.pick.destroy({ where: {} });
+            console.log(`  Cleared ${stats.picks} PICK order records.`);
 
-        // 4. Delete file records
-        stats.files = await db.files.destroy({ where: {} });
-        console.log(`  Cleared ${stats.files} file records.`);
+            // 4. Delete file records
+            stats.files = await db.files.destroy({ where: {} });
+            console.log(`  Cleared ${stats.files} file records.`);
+        }
 
-        // 5. Reset all Compartments to EMPTY
-        const [compUpdated] = await db.compartment.update({
-            status: 'EMPTY',
-            serial_number: null,
-            material_name: null,
-            allocated_at: null,
-            allocated_by: null
-        }, { where: {} });
-        console.log(`  Reset ${compUpdated} bin compartments to EMPTY.`);
+        if (clearBins) {
+            console.log('  Deleting all Compartments, Handling Units, and Bin Types...');
+            if (dialect === 'postgres') {
+                await db.sequelize.query('TRUNCATE TABLE "compartment", "handling_unit", "bin_type" RESTART IDENTITY CASCADE;');
+            } else {
+                await db.compartment.destroy({ where: {} });
+                await db.handling_unit.destroy({ where: {} });
+                await db.bin_type.destroy({ where: {} });
+            }
+            console.log('  Deleted all compartments, handling units, and bin types.');
 
-        // 6. Reset all Handling Units to EMPTY status
-        const [huUpdated] = await db.handling_unit.update({
-            hu_status: 'EMPTY',
-            last_transaction: null,
-            transaction_status: null,
-            put_order_seq: 0
-        }, { where: {} });
-        console.log(`  Reset ${huUpdated} handling units to EMPTY.`);
+            // Re-seed essential bin types so new bins can be registered
+            console.log('  Re-seeding standard bin types (15, 20, 30 compartments)...');
+            await db.bin_type.bulkCreate([
+                { name: 'Type-A (15 Compartments)', compartment_count: 15, bin_name: 'CON_BINA', description: '15-compartment bin' },
+                { name: 'Type-B (20 Compartments)', compartment_count: 20, bin_name: 'CON_BINB', description: '20-compartment bin' },
+                { name: 'Type-C (30 Compartments)', compartment_count: 30, bin_name: 'CON_BINC', description: '30-compartment bin' }
+            ]);
+            console.log('  Standard bin types ready.');
+        } else {
+            // 5. Reset all Compartments to EMPTY
+            const [compUpdated] = await db.compartment.update({
+                status: 'EMPTY',
+                serial_number: null,
+                material_name: null,
+                allocated_at: null,
+                allocated_by: null
+            }, { where: {} });
+            console.log(`  Reset ${compUpdated} bin compartments to EMPTY.`);
+
+            // 6. Reset all Handling Units to EMPTY status
+            const [huUpdated] = await db.handling_unit.update({
+                hu_status: 'EMPTY',
+                last_transaction: null,
+                transaction_status: null,
+                put_order_seq: 0
+            }, { where: {} });
+            console.log(`  Reset ${huUpdated} handling units to EMPTY.`);
+        }
 
         if (includeUsers) {
             stats.users = await db.user.destroy({ where: {} });

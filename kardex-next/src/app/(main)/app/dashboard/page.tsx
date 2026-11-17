@@ -28,7 +28,6 @@ import {
   Package,
   CheckCircle2,
   Layers,
-  Archive,
   Box,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -379,14 +378,14 @@ export default function DashboardPage() {
         }
         .all-metrics-one-line {
           display: grid;
-          grid-template-columns: repeat(9, minmax(0, 1fr));
+          grid-template-columns: repeat(8, minmax(0, 1fr));
           gap: 10px;
           margin-top: 4px;
           margin-bottom: 18px;
         }
         @media (max-width: 1279px) {
           .all-metrics-one-line {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
           }
         }
         @media (max-width: 575px) {
@@ -562,16 +561,6 @@ export default function DashboardPage() {
             iconBg: '#f1f5f9',
             iconColor: '#64748b',
             icon: <FileText size={14} />,
-          },
-          {
-            label: 'In Kardex',
-            value: countsLoading ? '—' : counts?.inKardexHUs ?? 0,
-            sub: 'in shuttle',
-            color: '#2563eb',
-            accent: 'linear-gradient(90deg, #2563eb, #60a5fa)',
-            iconBg: '#dbeafe',
-            iconColor: '#2563eb',
-            icon: <Archive size={14} />,
           },
           {
             label: 'Empty',

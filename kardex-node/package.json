@@ -6,7 +6,9 @@
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
         "dev": "nodemon index",
-        "start": "cross-env NODE_ENV=production node index"
+        "start": "cross-env NODE_ENV=production node index",
+        "clean-data": "node scripts/clean-all-data.js",
+        "clean-data:all": "node scripts/clean-all-data.js --all --seed-admin"
     },
     "author": "Mayur Parve (mayur.parve@autoflowtech.com)",
     "license": "ISC",
