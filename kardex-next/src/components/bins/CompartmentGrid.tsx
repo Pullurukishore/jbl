@@ -254,7 +254,7 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
           font-size: 10.5px;
           font-weight: 800;
-          color: #6ee7b7;
+          color: #ffffff;
           letter-spacing: 0.3px;
           word-break: break-all;
           line-height: 1.15;
@@ -267,8 +267,8 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
           font-size: 8.5px;
           font-weight: 700;
-          color: #10b981;
-          margin-top: 1px;
+          color: #fbbf24;
+          margin-top: 1.5px;
           letter-spacing: 0.3px;
           white-space: nowrap;
           overflow: hidden;
@@ -335,7 +335,7 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
           font-size: 10.5px;
           font-weight: 800;
-          color: #fde68a;
+          color: #ffffff;
           letter-spacing: 0.3px;
           word-break: break-all;
           line-height: 1.15;

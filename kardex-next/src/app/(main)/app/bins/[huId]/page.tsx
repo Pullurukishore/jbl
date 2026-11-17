@@ -23,7 +23,6 @@ import {
   Check,
   Layers,
   Barcode,
-  Search,
   PackagePlus,
   PackageMinus,
 } from 'lucide-react';
@@ -45,9 +44,8 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
   const [confirmSuccess, setConfirmSuccess] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
 
-  // Filters & Search for bin compartments
+  // Filters for bin compartments
   const [filterMode, setFilterMode] = useState<'ALL' | 'EMPTY' | 'OCCUPIED'>('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
 
   // Modals & Side-by-Side Panel State
   const [selectedCompartment, setSelectedCompartment] = useState<number | null>(null);
@@ -87,6 +85,11 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
       setError('');
       const res = await apiGet<HandlingUnit>(`/hu/${encodeURIComponent(huId)}/layout`);
       setHu(res);
+      const comps = res.compartments || [];
+      const hasEmpty = comps.some((c) => c.status === 'EMPTY');
+      if (!hasEmpty) {
+        setIsScanModalOpen(false);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load bin details');
     } finally {
@@ -163,6 +166,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
       compartments.find((c) => c.status === 'EMPTY')?.compartment_number;
 
     if (currentTarget) {
+      let nextTargetNumber: number | null = null;
       setHu((prev) => {
         if (!prev) return prev;
         const updatedCompartments = (prev.compartments || []).map((c) => {
@@ -177,6 +181,13 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         });
         const occupied = updatedCompartments.filter((c) => c.status === 'OCCUPIED').length;
         const total = updatedCompartments.length;
+
+        // Auto-advance selectedCompartment to the next lowest empty slot
+        const nextEmpty = updatedCompartments.find(
+          (c) => c.status === 'EMPTY' && c.compartment_number !== currentTarget
+        );
+        nextTargetNumber = nextEmpty ? nextEmpty.compartment_number : null;
+
         return {
           ...prev,
           compartments: updatedCompartments,
@@ -185,15 +196,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         };
       });
 
-      // Auto-advance selectedCompartment to the next lowest empty slot for continuous scanning
-      const nextEmpty = compartments.find(
-        (c) => c.status === 'EMPTY' && c.compartment_number !== currentTarget
-      );
-      if (nextEmpty) {
-        setSelectedCompartment(nextEmpty.compartment_number);
-      } else {
-        setSelectedCompartment(null);
-      }
+      setSelectedCompartment(nextTargetNumber);
     }
 
     // 2. Refresh from server in background to ensure all backend associations are in sync
@@ -222,16 +225,9 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
     return compartments.filter((c) => {
       if (filterMode === 'EMPTY' && c.status !== 'EMPTY') return false;
       if (filterMode === 'OCCUPIED' && c.status !== 'OCCUPIED') return false;
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchesSerial = c.serial_number?.toLowerCase().includes(q);
-        const matchesComp = c.compartment_number.toString().includes(q);
-        const matchesModel = c.material_name?.toLowerCase().includes(q);
-        if (!matchesSerial && !matchesComp && !matchesModel) return false;
-      }
       return true;
     });
-  }, [compartments, filterMode, searchQuery]);
+  }, [compartments, filterMode]);
 
   if (loading) {
     return <Loader message={`Loading handling unit ${huId}...`} />;
@@ -265,6 +261,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
   const totalCount = compartments.length;
   const emptyCount = totalCount - occupiedCount - pickedCount;
   const fillPct = totalCount > 0 ? Math.round((occupiedCount / totalCount) * 100) : 0;
+  const isBinFull = totalCount > 0 && emptyCount === 0;
   const isLocked = !canPut;
   const isFloorBin = hu.storage_status === 'DRAFT' || hu.storage_status === 'OUTSIDE_KARDEX';
   const canSendToKardex = canPut && occupiedCount > 0;
@@ -416,8 +413,18 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         .workspace-split-row {
           display: flex;
           align-items: flex-start;
-          gap: 12px;
+          gap: 14px;
           width: 100%;
+        }
+
+        @media (max-width: 1024px) {
+          .workspace-split-row {
+            flex-direction: column;
+          }
+          .scan-panel-col {
+            width: 100% !important;
+            min-width: 100% !important;
+          }
         }
 
         .layout-card {
@@ -482,37 +489,6 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
           align-items: center;
           gap: 8px;
           flex-wrap: wrap;
-        }
-
-        .search-box-wrap {
-          position: relative;
-          min-width: 150px;
-        }
-
-        .search-input {
-          width: 100%;
-          padding: 4px 10px 4px 28px;
-          font-size: 11.5px;
-          border-radius: 6px;
-          border: 1px solid #e2e8f0;
-          background: #f8fafc;
-          outline: none;
-          transition: all 0.15s ease;
-        }
-
-        .search-input:focus {
-          background: #ffffff;
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-        }
-
-        .search-icon-pos {
-          position: absolute;
-          left: 8px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: #94a3b8;
-          pointer-events: none;
         }
 
         .filter-pill-container {
@@ -742,7 +718,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         <div
           className="layout-card"
           style={{
-            flex: canPut && isScanModalOpen ? '1 1 58%' : '1 1 100%',
+            flex: canPut && isScanModalOpen ? '1 1 64%' : '1 1 100%',
             minWidth: 0,
           }}
         >
@@ -798,25 +774,13 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
                   Occupied ({occupiedCount})
                 </button>
               </div>
-
-              {/* Search Input for Serial or Cell Number */}
-              <div className="search-box-wrap">
-                <Search size={13} className="search-icon-pos" />
-                <input
-                  type="text"
-                  className="search-input"
-                  placeholder="Search cell or serial..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
             </div>
           </div>
 
           {/* Compartment Grid */}
           {filteredCompartments.length === 0 ? (
             <div className="text-center text-muted py-4" style={{ fontSize: '13px' }}>
-              No compartments match your current filter or search criteria.
+              No compartments match your current filter criteria.
             </div>
           ) : (
             <CompartmentGrid
@@ -835,20 +799,24 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
           <div
             className="scan-panel-col"
             style={{
-              flex: '0 0 450px',
-              maxWidth: '480px',
+              flex: '1 1 36%',
               width: '100%',
-              minWidth: '350px',
-              marginTop: '48px',
+              minWidth: '340px',
+              marginTop: 0,
             }}
           >
             <ScanModal
               isOpen={isScanModalOpen}
-              onClose={() => {}}
+              onClose={() => {
+                setIsScanModalOpen(false);
+                setUserDismissedScan(true);
+              }}
               onSuccess={handleScanSuccess}
               huId={hu.hu_id}
               compartmentNumber={selectedCompartment}
               embedded={true}
+              isFull={isBinFull}
+              onSendToKardex={() => setIsSendToKardexOpen(true)}
             />
           </div>
         )}

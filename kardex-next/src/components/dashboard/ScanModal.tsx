@@ -5,7 +5,7 @@ import { Modal } from '@/components/shared/Modal';
 import { TimelineProgress } from '@/components/shared/TimelineProgress';
 import { connectSSE } from '@/lib/api';
 import { Log } from '@/types';
-import { Scan, RotateCcw, PackagePlus, CheckCircle2, AlertCircle, X, ArrowRight } from 'lucide-react';
+import { Scan, RotateCcw, PackagePlus, CheckCircle2, AlertCircle, X, ArrowRight, Send } from 'lucide-react';
 
 interface ScanModalProps {
   isOpen: boolean;
@@ -14,6 +14,8 @@ interface ScanModalProps {
   huId?: string;
   compartmentNumber?: number | null;
   embedded?: boolean;
+  isFull?: boolean;
+  onSendToKardex?: () => void;
 }
 
 const PUT_STEPS = [
@@ -33,6 +35,8 @@ export const ScanModal: React.FC<ScanModalProps> = ({
   huId,
   compartmentNumber,
   embedded = false,
+  isFull = false,
+  onSendToKardex,
 }) => {
   const [serialNumber, setSerialNumber] = useState('');
   const [logs, setLogs] = useState<Log[]>([]);
@@ -49,10 +53,10 @@ export const ScanModal: React.FC<ScanModalProps> = ({
       setIsProcessing(false);
       setErrorMsg('');
       setIsCompleted(false);
-    } else {
+    } else if (!isFull) {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
-  }, [isOpen]);
+  }, [isOpen, isFull]);
 
   useEffect(() => {
     if (isOpen) {
@@ -61,9 +65,11 @@ export const ScanModal: React.FC<ScanModalProps> = ({
       setIsProcessing(false);
       setErrorMsg('');
       setIsCompleted(false);
-      setTimeout(() => inputRef.current?.focus(), 100);
+      if (!isFull) {
+        setTimeout(() => inputRef.current?.focus(), 100);
+      }
     }
-  }, [compartmentNumber]);
+  }, [compartmentNumber, isFull]);
 
   useEffect(() => {
     if ((isProcessing || logs.length > 0) && logsEndRef.current) {
@@ -77,24 +83,29 @@ export const ScanModal: React.FC<ScanModalProps> = ({
     setIsProcessing(false);
     setErrorMsg('');
     setIsCompleted(false);
-    setTimeout(() => inputRef.current?.focus(), 50);
+    if (!isFull) {
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
   };
 
   const handleScan = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!serialNumber.trim() || isProcessing) return;
+    if (isFull || !serialNumber.trim() || isProcessing) return;
 
     setIsProcessing(true);
     setLogs([]);
     setErrorMsg('');
     setIsCompleted(false);
 
+    const queryParams = new URLSearchParams();
+    if (huId) queryParams.append('hu_id', huId);
+    if (compartmentNumber !== null && compartmentNumber !== undefined) {
+      queryParams.append('compartment_number', String(compartmentNumber));
+    }
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+
     connectSSE(
-      `/put/create/${encodeURIComponent(serialNumber.trim())}${
-        huId && compartmentNumber
-          ? `?hu_id=${encodeURIComponent(huId)}&compartment_number=${compartmentNumber}`
-          : ''
-      }`,
+      `/put/create/${encodeURIComponent(serialNumber.trim())}${queryString}`,
       (data: any) => {
         if (data && typeof data === 'object') {
           setLogs((prev) => {
@@ -142,9 +153,9 @@ export const ScanModal: React.FC<ScanModalProps> = ({
           width: '32px',
           height: '32px',
           borderRadius: '8px',
-          background: 'rgba(56, 189, 248, 0.14)',
-          color: '#0284c7',
-          border: '1px solid rgba(56, 189, 248, 0.3)',
+          background: isFull ? 'rgba(239, 68, 68, 0.12)' : 'rgba(56, 189, 248, 0.14)',
+          color: isFull ? '#dc2626' : '#0284c7',
+          border: isFull ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(56, 189, 248, 0.3)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -156,7 +167,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
       <div>
         <div className="d-flex align-items-center gap-2">
           <span className="fw-bold" style={{ fontSize: '15.5px', color: '#0f172a' }}>
-            PUT Process — Scan Part Number
+            PUT Process — {isFull ? 'Bin is Full' : 'Scan Part Number'}
           </span>
           <span
             style={{
@@ -164,18 +175,22 @@ export const ScanModal: React.FC<ScanModalProps> = ({
               fontWeight: 700,
               padding: '2px 8px',
               borderRadius: '9999px',
-              background: 'rgba(56, 189, 248, 0.15)',
-              color: '#0369a1',
-              border: '1px solid rgba(56, 189, 248, 0.35)',
+              background: isFull ? 'rgba(239, 68, 68, 0.15)' : 'rgba(56, 189, 248, 0.15)',
+              color: isFull ? '#b91c1c' : '#0369a1',
+              border: isFull ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid rgba(56, 189, 248, 0.35)',
               letterSpacing: '0.5px',
             }}
           >
-            INBOUND
+            {isFull ? 'BIN FULL • LOCKED' : 'INBOUND'}
           </span>
         </div>
         <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
-          {huId && compartmentNumber
+          {isFull
+            ? `Bin ${huId || ''} is 100% full (all compartments occupied). Scanning is locked.`
+            : huId && compartmentNumber
             ? `Target: Slot #${compartmentNumber < 10 ? '0' + compartmentNumber : compartmentNumber} • Bin ${huId}`
+            : huId
+            ? `Target: Next available empty slot in Bin ${huId}`
             : 'Verify Kanban board status, PV test results, and generate text order'}
         </div>
       </div>
@@ -354,59 +369,102 @@ export const ScanModal: React.FC<ScanModalProps> = ({
           }
         `}</style>
 
-        {/* Scanner Input Form */}
-        <form onSubmit={handleScan} className="d-flex flex-column gap-1">
-          <div className="scanner-box">
-            <div className="scanner-icon-wrap">
-              <Scan size={18} />
+        {/* Scanner Input Form or Bin Full Locked State */}
+        {isFull ? (
+          <div
+            className="p-3 rounded-3 text-center d-flex flex-column align-items-center gap-2"
+            style={{
+              background: '#f8fafc',
+              border: '1.5px solid #cbd5e1',
+            }}
+          >
+            <div
+              style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '50%',
+                background: '#dcfce7',
+                color: '#16a34a',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <CheckCircle2 size={24} />
+            </div>
+            <div>
+              <div className="fw-bold text-dark" style={{ fontSize: '14px' }}>
+                All Compartments Filled (100%)
+              </div>
+              <div className="text-muted mt-1" style={{ fontSize: '12px', maxWidth: '340px' }}>
+                All 30 compartments in this handling unit are occupied and verified. Part scanning is now locked.
+              </div>
+            </div>
+            {onSendToKardex && (
+              <button
+                type="button"
+                className="btn btn-sm btn-success fw-bold d-inline-flex align-items-center gap-2 mt-1 px-3 py-2"
+                style={{ fontSize: '12.5px', borderRadius: '7px' }}
+                onClick={onSendToKardex}
+              >
+                <Send size={14} /> Send Bin to Kardex
+              </button>
+            )}
+          </div>
+        ) : (
+          <form onSubmit={handleScan} className="d-flex flex-column gap-1">
+            <div className="scanner-box">
+              <div className="scanner-icon-wrap">
+                <Scan size={18} />
+              </div>
+
+              <input
+                ref={inputRef}
+                type="text"
+                className="scanner-input"
+                placeholder="Scan or enter Serial Number (e.g. 2618991200001)..."
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+                disabled={isProcessing}
+                autoFocus
+              />
+
+              {serialNumber && !isProcessing && (
+                <button
+                  type="button"
+                  className="btn-input-clear"
+                  onClick={() => setSerialNumber('')}
+                  title="Clear"
+                >
+                  <X size={16} />
+                </button>
+              )}
+
+              <button
+                type="submit"
+                className="btn-scan-action"
+                disabled={isProcessing || !serialNumber.trim()}
+              >
+                <PackagePlus size={16} />
+                <span>{isProcessing ? 'Processing...' : 'Scan Part'}</span>
+              </button>
             </div>
 
-            <input
-              ref={inputRef}
-              type="text"
-              className="scanner-input"
-              placeholder="Scan or enter Serial Number (e.g. 2618991200001)..."
-              value={serialNumber}
-              onChange={(e) => setSerialNumber(e.target.value)}
-              disabled={isProcessing}
-              autoFocus
-            />
-
-            {serialNumber && !isProcessing && (
-              <button
-                type="button"
-                className="btn-input-clear"
-                onClick={() => setSerialNumber('')}
-                title="Clear"
-              >
-                <X size={16} />
-              </button>
-            )}
-
-            <button
-              type="submit"
-              className="btn-scan-action"
-              disabled={isProcessing || !serialNumber.trim()}
-            >
-              <PackagePlus size={16} />
-              <span>{isProcessing ? 'Processing...' : 'Scan Part'}</span>
-            </button>
-          </div>
-
-          <div className="scanner-hint">
-            <span>Scan barcode or type and press <kbd>Enter ↵</kbd></span>
-            {logs.length > 0 && (
-              <button
-                type="button"
-                className="btn btn-link btn-sm p-0 text-decoration-none text-muted"
-                onClick={handleReset}
-                style={{ fontSize: '11.5px' }}
-              >
-                <RotateCcw size={11} className="me-1" /> Reset / Clear
-              </button>
-            )}
-          </div>
-        </form>
+            <div className="scanner-hint">
+              <span>Scan barcode or type and press <kbd>Enter ↵</kbd></span>
+              {logs.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-link btn-sm p-0 text-decoration-none text-muted"
+                  onClick={handleReset}
+                  style={{ fontSize: '11.5px' }}
+                >
+                  <RotateCcw size={11} className="me-1" /> Reset / Clear
+                </button>
+              )}
+            </div>
+          </form>
+        )}
 
         {/* Success Banner */}
         {isCompleted && (
@@ -423,10 +481,17 @@ export const ScanModal: React.FC<ScanModalProps> = ({
               </div>
             </div>
 
-            <button type="button" className="success-btn" onClick={handleReset}>
-              <span>Scan Next</span>
-              <ArrowRight size={14} />
-            </button>
+            {!isFull ? (
+              <button type="button" className="success-btn" onClick={handleReset}>
+                <span>Scan Next</span>
+                <ArrowRight size={14} />
+              </button>
+            ) : onSendToKardex ? (
+              <button type="button" className="success-btn" onClick={onSendToKardex}>
+                <span>Send to Kardex</span>
+                <Send size={14} />
+              </button>
+            ) : null}
           </div>
         )}
 
@@ -484,6 +549,15 @@ export const ScanModal: React.FC<ScanModalProps> = ({
           style={{ background: '#f8fafc' }}
         >
           {titleContent}
+          <button
+            type="button"
+            className="btn btn-sm btn-link text-muted p-1 rounded-circle"
+            onClick={onClose}
+            title="Close Panel"
+            style={{ width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <X size={16} />
+          </button>
         </div>
 
         <div className="p-3" style={{ overflowY: 'auto' }}>

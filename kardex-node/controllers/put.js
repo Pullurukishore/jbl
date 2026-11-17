@@ -41,6 +41,86 @@ exports.createPut = asyncHandler(async (req, res) => {
 
         const logs = [];
 
+        // Validate Handling Unit capacity upfront if hu_id is provided
+        let targetHU = null;
+        let targetComp = null;
+        if (req.query?.hu_id) {
+            targetHU = await db.handling_unit.findOne({
+                where: { hu_id: req.query.hu_id },
+                include: [{ model: db.compartment }]
+            });
+            if (!targetHU) {
+                logs.push(await createAndSendLog({
+                    entity_number: serialNumber,
+                    activity: 'FETCH_DETAILS',
+                    status: 'FAILED',
+                    message: `Handling Unit ${req.query.hu_id} not found.`,
+                    logged_by: req.user?.id,
+                    log_type: 'PUT_PROCESS',
+                    user_first_name: req.user?.first_name,
+                    user_last_name: req.user?.last_name,
+                    user_id: req.user?.user_id,
+                    process_id
+                }, res));
+                return res.end();
+            }
+
+            const huComps = targetHU.compartments || [];
+            const emptyComps = huComps.filter(c => c.status === 'EMPTY');
+            if (huComps.length > 0 && emptyComps.length === 0) {
+                logs.push(await createAndSendLog({
+                    entity_number: serialNumber,
+                    activity: 'FETCH_DETAILS',
+                    status: 'FAILED',
+                    message: `Handling Unit ${req.query.hu_id} is completely full (all ${huComps.length} compartments occupied). Further scanning is not allowed.`,
+                    logged_by: req.user?.id,
+                    log_type: 'PUT_PROCESS',
+                    user_first_name: req.user?.first_name,
+                    user_last_name: req.user?.last_name,
+                    user_id: req.user?.user_id,
+                    process_id
+                }, res));
+                return res.end();
+            }
+
+            if (req.query?.compartment_number) {
+                const compNum = parseInt(req.query.compartment_number, 10);
+                targetComp = huComps.find(c => c.compartment_number === compNum);
+                if (!targetComp) {
+                    logs.push(await createAndSendLog({
+                        entity_number: serialNumber,
+                        activity: 'FETCH_DETAILS',
+                        status: 'FAILED',
+                        message: `Compartment #${compNum} not found in Handling Unit ${req.query.hu_id}.`,
+                        logged_by: req.user?.id,
+                        log_type: 'PUT_PROCESS',
+                        user_first_name: req.user?.first_name,
+                        user_last_name: req.user?.last_name,
+                        user_id: req.user?.user_id,
+                        process_id
+                    }, res));
+                    return res.end();
+                }
+                if (targetComp.status === 'OCCUPIED') {
+                    logs.push(await createAndSendLog({
+                        entity_number: serialNumber,
+                        activity: 'FETCH_DETAILS',
+                        status: 'FAILED',
+                        message: `Compartment #${compNum} in Handling Unit ${req.query.hu_id} is already occupied.`,
+                        logged_by: req.user?.id,
+                        log_type: 'PUT_PROCESS',
+                        user_first_name: req.user?.first_name,
+                        user_last_name: req.user?.last_name,
+                        user_id: req.user?.user_id,
+                        process_id
+                    }, res));
+                    return res.end();
+                }
+            } else {
+                targetComp = emptyComps.sort((a, b) => a.compartment_number - b.compartment_number)[0];
+            }
+        }
+
         const boardHistoryResponse = await getBoardHistory(serialNumber);
         if (boardHistoryResponse?.isError) {
             logs.push(await createAndSendLog({
@@ -574,43 +654,25 @@ exports.createPut = asyncHandler(async (req, res) => {
             });
         }
         // Link to Handling Unit & Compartment BEFORE sending completion event to eliminate race condition
-        if (req.query?.hu_id) {
+        if (targetHU && targetComp) {
             try {
-                const hu = await db.handling_unit.findOne({ where: { hu_id: req.query.hu_id } });
-                if (hu) {
-                    let compNum = req.query.compartment_number ? parseInt(req.query.compartment_number, 10) : null;
-                    let comp = null;
-                    if (compNum) {
-                        comp = await db.compartment.findOne({
-                            where: { handling_unit_id: hu.id, compartment_number: compNum }
-                        });
-                    }
-                    if (!comp) {
-                        comp = await db.compartment.findOne({
-                            where: { handling_unit_id: hu.id, status: 'EMPTY' },
-                            order: [['compartment_number', 'ASC']]
-                        });
-                    }
-                    if (comp) {
-                        await comp.update({
-                            status: 'OCCUPIED',
-                            serial_number: birthProcess?.SerialNumber,
-                            material_name: birthProcess?.Number,
-                            allocated_at: new Date(),
-                            allocated_by: req.user?.id || 'SYSTEM'
-                        });
-                        await putEntry.update({
-                            handling_unit_id: hu.id,
-                            compartment_id: comp.id
-                        });
+                await targetComp.update({
+                    status: 'OCCUPIED',
+                    serial_number: birthProcess?.SerialNumber,
+                    material_name: birthProcess?.Number,
+                    allocated_at: new Date(),
+                    allocated_by: req.user?.id || 'SYSTEM'
+                });
+                await putEntry.update({
+                    handling_unit_id: targetHU.id,
+                    compartment_id: targetComp.id
+                });
 
-                        const allComps = await db.compartment.findAll({ where: { handling_unit_id: hu.id } });
-                        const allFilled = allComps.length > 0 && allComps.every(c => c.status === 'OCCUPIED');
-                        const allEmpty = allComps.every(c => c.status === 'EMPTY');
-                        const nextStatus = allFilled ? 'FULL' : (allEmpty ? 'EMPTY' : 'PARTIALLY_FILLED');
-                        await hu.update({ hu_status: nextStatus });
-                    }
-                }
+                const allComps = await db.compartment.findAll({ where: { handling_unit_id: targetHU.id } });
+                const allFilled = allComps.length > 0 && allComps.every(c => c.status === 'OCCUPIED');
+                const allEmpty = allComps.every(c => c.status === 'EMPTY');
+                const nextStatus = allFilled ? 'FULL' : (allEmpty ? 'EMPTY' : 'PARTIALLY_FILLED');
+                await targetHU.update({ hu_status: nextStatus });
             } catch (huErr) {
                 console.error('Error linking put to Handling Unit:', huErr);
             }
