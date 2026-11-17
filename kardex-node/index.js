@@ -43,6 +43,9 @@ const huRoutes = require('./routes/hu');
 const materialRoutes = require('./routes/material');
 const { create } = require('xmlbuilder2');
 
+// Automated Daily Database Backup Scheduler (20-day retention)
+require('./scheduler/db_backup');
+
 //Request logger
 const morgan = require('morgan');
 

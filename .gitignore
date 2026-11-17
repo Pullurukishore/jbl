@@ -39,3 +39,7 @@ npm-debug.log*
 # # Misc
 uploads/
 /tmp/
+backups/
+*.dump
+*.sql
+
