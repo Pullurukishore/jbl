@@ -48,7 +48,22 @@ const morgan = require('morgan');
 
 const app = express();
 app.use(zip());
-app.use(cors({ origin: ['http://localhost:4200', 'http://localhost:3000'], exposedHeaders: ['File-Name'], }));
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+  : ['http://localhost:4200', 'http://localhost:3000'];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
+    exposedHeaders: ['File-Name'],
+    credentials: true,
+  })
+);
 //Body parser
 app.use(express.json({ limit: '1000mb' }));
 app.use(express.urlencoded({ limit: '1000mb', extended: true }));
