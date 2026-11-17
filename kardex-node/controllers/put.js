@@ -752,41 +752,70 @@ exports.getAll = asyncHandler(async (req, res) => {
 exports.findByModelAndQty = asyncHandler(async (req, res) => {
     try {
         const {
-            page = 1, // Default to page 0
-            size = 5, // Default to 10 entries per page
-            partNumber, // Optional filter
-            quantity = 0, // Limit on the maximum number of entries
+            page = 1,
+            size = 5,
+            partNumber,
+            quantity = 0,
         } = req.body;
 
+        const cleanInput = String(partNumber || '').trim();
+        let resolvedModelNumber = cleanInput;
+        let isFromSerial = false;
+        let seedSerial = null;
+
+        if (cleanInput) {
+            // Check if input is a serial number
+            const serialCheck = await db.put.findOne({
+                where: { serial_number: cleanInput }
+            });
+            if (serialCheck && serialCheck.model_number) {
+                resolvedModelNumber = serialCheck.model_number;
+                isFromSerial = true;
+                seedSerial = cleanInput;
+            }
+        }
+
         const where = {
-            [db.Sequelize.Op.or]: [
-                { model_number: partNumber },
-                { serial_number: partNumber }
-            ],
+            model_number: resolvedModelNumber,
             pick_id: null
         };
-        // Ensure `size` does not exceed `maxLimit`
-        const limit = Math.min(size, quantity);
-        const offset = (page - 1) * limit;
 
+        const reqQty = Number(quantity) || 0;
         const totalCount = await db.put.count({ where });
-        const adjustedCount = Math.min(totalCount, quantity);
+        const limit = Math.min(Math.max(Number(size) || 20, 1), 200);
+        const offset = (Number(page) - 1) * limit;
 
-        // Fetch paginated rows
+        // Fetch paginated rows (putting seed serial first if one was scanned)
+        const orderClause = seedSerial
+            ? [
+                [db.sequelize.literal(`CASE WHEN serial_number = ${db.sequelize.escape(seedSerial)} THEN 0 ELSE 1 END`), 'ASC'],
+                ['birth_date', 'ASC']
+            ]
+            : [['birth_date', 'ASC']];
+
         const rows = await db.put.findAll({
             where,
-            order: [['birth_date', 'ASC']],
+            include: [
+                { model: db.compartment, required: false },
+                { model: db.handling_unit, required: false }
+            ],
+            order: orderClause,
             limit,
             offset
         });
 
-        // Return paginated results
         res.status(200).json({
-            message: adjustedCount > 0 ? (quantity > adjustedCount ? 'Available Quantity is less than than the required quantity.' : null) : 'No serial numbers found for this model number.',
+            resolvedModelNumber,
+            isFromSerial,
+            seedSerial,
+            message: totalCount > 0
+                ? (reqQty > totalCount ? `Only ${totalCount} available in stock (requested ${reqQty}).` : null)
+                : `No available inventory found for model "${resolvedModelNumber}".`,
             data: rows,
-            page: page,
-            totalPages: Math.ceil(adjustedCount / limit), // Pages based on adjusted count
-            totalItems: adjustedCount, // Capped by maxLimit
+            page: Number(page),
+            totalPages: Math.ceil(totalCount / limit) || 1,
+            totalItems: totalCount,
+            availableCount: totalCount
         });
 
     } catch (err) {
@@ -955,7 +984,7 @@ exports.searchAll = asyncHandler(async (req, res) => {
         res.json({
             totalItems: results.count,
             totalPages: Math.ceil(results.count / pageSize),
-            page: pageNumber,
+            page: parseInt(page, 10),
             data: results.rows,
         });
     } catch (error) {
@@ -1058,7 +1087,6 @@ exports.downloadFile = asyncHandler(async (req, res) => {
     if (!id) {
         return res.status(400).json({ message: 'Invalid quantity.' });
     }
-    // Fetch the first 'quantity' records where 'text_file_downloaded' is false, sorted by 'scanned_at' DESC
     const put = await db.put.findByPk(id, { include: { model: db.files, foreignKey: 'text_file_id', as: 'put_text_file' } });
 
     if (!put) {
@@ -1069,15 +1097,22 @@ exports.downloadFile = asyncHandler(async (req, res) => {
         return res.status(404).json({ message: 'No file found for this put.' });
     }
 
-    if (put.text_file_downloaded) {
-        return res.status(400).json({ message: 'Text was file already downloaded.' });
-    }
-
     const fileName = put.put_text_file?.name;
-    const filePath = path.resolve(`uploads/files/put/${fileName}`);
 
-    // Check if the file existsput.text_file_downloaded?.name
-    if (!fs.existsSync(filePath)) {
+    // Search all candidate locations where the file may reside
+    const candidatePaths = [
+        put.put_text_file?.path ? path.resolve(put.put_text_file.path) : null,
+        path.resolve(`uploads/files/put/${fileName}`),
+        path.resolve(`uploads/files/pick/${fileName}`),
+        path.resolve('uploads', 'files', 'put', fileName),
+        path.resolve('uploads', 'files', 'pick', fileName),
+        process.env.Put_Text_File_Path ? path.resolve(process.env.Put_Text_File_Path, fileName) : null,
+        process.env.Pick_Text_File_Path ? path.resolve(process.env.Pick_Text_File_Path, fileName) : null,
+    ].filter(Boolean);
+
+    const filePath = candidatePaths.find(p => fs.existsSync(p));
+
+    if (!filePath) {
         return res.status(404).send({ error: 'File cannot be downloaded' });
     }
 

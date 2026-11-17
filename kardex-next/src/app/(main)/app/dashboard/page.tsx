@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { ViewLogsModal } from '@/components/dashboard/ViewLogsModal';
 import { PartScanLogsModal } from '@/components/dashboard/PartScanLogsModal';
 import { ScanModal } from '@/components/dashboard/ScanModal';
@@ -29,10 +30,93 @@ import {
   CheckCircle2,
   Layers,
   Box,
+  History,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
+function formatFileName(name?: string, maxLen = 22): string {
+  if (!name) return '-';
+  if (name.length <= maxLen) return name;
+  const extIndex = name.lastIndexOf('.');
+  const ext = extIndex !== -1 ? name.slice(extIndex) : '';
+  const base = extIndex !== -1 ? name.slice(0, extIndex) : name;
+  const charsToShow = maxLen - ext.length - 3;
+  if (charsToShow <= 3) return name.slice(0, Math.max(1, maxLen - 3)) + '...';
+  const front = Math.ceil(charsToShow / 2);
+  const back = Math.floor(charsToShow / 2);
+  return `${base.slice(0, front)}...${base.slice(-back)}${ext}`;
+}
+
+function renderProcessStatusBadge(status?: string | null) {
+  if (!status) return <span className="text-muted">-</span>;
+  const s = status.toUpperCase().replace('_', '-');
+
+  if (s.includes('IN')) {
+    return (
+      <span
+        className="badge"
+        style={{
+          backgroundColor: '#e0f2fe',
+          color: '#0369a1',
+          border: '1px solid #7dd3fc',
+          fontWeight: 700,
+          fontSize: '11px',
+          letterSpacing: '0.4px',
+          padding: '4px 8px',
+        }}
+      >
+        {status}
+      </span>
+    );
+  }
+
+  if (s.includes('OUT')) {
+    return (
+      <span
+        className="badge"
+        style={{
+          backgroundColor: '#f3e8ff',
+          color: '#7e22ce',
+          border: '1px solid #c084fc',
+          fontWeight: 700,
+          fontSize: '11px',
+          letterSpacing: '0.4px',
+          padding: '4px 8px',
+        }}
+      >
+        {status}
+      </span>
+    );
+  }
+
+  if (s.includes('RTN')) {
+    return (
+      <span
+        className="badge"
+        style={{
+          backgroundColor: '#fef3c7',
+          color: '#b45309',
+          border: '1px solid #fcd34d',
+          fontWeight: 700,
+          fontSize: '11px',
+          letterSpacing: '0.4px',
+          padding: '4px 8px',
+        }}
+      >
+        {status}
+      </span>
+    );
+  }
+
+  return (
+    <span className="badge bg-secondary" style={{ fontSize: '11px', padding: '4px 8px' }}>
+      {status}
+    </span>
+  );
+}
+
 export default function DashboardPage() {
+  const router = useRouter();
   const { canPut, canPick } = useAuth();
   const [counts, setCounts] = useState<DashboardCounts | null>(null);
   const [countsLoading, setCountsLoading] = useState(true);
@@ -41,8 +125,9 @@ export default function DashboardPage() {
   const [tableLoading, setTableLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [copiedSerial, setCopiedSerial] = useState<string | null>(null);
+  const [copiedPo, setCopiedPo] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(50);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
@@ -91,7 +176,7 @@ export default function DashboardPage() {
         setPuts(res.data || []);
         setTotalPages(res.totalPages || 1);
         setTotalItems(res.totalItems || 0);
-        setPage(res.page || 1);
+        setPage(pageNum);
       } catch {
         setPuts([]);
       } finally {
@@ -123,6 +208,15 @@ export default function DashboardPage() {
       fetchPuts(page);
     } catch (err: any) {
       alert(err.message || 'Error downloading PICK file');
+    }
+  };
+
+  const handleDownloadPoFile = async (poFileId: number) => {
+    try {
+      const { blob, fileName } = await apiDownloadFile('/file/download', { id: poFileId });
+      downloadBlob(blob, fileName);
+    } catch (err: any) {
+      alert(err.message || 'Error downloading PO file');
     }
   };
 
@@ -506,13 +600,13 @@ export default function DashboardPage() {
             <button
               type="button"
               className="scan-action-btn scan-btn-pick"
-              onClick={() => setIsPickModalOpen(true)}
-              title="Scan & Pick: Verify serials and generate Kardex pick order"
+              onClick={() => router.push('/app/pick')}
+              title="Open Pick Workstation: Pick specific serials or batch allocate orders"
             >
               <div className="scan-icon-pill pick-pill">
                 <PackageMinus size={16} />
               </div>
-              <span className="scan-btn-title">Scan & Pick</span>
+              <span className="scan-btn-title">Pick Workstation</span>
               <span className="scan-type-badge pick-badge">PICK</span>
             </button>
           )}
@@ -846,8 +940,56 @@ export default function DashboardPage() {
                         {row.pv_status || '-'}
                       </span>
                     </td>
-                    <td>{row.process_status || '-'}</td>
-                    <td>{row.put_po_file?.name || '-'}</td>
+                    <td className="text-center">{renderProcessStatusBadge(row.process_status)}</td>
+                    <td>
+                      {row.put_po_file?.name ? (
+                        <div className="d-flex align-items-center justify-content-between gap-1" style={{ maxWidth: '175px' }}>
+                          {row.po_file_id || row.put_po_file.id ? (
+                            <button
+                              className="btn btn-link p-0 text-dark fw-semibold d-inline-flex align-items-center text-decoration-none text-start text-truncate"
+                              style={{ fontSize: '13px' }}
+                              onClick={() => handleDownloadPoFile((row.po_file_id || row.put_po_file?.id)!)}
+                              title={`Click to download: ${row.put_po_file.name}`}
+                            >
+                              <FileText size={14} className="me-1 flex-shrink-0 text-secondary" />
+                              <span className="text-truncate">{formatFileName(row.put_po_file.name, 18)}</span>
+                            </button>
+                          ) : (
+                            <span
+                              className="d-inline-flex align-items-center text-dark fw-semibold text-truncate"
+                              style={{ fontSize: '13px' }}
+                              title={row.put_po_file.name}
+                            >
+                              <FileText size={14} className="me-1 flex-shrink-0 text-secondary" />
+                              <span className="text-truncate">{formatFileName(row.put_po_file.name, 18)}</span>
+                            </span>
+                          )}
+
+                          <button
+                            type="button"
+                            className="btn btn-sm p-1 border-0 text-muted flex-shrink-0 ms-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (row.put_po_file?.name) {
+                                navigator.clipboard.writeText(row.put_po_file.name);
+                                setCopiedPo(row.put_po_file.name);
+                                setTimeout(() => setCopiedPo(null), 1500);
+                              }
+                            }}
+                            title={copiedPo === row.put_po_file.name ? 'Copied PO!' : 'Copy full PO name'}
+                            style={{ lineHeight: 1 }}
+                          >
+                            {copiedPo === row.put_po_file.name ? (
+                              <Check size={14} className="text-success" />
+                            ) : (
+                              <Copy size={13} className="text-secondary" />
+                            )}
+                          </button>
+                        </div>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
                     <td>{row.model_number}</td>
                     <td>
                       {row.user_first_name
@@ -857,12 +999,13 @@ export default function DashboardPage() {
                     <td>
                       {row.put_text_file?.name ? (
                         <button
-                          className="btn btn-link p-0 text-primary fw-bold"
-                          style={{ fontSize: '13px' }}
+                          className="btn btn-link p-0 text-primary fw-bold d-inline-flex align-items-center text-decoration-none"
+                          style={{ fontSize: '13px', whiteSpace: 'nowrap' }}
                           onClick={() => handleDownloadPutFile(row.id)}
+                          title={`Download: ${row.put_text_file.name}`}
                         >
-                          <FileText size={14} className="me-1" />
-                          {row.put_text_file.name}
+                          <FileText size={14} className="me-1 flex-shrink-0" />
+                          <span>{formatFileName(row.put_text_file.name, 22)}</span>
                         </button>
                       ) : (
                         '-'
@@ -883,12 +1026,13 @@ export default function DashboardPage() {
                     <td>
                       {row.pick?.pick_text_file?.name ? (
                         <button
-                          className="btn btn-link p-0 text-info fw-bold"
-                          style={{ fontSize: '13px' }}
+                          className="btn btn-link p-0 text-info fw-bold d-inline-flex align-items-center text-decoration-none"
+                          style={{ fontSize: '13px', whiteSpace: 'nowrap' }}
                           onClick={() => row.pick_id && handleDownloadPickFile(row.pick_id)}
+                          title={`Download: ${row.pick.pick_text_file.name}`}
                         >
-                          <FileText size={14} className="me-1" />
-                          {row.pick.pick_text_file.name}
+                          <FileText size={14} className="me-1 flex-shrink-0" />
+                          <span>{formatFileName(row.pick.pick_text_file.name, 22)}</span>
                         </button>
                       ) : (
                         '-'
@@ -896,14 +1040,25 @@ export default function DashboardPage() {
                     </td>
                     <td className="text-center">
                       <button
-                        className="btn btn-sm btn-outline-secondary"
+                        type="button"
+                        className="btn btn-sm btn-light border d-inline-flex align-items-center justify-content-center p-0"
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '6px',
+                          backgroundColor: '#f8fafc',
+                          borderColor: '#cbd5e1',
+                          color: '#475569',
+                          transition: 'all 0.15s ease',
+                        }}
                         onClick={() => {
                           setViewLogPutId(row.id);
                           setViewLogPickId(null);
                           setIsViewLogModalOpen(true);
                         }}
+                        title="View Process Activity Logs"
                       >
-                        Logs
+                        <History size={15} className="text-primary" />
                       </button>
                     </td>
                   </tr>
@@ -918,11 +1073,15 @@ export default function DashboardPage() {
           <Pagination
             currentPage={page}
             totalPages={totalPages}
-            onPageChange={(p) => fetchPuts(p, pageSize)}
+            onPageChange={(p) => {
+              setPage(p);
+              fetchPuts(p, pageSize);
+            }}
             totalItems={totalItems}
             pageSize={pageSize}
             onPageSizeChange={(newSize) => {
               setPageSize(newSize);
+              setPage(1);
               fetchPuts(1, newSize);
             }}
             pageSizeOptions={[10, 20, 50, 100]}

@@ -98,7 +98,10 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
     if (!hu || !pickCompartmentTarget) return;
     try {
       setPickingSlot(true);
-      await apiPost(`/hu/${encodeURIComponent(hu.hu_id)}/compartment/${pickCompartmentTarget.compartment_number}/pick`);
+      const res = await apiPost<{ message: string; fileName?: string; pickId?: number }>(
+        `/hu/${encodeURIComponent(hu.hu_id)}/compartment/${pickCompartmentTarget.compartment_number}/pick`
+      );
+      setPickSendSuccess(res.message || `Part picked successfully.`);
       setPickCompartmentTarget(null);
       fetchLayout();
     } catch (err: any) {

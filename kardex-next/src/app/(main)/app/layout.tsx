@@ -9,6 +9,7 @@ import {
   Users,
   Power,
   PackagePlus,
+  PackageMinus,
   Boxes,
   Layers,
 } from 'lucide-react';
@@ -16,7 +17,7 @@ import {
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, isAuthenticated, isAdmin, canPut, isLoading, logout } = useAuth();
+  const { user, isAuthenticated, isAdmin, canPut, canPick, isLoading, logout } = useAuth();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -207,6 +208,15 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 className={`dock-nav-link ${pathname.startsWith('/app/hu-put') ? 'active' : ''}`}
               >
                 <PackagePlus size={14} /> HU Put
+              </Link>
+            )}
+
+            {canPick && (
+              <Link
+                href="/app/pick"
+                className={`dock-nav-link ${pathname.startsWith('/app/pick') ? 'active' : ''}`}
+              >
+                <PackageMinus size={14} /> Pick
               </Link>
             )}
 

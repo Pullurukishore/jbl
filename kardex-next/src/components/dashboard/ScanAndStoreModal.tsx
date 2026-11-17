@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from '@/components/shared/Modal';
 import { TimelineProgress } from '@/components/shared/TimelineProgress';
-import { connectSSE, apiPost } from '@/lib/api';
-import { Log, Put, PaginatedResponse } from '@/types';
+import { connectSSE, apiPost, apiDownloadFile, downloadBlob } from '@/lib/api';
+import { Log, Put } from '@/types';
 import {
   PackageMinus,
   Search,
@@ -13,10 +13,16 @@ import {
   RotateCcw,
   Minus,
   Plus,
-  ArrowRight,
   Boxes,
   Copy,
   Check,
+  Barcode,
+  Download,
+  Loader2,
+  Clock,
+  ArrowRight,
+  ShieldCheck,
+  MapPin,
 } from 'lucide-react';
 
 interface ScanAndStoreModalProps {
@@ -26,9 +32,9 @@ interface ScanAndStoreModalProps {
 }
 
 const PICK_STEPS = [
-  { key: 'FETCH_DETAILS', label: '1. Fetch Available Serial Numbers' },
+  { key: 'FETCH_DETAILS', label: '1. Verify Stock & MES Status' },
   { key: 'CHECK_QTY', label: '2. Verify Required Quantity' },
-  { key: 'CHECK_STATUS', label: '3. Update Kanban Board History' },
+  { key: 'CHECK_STATUS', label: '3. Update MES Kanban History' },
   { key: 'FILE_GENERATED', label: '4. Generate Pick Order Text File' },
 ];
 
@@ -37,33 +43,38 @@ export const ScanAndStoreModal: React.FC<ScanAndStoreModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const [modelNumber, setModelNumber] = useState('');
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const [resolvedModel, setResolvedModel] = useState('');
+  const [specificSerial, setSpecificSerial] = useState<string | null>(null);
   const [quantity, setQuantity] = useState<number>(1);
+  const [detectedNote, setDetectedNote] = useState<string | null>(null);
+
+  const [availableCount, setAvailableCount] = useState<number | null>(null);
   const [previewPuts, setPreviewPuts] = useState<Put[]>([]);
-  const [previewMsg, setPreviewMsg] = useState('');
+  const [isSearchingStock, setIsSearchingStock] = useState(false);
+  const [serialDetails, setSerialDetails] = useState<any | null>(null);
+
   const [logs, setLogs] = useState<Log[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [completedInfo, setCompletedInfo] = useState<{
+    fileName?: string;
+    pickId?: number;
+    lineCount?: number;
+    label?: string;
+  } | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [copiedSerial, setCopiedSerial] = useState<string | null>(null);
 
-  const modelInputRef = useRef<HTMLInputElement>(null);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isOpen) {
-      setModelNumber('');
-      setQuantity(1);
-      setPreviewPuts([]);
-      setPreviewMsg('');
-      setLogs([]);
-      setIsSearching(false);
-      setIsProcessing(false);
-      setIsCompleted(false);
-      setErrorMsg('');
+      handleReset();
     } else {
-      setTimeout(() => modelInputRef.current?.focus(), 100);
+      setTimeout(() => barcodeInputRef.current?.focus(), 100);
     }
   }, [isOpen]);
 
@@ -74,50 +85,86 @@ export const ScanAndStoreModal: React.FC<ScanAndStoreModalProps> = ({
   }, [isProcessing, logs]);
 
   const handleReset = () => {
-    setModelNumber('');
+    setBarcodeInput('');
+    setResolvedModel('');
+    setSpecificSerial(null);
     setQuantity(1);
+    setDetectedNote(null);
+    setAvailableCount(null);
     setPreviewPuts([]);
-    setPreviewMsg('');
+    setSerialDetails(null);
     setLogs([]);
-    setIsSearching(false);
+    setIsSearchingStock(false);
     setIsProcessing(false);
     setIsCompleted(false);
+    setCompletedInfo(null);
+    setIsDownloading(false);
     setErrorMsg('');
-    setTimeout(() => modelInputRef.current?.focus(), 50);
+    setTimeout(() => barcodeInputRef.current?.focus(), 50);
   };
 
-  const handleSearch = async () => {
-    if (!modelNumber.trim() || quantity <= 0) return;
+  const handleLookup = async () => {
+    const raw = barcodeInput.trim();
+    if (!raw) return;
+
     try {
-      setIsSearching(true);
+      setIsSearchingStock(true);
       setErrorMsg('');
-      const res = await apiPost<PaginatedResponse<Put>>('/put/find-by-model-and-qty', {
-        partNumber: modelNumber.trim(),
-        quantity: Number(quantity),
+      setDetectedNote(null);
+      setSerialDetails(null);
+
+      const res = await apiPost<any>('/put/find-by-model-and-qty', {
+        partNumber: raw,
+        quantity: Math.max(1, Number(quantity) || 1),
         page: 1,
-        size: Number(quantity),
+        size: 10,
       });
 
+      const model = res.resolvedModelNumber || raw;
+      setResolvedModel(model);
+      setAvailableCount(res.totalItems || 0);
       setPreviewPuts(res.data || []);
-      setPreviewMsg(res.message || '');
+
+      if (res.isFromSerial) {
+        setSpecificSerial(raw);
+        setDetectedNote(`Serial "${raw}" recognized (Model: ${model}).`);
+        if (quantity <= 1) setQuantity(1);
+
+        try {
+          const detailRes = await apiPost<any>('/pick/validate-serial', { serialNumber: raw });
+          if (detailRes?.data) setSerialDetails(detailRes.data);
+        } catch {}
+      } else {
+        setSpecificSerial(null);
+        setDetectedNote(`Model "${model}" confirmed. Available in inventory: ${res.totalItems || 0} unit(s).`);
+      }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error searching model number');
+      setErrorMsg(err.message || 'Error looking up barcode.');
     } finally {
-      setIsSearching(false);
+      setIsSearchingStock(false);
     }
   };
 
-  const handleProcess = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!modelNumber.trim() || quantity <= 0 || isProcessing) return;
+  const handleExecutePick = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const raw = barcodeInput.trim();
+    if (!raw || quantity <= 0 || isProcessing) return;
+
+    const modelToPick = resolvedModel || raw;
 
     setLogs([]);
     setIsProcessing(true);
     setIsCompleted(false);
+    setCompletedInfo(null);
     setErrorMsg('');
 
+    let endpoint = `/pick/create/${encodeURIComponent(modelToPick)}/${quantity}`;
+    if (specificSerial && quantity === 1) {
+      endpoint += `?serials=${encodeURIComponent(specificSerial)}`;
+    }
+
     connectSSE(
-      `/pick/create/${encodeURIComponent(modelNumber.trim())}/${quantity}`,
+      endpoint,
       (data: any) => {
         if (data && typeof data === 'object') {
           setLogs((prev) => {
@@ -131,24 +178,44 @@ export const ScanAndStoreModal: React.FC<ScanAndStoreModalProps> = ({
           });
 
           if (data.status === 'FAILED') {
-            setErrorMsg(data.message || 'PICK process failed.');
+            setErrorMsg(data.message || 'Pick process failed.');
             setIsProcessing(false);
           }
 
           if (data.activity === 'FILE_GENERATED' && data.status === 'SUCCESS') {
             setIsProcessing(false);
             setIsCompleted(true);
+            const lineCount = data.lineCount || quantity;
+            setCompletedInfo({
+              fileName: data.fileName,
+              pickId: data.pick_id,
+              lineCount: lineCount,
+              label: specificSerial && quantity === 1
+                ? `Specific Serial ${specificSerial} (${modelToPick})`
+                : `${lineCount} serials for model ${modelToPick}`,
+            });
             onSuccess();
           }
         }
       },
-      () => {
-        setIsProcessing(false);
-      },
-      () => {
-        setIsProcessing(false);
-      }
+      () => setIsProcessing(false),
+      () => setIsProcessing(false)
     );
+  };
+
+  const handleDownloadFile = async () => {
+    if (!completedInfo?.pickId) return;
+    try {
+      setIsDownloading(true);
+      const { blob, fileName } = await apiDownloadFile('/pick/download-text-file', {
+        id: completedInfo.pickId,
+      });
+      downloadBlob(blob, fileName);
+    } catch (err: any) {
+      alert(err.message || 'Error downloading pick file');
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const copyToClipboard = (serial: string) => {
@@ -181,7 +248,7 @@ export const ScanAndStoreModal: React.FC<ScanAndStoreModalProps> = ({
           <div>
             <div className="d-flex align-items-center gap-2">
               <span className="fw-bold" style={{ fontSize: '16px', color: '#0f172a' }}>
-                PICK Process — Scan Model & Quantity
+                PICK Process — Scan & Pick
               </span>
               <span
                 style={{
@@ -199,544 +266,220 @@ export const ScanAndStoreModal: React.FC<ScanAndStoreModalProps> = ({
               </span>
             </div>
             <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
-              Allocate available serial numbers from stock & generate pick order
+              Scan Model Number or Serial Number, set quantity, and generate multi-line pick orders
             </div>
           </div>
         </div>
       }
-      maxWidth="720px"
+      maxWidth="760px"
     >
-      <div className="pick-modal-content">
-        <style jsx>{`
-          .pick-modal-content {
-            display: flex;
-            flex-direction: column;
-            gap: 1.25rem;
-          }
-
-          .pick-form-card {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
-            padding: 1rem;
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-          }
-
-          .input-row {
-            display: grid;
-            grid-template-columns: 1fr 190px auto;
-            gap: 0.75rem;
-            align-items: flex-end;
-          }
-
-          @media (max-width: 640px) {
-            .input-row {
-              grid-template-columns: 1fr;
-            }
-          }
-
-          .field-label {
-            display: block;
-            font-size: 12px;
-            font-weight: 600;
-            color: #475569;
-            margin-bottom: 5px;
-          }
-
-          .field-input-box {
-            position: relative;
-            display: flex;
-            align-items: center;
-          }
-
-          .field-input {
-            width: 100%;
-            height: 40px;
-            border: 1.5px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 0 12px 0 34px;
-            font-size: 13.5px;
-            font-weight: 500;
-            color: #0f172a;
-            outline: none;
-            transition: all 0.2s ease;
-          }
-
-          .field-input:focus {
-            border-color: #d97706;
-            box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.15);
-          }
-
-          .field-icon {
-            position: absolute;
-            left: 10px;
-            color: #94a3b8;
-          }
-
-          /* Stepper Input */
-          .stepper-box {
-            display: flex;
-            align-items: center;
-            border: 1.5px solid #e2e8f0;
-            border-radius: 8px;
-            height: 40px;
-            overflow: hidden;
-            background: #ffffff;
-          }
-
-          .stepper-box:focus-within {
-            border-color: #d97706;
-            box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.15);
-          }
-
-          .stepper-btn {
-            width: 38px;
-            height: 100%;
-            background: #f8fafc;
-            border: none;
-            color: #64748b;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: background 0.15s;
-          }
-
-          .stepper-btn:hover:not(:disabled) {
-            background: #e2e8f0;
-            color: #0f172a;
-          }
-
-          .stepper-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-          }
-
-          .stepper-input {
-            flex: 1;
-            width: 100%;
-            border: none;
-            text-align: center;
-            font-size: 14px;
-            font-weight: 700;
-            color: #0f172a;
-            outline: none;
-            padding: 0;
-            background: transparent;
-          }
-
-          .btn-preview-action {
-            height: 40px;
-            padding: 0 16px;
-            border-radius: 8px;
-            background: #f8fafc;
-            border: 1.5px solid #e2e8f0;
-            color: #334155;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            white-space: nowrap;
-            transition: all 0.15s ease;
-          }
-
-          .btn-preview-action:hover:not(:disabled) {
-            background: #f1f5f9;
-            border-color: #cbd5e1;
-            color: #0f172a;
-          }
-
-          .btn-preview-action:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-          }
-
-          /* Quick presets */
-          .quick-presets {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 11.5px;
-            color: #64748b;
-          }
-
-          .preset-chip {
-            padding: 2px 8px;
-            border-radius: 6px;
-            border: 1px solid #e2e8f0;
-            background: #f8fafc;
-            font-size: 11px;
-            font-weight: 600;
-            color: #475569;
-            cursor: pointer;
-            transition: all 0.15s ease;
-          }
-
-          .preset-chip:hover {
-            background: #e2e8f0;
-          }
-
-          .preset-chip.selected {
-            background: #d97706;
-            color: #ffffff;
-            border-color: #d97706;
-          }
-
-          /* Stock preview card */
-          .preview-panel {
-            border: 1px solid #fef3c7;
-            background: #fffbeb;
-            border-radius: 8px;
-            padding: 12px 14px;
-          }
-
-          .preview-panel-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 8px;
-          }
-
-          .preview-panel-title {
-            font-size: 12.5px;
-            font-weight: 700;
-            color: #92400e;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-          }
-
-          .preview-tag-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            max-height: 120px;
-            overflow-y: auto;
-          }
-
-          .preview-chip {
-            background: #ffffff;
-            border: 1px solid #fde68a;
-            color: #b45309;
-            padding: 3px 8px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-family: monospace;
-            font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            cursor: pointer;
-            transition: all 0.15s;
-          }
-
-          .preview-chip:hover {
-            border-color: #d97706;
-            background: #fff7ed;
-          }
-
-          /* Primary Execute Button */
-          .btn-execute-action {
-            background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-            color: #ffffff;
-            border: none;
-            height: 42px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            width: 100%;
-            box-shadow: 0 2px 6px rgba(217, 119, 6, 0.25);
-            transition: all 0.2s ease;
-          }
-
-          .btn-execute-action:hover:not(:disabled) {
-            background: linear-gradient(135deg, #b45309 0%, #92400e 100%);
-            box-shadow: 0 4px 12px rgba(217, 119, 6, 0.35);
-            transform: translateY(-1px);
-          }
-
-          .btn-execute-action:disabled {
-            opacity: 0.65;
-            cursor: not-allowed;
-          }
-
-          /* Success & Error Banners */
-          .success-banner {
-            background: #f0fdf4;
-            border: 1px solid #bbf7d0;
-            border-radius: 10px;
-            padding: 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-          }
-
-          .success-btn {
-            background: #16a34a;
-            color: #ffffff;
-            border: none;
-            padding: 6px 14px;
-            border-radius: 6px;
-            font-size: 12.5px;
-            font-weight: 600;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            transition: background 0.15s ease;
-          }
-
-          .success-btn:hover {
-            background: #15803d;
-          }
-
-          .error-banner {
-            background: #fef2f2;
-            border: 1px solid #fecaca;
-            border-radius: 10px;
-            padding: 0.85rem 1rem;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: #991b1b;
-            font-size: 13px;
-          }
-
-          .logs-wrapper {
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
-            padding: 1rem;
-            background: #ffffff;
-            max-height: 320px;
-            overflow-y: auto;
-            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
-          }
-        `}</style>
-
-        {/* Form Controls Card */}
-        <form onSubmit={handleProcess} className="pick-form-card">
-          <div className="input-row">
-            {/* Model Number */}
-            <div>
-              <label className="field-label">Part / Model Number</label>
-              <div className="field-input-box">
-                <Search size={16} className="field-icon" />
+      <div className="d-flex flex-column gap-3">
+        <form onSubmit={handleExecutePick} className="bg-white border rounded-3 p-3 d-flex flex-column gap-3">
+          {/* Barcode Input */}
+          <div>
+            <label className="form-label fw-semibold text-secondary" style={{ fontSize: '12px' }}>
+              Scan Model Number OR Serial Number
+            </label>
+            <div className="d-flex gap-2">
+              <div className="position-relative flex-1">
+                <Barcode size={18} className="position-absolute text-muted" style={{ left: '12px', top: '12px' }} />
                 <input
-                  ref={modelInputRef}
+                  ref={barcodeInputRef}
                   type="text"
-                  className="field-input"
-                  placeholder="Enter model number (e.g. 5013000)..."
-                  value={modelNumber}
-                  onChange={(e) => setModelNumber(e.target.value)}
+                  className="form-control ps-5"
+                  style={{ height: '42px', fontWeight: 600 }}
+                  placeholder="Scan barcode (e.g. SA005157 or S1)..."
+                  value={barcodeInput}
+                  onChange={(e) => {
+                    setBarcodeInput(e.target.value);
+                    setDetectedNote(null);
+                    setResolvedModel('');
+                    setSpecificSerial(null);
+                    setAvailableCount(null);
+                    setPreviewPuts([]);
+                    setSerialDetails(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleLookup();
+                    }
+                  }}
                   disabled={isProcessing}
                   required
                 />
               </div>
-            </div>
 
-            {/* Quantity with Stepper */}
-            <div>
-              <label className="field-label">Quantity</label>
-              <div className="stepper-box">
-                <button
-                  type="button"
-                  className="stepper-btn"
-                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  disabled={isProcessing || quantity <= 1}
-                  title="Decrease"
-                >
-                  <Minus size={14} />
-                </button>
-
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  className="stepper-input"
-                  value={quantity}
-                  onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))}
-                  disabled={isProcessing}
-                  required
-                />
-
-                <button
-                  type="button"
-                  className="stepper-btn"
-                  onClick={() => setQuantity((q) => q + 1)}
-                  disabled={isProcessing}
-                  title="Increase"
-                >
-                  <Plus size={14} />
-                </button>
-              </div>
-            </div>
-
-            {/* Preview Button */}
-            <button
-              type="button"
-              className="btn-preview-action"
-              onClick={handleSearch}
-              disabled={isSearching || isProcessing || !modelNumber.trim()}
-              title="Check available serial numbers in stock"
-            >
-              <Boxes size={15} />
-              <span>{isSearching ? 'Checking...' : 'Check Stock'}</span>
-            </button>
-          </div>
-
-          {/* Quick Quantity Chips & Hints */}
-          <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <div className="quick-presets">
-              <span>Quick Qty:</span>
-              {[1, 2, 5, 10, 20].map((q) => (
-                <button
-                  key={q}
-                  type="button"
-                  className={`preset-chip ${quantity === q ? 'selected' : ''}`}
-                  onClick={() => setQuantity(q)}
-                  disabled={isProcessing}
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
-
-            {logs.length > 0 && (
               <button
                 type="button"
-                className="btn btn-link btn-sm p-0 text-decoration-none text-muted"
-                onClick={handleReset}
-                style={{ fontSize: '11.5px' }}
+                className="btn btn-light border px-3 fw-semibold d-inline-flex align-items-center gap-1"
+                onClick={handleLookup}
+                disabled={isSearchingStock || isProcessing || !barcodeInput.trim()}
               >
-                <RotateCcw size={11} className="me-1" /> Reset All
+                {isSearchingStock ? <Loader2 size={15} className="spin-animation" /> : <Search size={15} />}
+                <span>{isSearchingStock ? 'Checking...' : 'Check'}</span>
               </button>
-            )}
+            </div>
           </div>
 
-          {/* Available Serials Preview Card */}
-          {previewPuts.length > 0 && (
-            <div className="preview-panel">
-              <div className="preview-panel-header">
-                <div className="preview-panel-title">
-                  <Boxes size={14} />
-                  <span>
-                    Available Inventory ({previewPuts.length} items ready for model &ldquo;{modelNumber}&rdquo;)
-                  </span>
-                </div>
-                <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    color: previewPuts.length >= quantity ? '#15803d' : '#b45309',
-                  }}
-                >
-                  {previewPuts.length >= quantity
-                    ? '✓ Sufficient stock available'
-                    : `⚠ Only ${previewPuts.length} available (requested ${quantity})`}
-                </span>
-              </div>
-
-              <div className="preview-tag-list">
-                {previewPuts.map((p) => (
-                  <span
-                    key={p.id}
-                    className="preview-chip"
-                    onClick={() => copyToClipboard(p.serial_number)}
-                    title="Click to copy serial"
+          {/* Quantity Stepper */}
+          <div>
+            <div className="d-flex justify-content-between align-items-center mb-1">
+              <label className="form-label fw-semibold text-secondary mb-0" style={{ fontSize: '12px' }}>
+                Quantity to Pick
+              </label>
+              <div className="d-flex gap-1 align-items-center" style={{ fontSize: '11px' }}>
+                <span className="text-muted">Presets:</span>
+                {[1, 5, 10, 15, 20].map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    className={`btn btn-sm py-0 px-2 fw-bold ${quantity === q ? 'btn-warning' : 'btn-light border'}`}
+                    style={{ fontSize: '11px' }}
+                    onClick={() => {
+                      setQuantity(q);
+                      if (barcodeInput.trim()) handleLookup();
+                    }}
+                    disabled={isProcessing}
                   >
-                    {p.serial_number}
-                    {copiedSerial === p.serial_number ? (
-                      <Check size={11} className="text-success" />
-                    ) : (
-                      <Copy size={11} className="text-muted" />
-                    )}
-                  </span>
+                    {q}
+                  </button>
                 ))}
               </div>
+            </div>
 
-              {previewMsg && (
-                <div style={{ fontSize: '11.5px', color: '#78350f', marginTop: '6px' }}>
-                  {previewMsg}
-                </div>
+            <div className="input-group" style={{ maxWidth: '240px' }}>
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                disabled={isProcessing || quantity <= 1}
+              >
+                <Minus size={14} />
+              </button>
+              <input
+                type="number"
+                min="1"
+                max="50"
+                className="form-control text-center fw-bold fs-6"
+                value={quantity}
+                onChange={(e) => setQuantity(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+                disabled={isProcessing}
+                required
+              />
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                onClick={() => setQuantity((q) => Math.min(50, q + 1))}
+                disabled={isProcessing || quantity >= 50}
+              >
+                <Plus size={14} />
+              </button>
+            </div>
+          </div>
+
+          {/* Detected Info */}
+          {detectedNote && (
+            <div className="bg-light p-2 rounded-2 border d-flex justify-content-between align-items-center" style={{ fontSize: '12.5px' }}>
+              <div className="d-flex align-items-center gap-2">
+                <CheckCircle2 size={15} className="text-success" />
+                <span className="fw-semibold text-dark">{detectedNote}</span>
+              </div>
+              {availableCount !== null && (
+                <span className="badge bg-secondary-subtle text-secondary border">
+                  Stock: {availableCount}
+                </span>
               )}
             </div>
           )}
 
-          {/* Primary Execute Pick Button */}
+          {/* Stock Preview (when quantity > 1) */}
+          {previewPuts.length > 0 && quantity > 1 && (
+            <div className="bg-warning-subtle border border-warning-subtle rounded-2 p-2">
+              <div className="d-flex justify-content-between align-items-center mb-1" style={{ fontSize: '11.5px' }}>
+                <span className="fw-bold text-dark">FIFO Stock Candidate Serials ({previewPuts.length} available):</span>
+                <span className={previewPuts.length >= quantity ? 'text-success fw-bold' : 'text-danger fw-bold'}>
+                  {previewPuts.length >= quantity ? '✓ Sufficient' : `⚠ Only ${previewPuts.length} available`}
+                </span>
+              </div>
+              <div className="d-flex flex-wrap gap-1">
+                {previewPuts.slice(0, quantity).map((p) => (
+                  <span
+                    key={p.id}
+                    className="badge bg-white text-dark border font-monospace px-2 py-1"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => copyToClipboard(p.serial_number)}
+                  >
+                    {p.serial_number}
+                    {copiedSerial === p.serial_number ? <Check size={10} className="text-success ms-1" /> : <Copy size={10} className="text-muted ms-1" />}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Execute Button */}
           <button
             type="submit"
-            className="btn-execute-action"
-            disabled={isProcessing || !modelNumber.trim() || quantity <= 0}
+            className="btn btn-warning fw-bold py-2 text-white d-flex align-items-center justify-content-center gap-2"
+            disabled={isProcessing || !barcodeInput.trim() || quantity <= 0}
+            style={{ background: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)', border: 'none' }}
           >
             <PackageMinus size={18} />
             <span>
               {isProcessing
-                ? 'Executing Pick Process...'
-                : `Execute Pick Process (${quantity} unit${quantity > 1 ? 's' : ''})`}
+                ? `Validating & Picking ${quantity} Unit${quantity > 1 ? 's' : ''}...`
+                : specificSerial && quantity === 1
+                ? `Pick Serial [${specificSerial}] → Generate Pick Order`
+                : `Pick ${quantity} Units (${resolvedModel || barcodeInput.trim()}) → Generate ${quantity}-Line File`}
             </span>
           </button>
         </form>
 
         {/* Success Banner */}
         {isCompleted && (
-          <div className="success-banner">
+          <div className="alert alert-success d-flex align-items-center justify-content-between p-3 rounded-3">
             <div className="d-flex align-items-center gap-2">
-              <CheckCircle2 size={24} className="text-success flex-shrink-0" />
+              <CheckCircle2 size={24} className="text-success" />
               <div>
-                <div className="fw-bold text-dark" style={{ fontSize: '13.5px' }}>
-                  PICK Order Generated Successfully!
-                </div>
-                <div style={{ fontSize: '12px', color: '#15803d' }}>
-                  Allocated {quantity} part{quantity > 1 ? 's' : ''} for model{' '}
-                  <span className="fw-bold">{modelNumber}</span>.
-                </div>
+                <strong className="d-block" style={{ fontSize: '14px' }}>Pick Order Generated!</strong>
+                <span style={{ fontSize: '12px' }}>
+                  {completedInfo?.lineCount || quantity} line item(s) in file: <code className="fw-bold">{completedInfo?.fileName}</code>
+                </span>
               </div>
             </div>
 
-            <button type="button" className="success-btn" onClick={handleReset}>
-              <span>Pick Another</span>
-              <ArrowRight size={14} />
-            </button>
+            <div className="d-flex gap-2">
+              {completedInfo?.pickId && (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm fw-semibold d-inline-flex align-items-center gap-1"
+                  onClick={handleDownloadFile}
+                  disabled={isDownloading}
+                >
+                  <Download size={13} />
+                  <span>Download File</span>
+                </button>
+              )}
+              <button type="button" className="btn btn-success btn-sm fw-semibold" onClick={handleReset}>
+                <span>Pick Next</span>
+              </button>
+            </div>
           </div>
         )}
 
         {/* Error Banner */}
         {errorMsg && (
-          <div className="error-banner">
-            <AlertCircle size={20} className="flex-shrink-0" />
-            <div className="flex-1">
-              <strong>Error: </strong> {errorMsg}
-            </div>
-            <button
-              type="button"
-              className="btn btn-sm btn-outline-danger ms-auto"
-              style={{ fontSize: '12px', padding: '3px 8px' }}
-              onClick={() => setErrorMsg('')}
-            >
-              Dismiss
-            </button>
+          <div className="alert alert-danger p-2 rounded-2 d-flex align-items-center justify-content-between mb-0" style={{ fontSize: '13px' }}>
+            <span><strong>Error:</strong> {errorMsg}</span>
+            <button type="button" className="btn-close" onClick={() => setErrorMsg('')} />
           </div>
         )}
 
-        {/* Timeline Logs Section */}
+        {/* SSE Timeline Logs */}
         {(isProcessing || logs.length > 0) && (
-          <div className="logs-wrapper">
-            <TimelineProgress
-              logs={logs}
-              steps={PICK_STEPS}
-              isProcessing={isProcessing}
-            />
+          <div className="border rounded-3 p-3 bg-white" style={{ maxHeight: '250px', overflowY: 'auto' }}>
+            <TimelineProgress logs={logs} steps={PICK_STEPS} isProcessing={isProcessing} />
             <div ref={logsEndRef} />
           </div>
         )}
@@ -744,4 +487,3 @@ export const ScanAndStoreModal: React.FC<ScanAndStoreModalProps> = ({
     </Modal>
   );
 };
-

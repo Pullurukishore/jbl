@@ -711,6 +711,9 @@ exports.pickCompartment = asyncHandler(async (req, res) => {
     const serialNumber = compartment.serial_number;
     const pickProcessStep = process.env.KanbanOutProcessStep || 'KANBAN-OUT';
 
+    const putRecord = await db.put.findOne({ where: { compartment_id: compartment.id } });
+    const modelNumber = putRecord?.model_number || compartment.material_name || 'MODEL';
+
     // Update MES board history if serial exists
     if (serialNumber) {
         try {
@@ -725,9 +728,59 @@ exports.pickCompartment = asyncHandler(async (req, res) => {
         } catch (_) {}
     }
 
+    // Generate Kardex Pick Order File for this specific serial
+    const existingPickCount = await db.files.count({
+        where: { name: { [Op.like]: `PICK_${modelNumber}_%` } }
+    });
+    const pickSeq = String(existingPickCount + 1).padStart(2, '0');
+    const pickOrderNumber = `${modelNumber}-PICK-${pickSeq}`;
+    const genFileName = `PICK_${modelNumber}_${pickSeq}_${Date.now()}.txt`;
+    const dirPath = process.env.Pick_Text_File_Path || path.join('uploads', 'files', 'pick');
+    if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true });
+    }
+    const filePath = path.join(dirPath, genFileName);
+    const uploadDir = path.join('uploads', 'files', 'pick');
+    if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    const uploadFilePath = path.join(uploadDir, genFileName);
+    const content = `${pickOrderNumber}|${serialNumber}|${modelNumber}|1`;
+
+    fs.writeFileSync(filePath, content, 'ascii');
+    fs.writeFileSync(uploadFilePath, content, 'ascii');
+    const fileStats = fs.statSync(uploadFilePath);
+
+    const newFile = await db.files.create({
+        name: genFileName,
+        size: fileStats.size,
+        type: 'text/plain',
+        path: uploadFilePath,
+        created_by: req.user?.id,
+        updated_by: req.user?.id
+    });
+
+    const savedPickEntry = await db.pick.create({
+        model_number: modelNumber,
+        quantity: 1,
+        process_status: pickProcessStep,
+        entered_by: req.user?.id,
+        text_file_id: newFile.id
+    });
+
+    if (putRecord) {
+        await savedPickEntry.setPuts([putRecord]);
+    }
+
     // Update put record to PICKED
     await db.put.update(
-        { pick_status: 'PICKED', process_status: pickProcessStep, compartment_id: null },
+        {
+            pick_status: 'PICKED',
+            process_status: pickProcessStep,
+            compartment_id: null,
+            pick_id: savedPickEntry.id,
+            text_file_id: newFile.id
+        },
         { where: { compartment_id: compartment.id } }
     );
 
@@ -742,9 +795,11 @@ exports.pickCompartment = asyncHandler(async (req, res) => {
     const newHuStatus = await recalcHUStatus(hu.id);
 
     return res.status(200).json({
-        message: `Serial ${serialNumber} picked successfully from compartment #${num}.`,
+        message: `Serial ${serialNumber} picked successfully from compartment #${num}. File ${genFileName} generated.`,
         compartment,
-        hu_status: newHuStatus
+        hu_status: newHuStatus,
+        fileName: genFileName,
+        pickId: savedPickEntry.id
     });
 });
 
@@ -961,7 +1016,7 @@ exports.pickScanGet = asyncHandler(async (req, res) => {
 
         // Update put record to PICKED
         await db.put.update(
-            { pick_status: 'PICKED', process_status: pickProcessStep, text_file_id: newFile.id },
+            { pick_status: 'PICKED', process_status: pickProcessStep },
             { where: { compartment_id: compartment.id } }
         );
 

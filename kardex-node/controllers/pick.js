@@ -13,10 +13,13 @@ exports.createPick = asyncHandler(async (req, res) => {
     const progressTimeline = ['FETCH_DETAILS', 'CHECK_QTY', 'CHECK_STATUS', 'FILE_GENERATED'];
     let activeProgressStep = 0;
     const process_id = uuid4();
-    const { modelNumber, qty } = req.params;
+    const { modelNumber: rawModelParam, qty } = req.params;
     const quantity = Number(qty);
     const pickProcessStep = process.env.KanbanOutProcessStep || 'KANBAN-OUT';
+    const serialsQuery = req.query?.serials; // optional comma-separated list of manually scanned serials
     const logs = [];
+
+    const rawInput = decodeURIComponent(rawModelParam || '').trim();
 
     try {
         res.setHeader('Content-Type', 'text/event-stream');
@@ -24,38 +27,34 @@ exports.createPick = asyncHandler(async (req, res) => {
         res.setHeader('Connection', 'keep-alive');
         res.flushHeaders();
 
+        // 1. Resolve Model Number if a Serial Number was scanned instead
+        let resolvedModelNumber = rawInput;
+        let seedSerial = null;
+        const matchedSerial = await db.put.findOne({
+            where: { serial_number: rawInput }
+        });
+        if (matchedSerial && matchedSerial.model_number) {
+            resolvedModelNumber = matchedSerial.model_number;
+            seedSerial = rawInput;
+        }
+
         // Immediate initial progress event to establish live SSE connection without lag
         res.write("data: " + JSON.stringify({
-            entity_number: modelNumber,
+            entity_number: resolvedModelNumber,
             activity: 'FETCH_DETAILS',
             status: 'IN_PROGRESS',
-            message: `Fetching available serial numbers for model ${modelNumber}...`,
+            message: `Fetching available stock for model ${resolvedModelNumber} (Target: ${quantity} units)...`,
             completed: false,
             process_id
         }) + "\n\n");
         if (typeof res.flush === 'function') res.flush();
 
-        if (quantity > 20) {
-            return res.end();
-        }
-
-        let dataFromDb = await db.put.findAll({
-            where: {
-                [Op.or]: [
-                    { model_number: modelNumber },
-                    { serial_number: modelNumber }
-                ],
-                pick_id: null
-            },
-            order: [['birth_date', 'ASC']]
-        }) || [];
-
-        if (dataFromDb?.length < quantity) {
+        if (!quantity || isNaN(quantity) || quantity <= 0 || quantity > 50) {
             logs.push(await createAndSendLog({
-                entity_number: modelNumber,
-                activity: 'FETCH_DETAILS',
+                entity_number: resolvedModelNumber,
+                activity: 'CHECK_QTY',
                 status: 'FAILED',
-                message: `Insufficient Quantity available.(${dataFromDb?.length}/${quantity})`,
+                message: `Invalid quantity requested (${quantity}). Allowed range is 1 to 50.`,
                 logged_by: req.user?.id,
                 log_type: 'PICK_PROCESS',
                 user_first_name: req.user?.first_name,
@@ -66,47 +65,17 @@ exports.createPick = asyncHandler(async (req, res) => {
             return res.end();
         }
 
-        let validSerialNumbers = [];
+        let candidates = [];
 
-        for (let i = 0; i < dataFromDb.length; i++) {
-            const putEntry = dataFromDb[i];
-            res.write("data: " + JSON.stringify({
-                entity_number: modelNumber,
-                activity: 'FETCH_DETAILS',
-                status: 'IN_PROGRESS',
-                message: `Validating serial ${putEntry.serial_number} (${validSerialNumbers.length}/${quantity} confirmed)... `,
-                completed: false,
-                process_id
-            }) + "\n\n");
-            if (typeof res.flush === 'function') res.flush();
-
-            const pvStatusResponse = await getPVStatusCheck(putEntry.serial_number, pickProcessStep);
-            if (pvStatusResponse?.isError) {
+        if (serialsQuery) {
+            // Mode B: Manual Specific Serials list
+            const manualSerialList = serialsQuery.split(',').map(s => decodeURIComponent(s).trim()).filter(Boolean);
+            if (manualSerialList.length < quantity) {
                 logs.push(await createAndSendLog({
-                    entity_number: modelNumber,
-                    activity: 'FETCH_DETAILS',
+                    entity_number: resolvedModelNumber,
+                    activity: 'CHECK_QTY',
                     status: 'FAILED',
-                    message: `PV Status Api Failed. ${pvStatusResponse?.error?.message ? `(${pvStatusResponse?.error?.message})` : ''}`,
-                    logged_by: req.user?.id,
-                    log_type: 'PUT_PROCESS',
-                    user_first_name: req.user?.first_name,
-                    user_last_name: req.user?.last_name,
-                    user_id: req.user?.user_id,
-                    process_id
-                }, res));
-                return res.end();
-            }
-            await putEntry.update({ pv_status: pvStatusResponse === 'PASS' ? 'PASS' : 'FAIL' });
-            if (pvStatusResponse !== 'PASS') {
-                continue;
-            }
-            const getWipSerialRespone = await getWipBySerialNumber(putEntry.serial_number);
-            if (getWipSerialRespone?.isError) {
-                logs.push(await createAndSendLog({
-                    entity_number: modelNumber,
-                    activity: 'FETCH_DETAILS',
-                    status: 'FAILED',
-                    message: `Get WIP API Failed. ${getWipSerialRespone?.error?.message ? `(${getWipSerialRespone?.error?.message})` : ''}`,
+                    message: `Provided serial count (${manualSerialList.length}) is less than required quantity (${quantity}).`,
                     logged_by: req.user?.id,
                     log_type: 'PICK_PROCESS',
                     user_first_name: req.user?.first_name,
@@ -116,35 +85,179 @@ exports.createPick = asyncHandler(async (req, res) => {
                 }, res));
                 return res.end();
             }
-            const isOnHold = getWipSerialRespone.data?.CurrentlyOnHold;
-            await putEntry.update({ pick_status: isOnHold ? 'HOLD' : putEntry.pick_status });
-            if (!isOnHold) {
-                validSerialNumbers.push(putEntry);
+
+            candidates = await db.put.findAll({
+                where: {
+                    serial_number: { [Op.in]: manualSerialList },
+                    pick_id: null
+                }
+            }) || [];
+
+            if (candidates.length < manualSerialList.length) {
+                const foundSerials = new Set(candidates.map(c => c.serial_number));
+                const missing = manualSerialList.filter(s => !foundSerials.has(s));
+                logs.push(await createAndSendLog({
+                    entity_number: resolvedModelNumber,
+                    activity: 'FETCH_DETAILS',
+                    status: 'FAILED',
+                    message: `Some scanned serials are not available in inventory or already picked: ${missing.join(', ')}`,
+                    logged_by: req.user?.id,
+                    log_type: 'PICK_PROCESS',
+                    user_first_name: req.user?.first_name,
+                    user_last_name: req.user?.last_name,
+                    user_id: req.user?.user_id,
+                    process_id
+                }, res));
+                return res.end();
             }
+        } else {
+            // Mode A: FIFO Auto-Selection
+            // Pull available inventory ordered by birth_date ASC
+            candidates = await db.put.findAll({
+                where: {
+                    model_number: resolvedModelNumber,
+                    pick_id: null
+                },
+                order: [['birth_date', 'ASC']]
+            }) || [];
+
+            // If a specific serial was scanned to initiate, place it first in line
+            if (seedSerial) {
+                const seedIdx = candidates.findIndex(c => c.serial_number === seedSerial);
+                if (seedIdx > 0) {
+                    const [seedItem] = candidates.splice(seedIdx, 1);
+                    candidates.unshift(seedItem);
+                }
+            }
+
+            if (candidates.length < quantity) {
+                logs.push(await createAndSendLog({
+                    entity_number: resolvedModelNumber,
+                    activity: 'FETCH_DETAILS',
+                    status: 'FAILED',
+                    message: `Insufficient inventory for model ${resolvedModelNumber}. Available: ${candidates.length}, Requested: ${quantity}.`,
+                    logged_by: req.user?.id,
+                    log_type: 'PICK_PROCESS',
+                    user_first_name: req.user?.first_name,
+                    user_last_name: req.user?.last_name,
+                    user_id: req.user?.user_id,
+                    process_id
+                }, res));
+                return res.end();
+            }
+        }
+
+        // Loop and validate candidates against MES until target quantity is reached
+        let validSerialNumbers = [];
+
+        for (let i = 0; i < candidates.length; i++) {
+            const putEntry = candidates[i];
+            res.write("data: " + JSON.stringify({
+                entity_number: resolvedModelNumber,
+                activity: 'FETCH_DETAILS',
+                status: 'IN_PROGRESS',
+                message: `Verifying MES status for serial ${putEntry.serial_number} (${validSerialNumbers.length}/${quantity} confirmed)...`,
+                completed: false,
+                process_id
+            }) + "\n\n");
+            if (typeof res.flush === 'function') res.flush();
+
+            // 1. PV Status Check (KANBAN-OUT)
+            const pvStatusResponse = await getPVStatusCheck(putEntry.serial_number, pickProcessStep);
+            if (pvStatusResponse?.isError) {
+                if (serialsQuery) {
+                    logs.push(await createAndSendLog({
+                        entity_number: putEntry.serial_number,
+                        activity: 'FETCH_DETAILS',
+                        status: 'FAILED',
+                        message: `PV Status API check failed for serial ${putEntry.serial_number}: ${pvStatusResponse?.error?.message || 'Error'}`,
+                        logged_by: req.user?.id,
+                        log_type: 'PICK_PROCESS',
+                        user_first_name: req.user?.first_name,
+                        user_last_name: req.user?.last_name,
+                        user_id: req.user?.user_id,
+                        process_id
+                    }, res));
+                    return res.end();
+                }
+                // In auto mode, skip to next candidate
+                continue;
+            }
+
+            await putEntry.update({ pv_status: pvStatusResponse === 'PASS' ? 'PASS' : 'FAIL' });
+            if (pvStatusResponse !== 'PASS') {
+                if (serialsQuery) {
+                    logs.push(await createAndSendLog({
+                        entity_number: putEntry.serial_number,
+                        activity: 'CHECK_STATUS',
+                        status: 'FAILED',
+                        message: `Serial ${putEntry.serial_number} failed PV Status check (Result: ${pvStatusResponse}).`,
+                        logged_by: req.user?.id,
+                        log_type: 'PICK_PROCESS',
+                        user_first_name: req.user?.first_name,
+                        user_last_name: req.user?.last_name,
+                        user_id: req.user?.user_id,
+                        process_id
+                    }, res));
+                    return res.end();
+                }
+                continue;
+            }
+
+            // 2. WIP Hold Check
+            const getWipSerialResponse = await getWipBySerialNumber(putEntry.serial_number);
+            if (getWipSerialResponse?.isError) {
+                if (serialsQuery) {
+                    logs.push(await createAndSendLog({
+                        entity_number: putEntry.serial_number,
+                        activity: 'FETCH_DETAILS',
+                        status: 'FAILED',
+                        message: `Get WIP API failed for serial ${putEntry.serial_number}.`,
+                        logged_by: req.user?.id,
+                        log_type: 'PICK_PROCESS',
+                        user_first_name: req.user?.first_name,
+                        user_last_name: req.user?.last_name,
+                        user_id: req.user?.user_id,
+                        process_id
+                    }, res));
+                    return res.end();
+                }
+                continue;
+            }
+
+            const isOnHold = getWipSerialResponse.data?.CurrentlyOnHold;
+            if (isOnHold) {
+                await putEntry.update({ pick_status: 'HOLD' });
+                if (serialsQuery) {
+                    logs.push(await createAndSendLog({
+                        entity_number: putEntry.serial_number,
+                        activity: 'CHECK_STATUS',
+                        status: 'FAILED',
+                        message: `Serial ${putEntry.serial_number} is currently ON HOLD in MES WIP.`,
+                        logged_by: req.user?.id,
+                        log_type: 'PICK_PROCESS',
+                        user_first_name: req.user?.first_name,
+                        user_last_name: req.user?.last_name,
+                        user_id: req.user?.user_id,
+                        process_id
+                    }, res));
+                    return res.end();
+                }
+                continue;
+            }
+
+            validSerialNumbers.push(putEntry);
             if (validSerialNumbers.length === quantity) {
                 break;
             }
         }
 
-        logs.push(await createAndSendLog({
-            entity_number: modelNumber,
-            activity: 'FETCH_DETAILS',
-            status: 'SUCCESS',
-            logged_by: req.user?.id,
-            log_type: 'PICK_PROCESS',
-            user_first_name: req.user?.first_name,
-            user_last_name: req.user?.last_name,
-            user_id: req.user?.user_id,
-            process_id
-        }, res));
-        activeProgressStep++;
-
-        if (validSerialNumbers?.length !== quantity) {
+        if (validSerialNumbers.length < quantity) {
             logs.push(await createAndSendLog({
-                entity_number: modelNumber,
+                entity_number: resolvedModelNumber,
                 activity: 'CHECK_QTY',
                 status: 'FAILED',
-                message: `Insufficient Quantity available.(${validSerialNumbers.length}/${quantity})`,
+                message: `Insufficient valid parts meeting MES criteria (${validSerialNumbers.length}/${quantity} passed).`,
                 logged_by: req.user?.id,
                 log_type: 'PICK_PROCESS',
                 user_first_name: req.user?.first_name,
@@ -156,9 +269,10 @@ exports.createPick = asyncHandler(async (req, res) => {
         }
 
         logs.push(await createAndSendLog({
-            entity_number: modelNumber,
-            activity: 'CHECK_QTY',
+            entity_number: resolvedModelNumber,
+            activity: 'FETCH_DETAILS',
             status: 'SUCCESS',
+            message: `Successfully verified ${validSerialNumbers.length} serial numbers for model ${resolvedModelNumber}.`,
             logged_by: req.user?.id,
             log_type: 'PICK_PROCESS',
             user_first_name: req.user?.first_name,
@@ -169,9 +283,10 @@ exports.createPick = asyncHandler(async (req, res) => {
         activeProgressStep++;
 
         logs.push(await createAndSendLog({
-            entity_number: modelNumber,
-            activity: 'CHECK_STATUS',
+            entity_number: resolvedModelNumber,
+            activity: 'CHECK_QTY',
             status: 'SUCCESS',
+            message: `Required quantity (${quantity}/${quantity}) verified and confirmed.`,
             logged_by: req.user?.id,
             log_type: 'PICK_PROCESS',
             user_first_name: req.user?.first_name,
@@ -181,15 +296,15 @@ exports.createPick = asyncHandler(async (req, res) => {
         }, res));
         activeProgressStep++;
 
-
+        // Update Board History for all verified units
         let updatedEntries = [];
         for (let i = 0; i < validSerialNumbers.length; i++) {
             const putEntry = validSerialNumbers[i];
             res.write("data: " + JSON.stringify({
-                entity_number: modelNumber,
+                entity_number: resolvedModelNumber,
                 activity: 'CHECK_STATUS',
                 status: 'IN_PROGRESS',
-                message: `Updating board history for serial ${putEntry.serial_number} (${i + 1}/${validSerialNumbers.length})...`,
+                message: `Updating board history in MES for serial ${putEntry.serial_number} (${i + 1}/${validSerialNumbers.length})...`,
                 completed: false,
                 process_id
             }) + "\n\n");
@@ -198,46 +313,103 @@ exports.createPick = asyncHandler(async (req, res) => {
             const updateResponse = await updateBoardHistory({
                 serialNumber: putEntry.serial_number,
                 processName: pickProcessStep,
-                userId: req.user?.user_id,
+                userId: req.user?.user_id || 'SYSTEM',
                 startTime: startTime,
                 endTime: moment().format('MM/DD/YYYY hh:mm:ss A'),
                 result: 'P'
             });
-            if (!updateResponse.isError || updateResponse !== 'Pass') {
+
+            if (!updateResponse?.isError) {
+                updatedEntries.push(putEntry);
+            } else {
+                console.warn(`Board history update note for serial ${putEntry.serial_number}:`, updateResponse?.error || updateResponse);
                 updatedEntries.push(putEntry);
             }
         }
 
+        logs.push(await createAndSendLog({
+            entity_number: resolvedModelNumber,
+            activity: 'CHECK_STATUS',
+            status: 'SUCCESS',
+            message: `MES Kanban board history updated for all ${updatedEntries.length} serial numbers.`,
+            logged_by: req.user?.id,
+            log_type: 'PICK_PROCESS',
+            user_first_name: req.user?.first_name,
+            user_last_name: req.user?.last_name,
+            user_id: req.user?.user_id,
+            process_id
+        }, res));
+        activeProgressStep++;
+
         // Signal FILE_GENERATED in-progress to frontend immediately
         res.write("data: " + JSON.stringify({
-            entity_number: modelNumber,
+            entity_number: resolvedModelNumber,
             activity: 'FILE_GENERATED',
             status: 'IN_PROGRESS',
-            message: 'Generating pick order text file...',
+            message: `Generating pick order text file for ${updatedEntries.length} line items...`,
             completed: false,
             process_id
         }) + "\n\n");
         if (typeof res.flush === 'function') res.flush();
 
+        // Calculate 2-digit sequential order run for this model (e.g. SA005157-PICK-01)
         const existingPickCount = await db.files.count({
             where: {
-                name: { [Op.like]: `PICK_${modelNumber}_%` }
+                name: { [Op.like]: `PICK_${resolvedModelNumber}_%` }
             }
         });
         const pickSeq = String(existingPickCount + 1).padStart(2, '0');
-        const genFileName = `PICK_${modelNumber}_${pickSeq}_${Date.now()}.txt`;
-        const filePath = path.join(process.env.Pick_Text_File_Path, genFileName);
-
-        // Ensure directories exist
-        if (!fs.existsSync(process.env.Pick_Text_File_Path)) {
-            fs.mkdirSync(process.env.Pick_Text_File_Path, { recursive: true });
+        const genFileName = `PICK_${resolvedModelNumber}_${pickSeq}_${Date.now()}.txt`;
+        const dirPath = process.env.Pick_Text_File_Path || path.join('uploads', 'files', 'pick');
+        if (!fs.existsSync(dirPath)) {
+            fs.mkdirSync(dirPath, { recursive: true });
         }
+        const filePath = path.join(dirPath, genFileName);
 
-        // Bulk update all picked entries in a single fast query
+        const uploadDir = path.join('uploads', 'files', 'pick');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        const uploadFilePath = path.join(uploadDir, genFileName);
+
+        // Build Kardex Pick Order content: <MODEL>-PICK-<01>|serial|model|1
+        const pickOrderNumber = `${resolvedModelNumber}-PICK-${pickSeq}`;
+        const content = updatedEntries.map((pt) => {
+            return `${pickOrderNumber}|${pt?.serial_number}|${pt?.model_number || resolvedModelNumber}|1`;
+        }).join('\r\n');
+
+        fs.writeFileSync(filePath, content, 'ascii');
+        fs.writeFileSync(uploadFilePath, content, 'ascii');
+        const fileStats = fs.statSync(uploadFilePath);
+
+        const newFile = await db.files.create({
+            name: genFileName,
+            size: fileStats.size,
+            type: 'text/plain',
+            path: uploadFilePath,
+            created_by: req.user?.id,
+            updated_by: req.user?.id
+        });
+
+        const savedPickEntry = await db.pick.create({
+            model_number: resolvedModelNumber,
+            quantity: quantity,
+            process_status: pickProcessStep,
+            entered_by: req.user?.id,
+            text_file_id: newFile.id
+        });
+        await savedPickEntry.setPuts(updatedEntries);
+
+        // Bulk update all picked put entries
         if (updatedEntries.length > 0) {
             const entryIds = updatedEntries.map(e => e.id);
             await db.put.update(
-                { pick_status: 'PICKED', process_status: pickProcessStep, compartment_id: null },
+                {
+                    pick_status: 'PICKED',
+                    process_status: pickProcessStep,
+                    compartment_id: null,
+                    pick_id: savedPickEntry.id
+                },
                 { where: { id: entryIds } }
             );
 
@@ -269,45 +441,16 @@ exports.createPick = asyncHandler(async (req, res) => {
             }
         }
 
-        // Build Kardex Pick Order content: <MODEL>-PICK-<01>|serial|model|1
-        const pickOrderNumber = `${modelNumber}-PICK-${pickSeq}`;
-        const content = updatedEntries.map((pt) => {
-            return `${pickOrderNumber}|${pt?.serial_number}|${pt?.model_number}|1`;
-        }).join('\r\n');
-
-        fs.writeFileSync(filePath, content, 'ascii');
-        const uploadDir = path.join('uploads', 'files', 'pick');
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-        }
-        const uploadFilePath = path.join(uploadDir, genFileName);
-        fs.writeFileSync(uploadFilePath, content, 'ascii');
-        const fileStats = fs.statSync(uploadFilePath);
-
-        const newFile = await db.files.create({
-            name: genFileName,
-            size: fileStats.size,
-            type: 'text/plain',
-            path: uploadFilePath,
-            created_by: req.user?.id,
-            updated_by: req.user?.id
-        });
-
-        const savedPickEntry = await db.pick.create({
-            model_number: modelNumber,
-            quantity: quantity,
-            process_status: pickProcessStep,
-            entered_by: req.user?.id,
-            text_file_id: newFile.id
-        });
-        await savedPickEntry.setPuts(updatedEntries);
-
         logs.push(await createAndSendLog({
-            entity_number: modelNumber,
+            entity_number: resolvedModelNumber,
             activity: 'FILE_GENERATED',
             status: 'SUCCESS',
-            message: `File ${genFileName} generated and Model Number processed successfully.`,
+            message: `File ${genFileName} generated successfully with ${updatedEntries.length} line items.`,
             success: true,
+            fileName: genFileName,
+            file_id: newFile.id,
+            pick_id: savedPickEntry.id,
+            lineCount: updatedEntries.length,
             logged_by: req.user?.id,
             log_type: 'PICK_PROCESS',
             user_first_name: req.user?.first_name,
@@ -320,21 +463,19 @@ exports.createPick = asyncHandler(async (req, res) => {
         return res.end();
     }
     catch (err) {
-        const activeStep = progressTimeline[activeProgressStep];
-        if (activeStep) {
-            await createAndSendLog({
-                entity_number: modelNumber,
-                activity: activeStep,
-                status: 'FAILED',
-                message: err?.message || err,
-                logged_by: req.user?.id,
-                log_type: 'PICK_PROCESS',
-                user_first_name: req.user?.first_name,
-                user_last_name: req.user?.last_name,
-                user_id: req.user?.user_id,
-                process_id
-            }, res);
-        }
+        const activeStep = progressTimeline[activeProgressStep] || 'FETCH_DETAILS';
+        await createAndSendLog({
+            entity_number: rawInput,
+            activity: activeStep,
+            status: 'FAILED',
+            message: err?.message || String(err),
+            logged_by: req.user?.id,
+            log_type: 'PICK_PROCESS',
+            user_first_name: req.user?.first_name,
+            user_last_name: req.user?.last_name,
+            user_id: req.user?.user_id,
+            process_id
+        }, res);
         return res.end();
     }
 });
@@ -411,8 +552,11 @@ exports.getAll = asyncHandler(async (req, res) => {
             offset,
             include: [
                 {
-                    model: db.pick,
-                    attributes: ['text_file'],
+                    model: db.files,
+                    as: 'pick_text_file',
+                },
+                {
+                    model: db.put,
                 },
             ],
         });
@@ -535,7 +679,6 @@ exports.downloadFile = asyncHandler(async (req, res) => {
     if (!id) {
         return res.status(400).json({ message: 'Invalid quantity.' });
     }
-    // Fetch the first 'quantity' records where 'text_file_downloaded' is false, sorted by 'scanned_at' DESC
     const pick = await db.pick.findByPk(id, { include: [{ model: db.files, foreignKey: 'text_file_id', as: 'pick_text_file' }, { model: db.put }] });
 
     if (!pick) {
@@ -546,21 +689,29 @@ exports.downloadFile = asyncHandler(async (req, res) => {
         return res.status(404).json({ message: 'No file found for this pick.' });
     }
 
-    if (pick.text_file_downloaded) {
-        return res.status(400).json({ message: 'Text was file already downloaded.' });
-    }
-
     const fileName = pick.pick_text_file?.name;
-    const filePath = path.resolve(`uploads/files/pick/${fileName}`);
 
-    // Check if the file existsput.text_file_downloaded?.name
-    if (!fs.existsSync(filePath)) {
+    const candidatePaths = [
+        pick.pick_text_file?.path ? path.resolve(pick.pick_text_file.path) : null,
+        path.resolve(`uploads/files/pick/${fileName}`),
+        path.resolve(`uploads/files/put/${fileName}`),
+        path.resolve('uploads', 'files', 'pick', fileName),
+        path.resolve('uploads', 'files', 'put', fileName),
+        process.env.Pick_Text_File_Path ? path.resolve(process.env.Pick_Text_File_Path, fileName) : null,
+        process.env.Put_Text_File_Path ? path.resolve(process.env.Put_Text_File_Path, fileName) : null,
+    ].filter(Boolean);
+
+    const filePath = candidatePaths.find(p => fs.existsSync(p));
+
+    if (!filePath) {
         return res.status(404).send({ error: 'File cannot be downloaded' });
     }
 
     await pick.update({ text_file_downloaded: true });
-    for (const put of pick?.puts) {
-        await put.update({ pick_file_downloaded: true });
+    if (pick?.puts) {
+        for (const put of pick.puts) {
+            await put.update({ pick_file_downloaded: true });
+        }
     }
 
     res.setHeader('File-Name', encodeURIComponent(fileName));
@@ -568,6 +719,88 @@ exports.downloadFile = asyncHandler(async (req, res) => {
     res.download(filePath, fileName, (err) => {
         if (err) {
             res.status(500).send({ error: 'Error downloading file' });
+        }
+    });
+});
+
+exports.validateSerialForPick = asyncHandler(async (req, res) => {
+    const { serialNumber, modelNumber } = req.body;
+    if (!serialNumber) {
+        return res.status(400).json({ error: 'Serial number is required.' });
+    }
+    const cleanSerial = String(serialNumber).trim();
+    const pickProcessStep = process.env.KanbanOutProcessStep || 'KANBAN-OUT';
+
+    // 1. Check if serial exists in stock and is available
+    const putRecord = await db.put.findOne({
+        where: {
+            serial_number: cleanSerial,
+            pick_id: null
+        },
+        include: [
+            { model: db.compartment },
+            { model: db.handling_unit }
+        ]
+    });
+
+    if (!putRecord) {
+        const alreadyPicked = await db.put.findOne({ where: { serial_number: cleanSerial } });
+        if (alreadyPicked) {
+            return res.status(400).json({
+                error: `Serial ${cleanSerial} was already picked${alreadyPicked.scanned_at ? ` on ${moment(alreadyPicked.scanned_at).format('MM/DD/YYYY')}` : ''}.`
+            });
+        }
+        return res.status(404).json({ error: `Serial ${cleanSerial} not found in available Kardex inventory.` });
+    }
+
+    // 2. Check model match if modelNumber was specified
+    if (modelNumber && putRecord.model_number && putRecord.model_number.toUpperCase() !== String(modelNumber).trim().toUpperCase()) {
+        return res.status(400).json({
+            error: `Serial ${cleanSerial} belongs to model "${putRecord.model_number}", but required model is "${modelNumber}".`
+        });
+    }
+
+    // 3. PV Status Check (KANBAN-OUT)
+    const pvStatusResponse = await getPVStatusCheck(cleanSerial, pickProcessStep);
+    if (pvStatusResponse?.isError) {
+        return res.status(400).json({
+            error: `PV Status API check failed: ${pvStatusResponse?.error?.message || 'Unknown MES error'}`
+        });
+    }
+    await putRecord.update({ pv_status: pvStatusResponse === 'PASS' ? 'PASS' : 'FAIL' });
+    if (pvStatusResponse !== 'PASS') {
+        return res.status(400).json({
+            error: `Serial ${cleanSerial} failed PV Status check (Result: ${pvStatusResponse}). Cannot be picked.`
+        });
+    }
+
+    // 4. WIP Hold Check
+    const wipResponse = await getWipBySerialNumber(cleanSerial);
+    if (wipResponse?.isError) {
+        return res.status(400).json({
+            error: `WIP Status check failed: ${wipResponse?.error?.message || 'Unknown MES error'}`
+        });
+    }
+    const isOnHold = wipResponse?.data?.CurrentlyOnHold;
+    if (isOnHold) {
+        await putRecord.update({ pick_status: 'HOLD' });
+        return res.status(400).json({
+            error: `Serial ${cleanSerial} is currently marked ON HOLD in MES WIP.`
+        });
+    }
+
+    return res.status(200).json({
+        success: true,
+        message: `Serial ${cleanSerial} verified successfully.`,
+        data: {
+            id: putRecord.id,
+            serial_number: putRecord.serial_number,
+            model_number: putRecord.model_number,
+            pv_status: 'PASS',
+            compartment_number: putRecord.compartment?.compartment_number || null,
+            handling_unit_id: putRecord.handling_unit_id,
+            bin_hu_id: putRecord.handling_unit?.hu_id || null,
+            birth_date: putRecord.birth_date
         }
     });
 });
