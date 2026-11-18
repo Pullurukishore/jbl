@@ -600,55 +600,64 @@ exports.createPut = asyncHandler(async (req, res) => {
         /**Latest Source CSV File upload */
         let savedCsvFile = null;
         if (!isOffline && latestFile) {
-            const poUploadPath = path.join('uploads', 'files', 'source-po', latestFile.name);
+            try {
+                const poUploadPath = path.join('uploads', 'files', 'source-po', latestFile.name);
 
-            // Reuse existing file record if this exact PO was already uploaded
-            savedCsvFile = await db.files.findOne({ where: { name: latestFile.name } });
+                // Reuse existing file record if this exact PO was already uploaded
+                savedCsvFile = await db.files.findOne({ where: { name: latestFile.name } });
 
-            if (!savedCsvFile) {
-                const poUploadDir = path.dirname(poUploadPath);
-                if (!fs.existsSync(poUploadDir)) {
-                    fs.mkdirSync(poUploadDir, { recursive: true });
+                if (!savedCsvFile) {
+                    const poUploadDir = path.dirname(poUploadPath);
+                    if (!fs.existsSync(poUploadDir)) {
+                        fs.mkdirSync(poUploadDir, { recursive: true });
+                    }
+                    if (path.resolve(latestFile.path) !== path.resolve(poUploadPath)) {
+                        fs.copyFileSync(latestFile.path, poUploadPath);
+                    }
+                    const poFileStats = fs.statSync(poUploadPath);
+                    savedCsvFile = await db.files.create({
+                        name: latestFile.name,
+                        size: poFileStats.size,
+                        type: 'text',
+                        path: poUploadPath,
+                        created_by: 'SYSTEM',
+                        updated_by: 'SYSTEM'
+                    });
                 }
-                if (path.resolve(latestFile.path) !== path.resolve(poUploadPath)) {
-                    fs.copyFileSync(latestFile.path, poUploadPath);
-                }
-                const poFileStats = fs.statSync(poUploadPath);
-                savedCsvFile = await db.files.create({
-                    name: latestFile.name,
-                    size: poFileStats.size,
-                    type: 'text',
-                    path: poUploadPath,
-                    created_by: 'SYSTEM',
-                    updated_by: 'SYSTEM'
-                });
+            } catch (fileErr) {
+                console.error('Warning: Failed to copy/save PO file record:', fileErr.message);
             }
         }
         /**Latest Source CSV File upload */
 
         const isBinScan = !!req.query?.hu_id;
+        // Always fall back to the scanned parameter to prevent undefined serial_number in real production
+        const finalSerial = serialNumber || birthProcess?.SerialNumber;
+        const finalModel = birthProcess?.Number || 'N/A';
+        const finalUserId = req?.user?.user_id || (req?.user?.id ? String(req.user.id) : 'SYSTEM');
 
         let putEntry = existingPart;
         if (putEntry?.id) {
             await putEntry.update({
+                serial_number: finalSerial,
                 process_status: testProcess,
                 pick_status: 'AVAILABLE',
                 po_file_id: savedCsvFile?.id,
                 text_file_id: putEntry.text_file_id,
                 pick_id: null,
-                scanned_by: req?.user?.id,
+                scanned_by: finalUserId,
                 text_file_downloaded: false
             });
         }
         else {
             putEntry = await db.put.create({
-                serial_number: birthProcess?.SerialNumber,
+                serial_number: finalSerial,
                 birth_date: createDateFromString(birthProcess?.StartDateTime),
                 pv_status: 'PASS',
                 process_status: testProcess,
                 po_file_id: savedCsvFile?.id,
-                model_number: birthProcess?.Number,
-                scanned_by: req?.user?.id,
+                model_number: finalModel,
+                scanned_by: finalUserId,
                 text_file_id: null,
                 pick_status: 'AVAILABLE'
             });
@@ -658,10 +667,10 @@ exports.createPut = asyncHandler(async (req, res) => {
             try {
                 await targetComp.update({
                     status: 'OCCUPIED',
-                    serial_number: birthProcess?.SerialNumber,
-                    material_name: birthProcess?.Number,
+                    serial_number: finalSerial,
+                    material_name: finalModel,
                     allocated_at: new Date(),
-                    allocated_by: req.user?.id || 'SYSTEM'
+                    allocated_by: finalUserId
                 });
                 await putEntry.update({
                     handling_unit_id: targetHU.id,
@@ -679,11 +688,11 @@ exports.createPut = asyncHandler(async (req, res) => {
         }
 
         const successMessage = isBinScan
-            ? `Serial Number ${birthProcess?.SerialNumber} verified and allocated to Bin ${req.query.hu_id}.`
-            : `Serial Number ${birthProcess?.SerialNumber} verified and processed successfully.`;
+            ? `Serial Number ${finalSerial} verified and allocated to Bin ${req.query.hu_id}.`
+            : `Serial Number ${finalSerial} verified and processed successfully.`;
 
         logs.push(await createAndSendLog({
-            entity_number: birthProcess?.SerialNumber,
+            entity_number: finalSerial,
             activity: 'CHECKING_AVAILABILITY',
             status: 'SUCCESS',
             message: successMessage,

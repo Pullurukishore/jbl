@@ -1,7 +1,7 @@
 const axios = require('axios');
 const soap = require('soap');
 
-const API_TIMEOUT = parseInt(process.env.API_TIMEOUT_MS, 10) || 10000;
+const API_TIMEOUT = parseInt(process.env.API_TIMEOUT_MS, 10) || 30000;
 
 let client;
 initializeSoapClient();

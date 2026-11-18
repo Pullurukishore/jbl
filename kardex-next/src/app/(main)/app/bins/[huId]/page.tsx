@@ -200,10 +200,8 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
       setSelectedCompartment(nextTargetNumber);
     }
 
-    // 2. Refresh from server in background to ensure all backend associations are in sync
-    setTimeout(() => {
-      fetchLayout();
-    }, 150);
+    // 2. Refresh silently from server to ensure all backend associations are in sync without UI flicker
+    fetchLayout(true);
   };
 
   const handleConfirmKardex = async () => {

@@ -123,14 +123,15 @@ export const ScanModal: React.FC<ScanModalProps> = ({
             setIsProcessing(false);
           }
 
-          if (
+          const isFinished =
+            data.status === 'SUCCESS' &&
             (data.activity === 'CHECKING_AVAILABILITY' ||
               data.activity === 'FILE_GENERATED' ||
               data.activity === 'ALLOCATE' ||
               data.activity === 'COMPLETE' ||
-              data.completed === true) &&
-            data.status === 'SUCCESS'
-          ) {
+              data.success === true);
+
+          if (isFinished) {
             setIsProcessing(false);
             setIsCompleted(true);
             onSuccess(serialNumber.trim());

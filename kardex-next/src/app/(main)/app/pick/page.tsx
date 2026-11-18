@@ -112,6 +112,7 @@ export default function PickWorkstationPage() {
   const [pickPlan, setPickPlan] = useState<PickPlanResponse | null>(null);
   const [isLoadingPlan, setIsLoadingPlan] = useState(false);
   const [pickedBins, setPickedBins] = useState<Record<string, PickedBinRecord>>({});
+  const pickedBinsRef = useRef<Record<string, PickedBinRecord>>({});
   const [activeBinHuId, setActiveBinHuId] = useState<string | null>(null);
   const [isPickingBin, setIsPickingBin] = useState<string | null>(null);
   const [isSessionFinished, setIsSessionFinished] = useState(false);
@@ -187,6 +188,7 @@ export default function PickWorkstationPage() {
 
     setPickPlan(null);
     setIsLoadingPlan(false);
+    pickedBinsRef.current = {};
     setPickedBins({});
     setActiveBinHuId(null);
     setSelectedBinHuIds([]);
@@ -302,7 +304,10 @@ export default function PickWorkstationPage() {
         };
 
         setPickPlan(plan);
-        setSelectedBinHuIds(planBins.map((b) => b.hu_id));
+        pickedBinsRef.current = {};
+        setPickedBins({});
+        setIsSessionFinished(false);
+        setSelectedBinHuIds([]);
         if (planBins.length > 4) {
           setBinViewMode('table');
         }
@@ -347,6 +352,7 @@ export default function PickWorkstationPage() {
 
   const handleBarcodeInput = (val: string) => {
     setBarcodeInput(val);
+    pickedBinsRef.current = {};
     setPickedBins({});
     setCompletedBinFiles([]);
     setIsSessionFinished(false);
@@ -362,6 +368,7 @@ export default function PickWorkstationPage() {
   const handleQuantityChange = (newQty: number) => {
     const validQty = Math.max(1, newQty);
     setQuantity(validQty);
+    pickedBinsRef.current = {};
     setPickedBins({});
     setCompletedBinFiles([]);
     setIsSessionFinished(false);
@@ -422,9 +429,10 @@ export default function PickWorkstationPage() {
             };
 
             const nextPickedBins = {
-              ...pickedBins,
+              ...pickedBinsRef.current,
               [bin.hu_id]: result,
             };
+            pickedBinsRef.current = nextPickedBins;
             setPickedBins(nextPickedBins);
 
             const newFile = {
@@ -443,11 +451,14 @@ export default function PickWorkstationPage() {
             // Find next unpicked bin
             if (pickPlan) {
               const remainingBins = pickPlan.bins.filter((b) => !nextPickedBins[b.hu_id]);
+              setSelectedBinHuIds([]);
               if (remainingBins.length === 0) {
                 setIsCompleted(true);
                 setIsSessionFinished(true);
               } else {
                 setActiveBinHuId(remainingBins[0].hu_id);
+                setIsSessionFinished(false);
+                setIsCompleted(false);
               }
             }
           }
@@ -466,7 +477,8 @@ export default function PickWorkstationPage() {
 
   // Mode 1: Checkbox selection handlers for bins
   const handleToggleBinSelect = (huId: string) => {
-    if (pickedBins[huId] || isProcessing) return;
+    if (pickedBinsRef.current[huId] || isProcessing) return;
+    setIsSessionFinished(false);
     setSelectedBinHuIds((prev) =>
       prev.includes(huId) ? prev.filter((id) => id !== huId) : [...prev, huId]
     );
@@ -474,7 +486,8 @@ export default function PickWorkstationPage() {
 
   const handleSelectAllBins = () => {
     if (!pickPlan || isProcessing) return;
-    const unpicked = pickPlan.bins.filter((b) => !pickedBins[b.hu_id]).map((b) => b.hu_id);
+    setIsSessionFinished(false);
+    const unpicked = pickPlan.bins.filter((b) => !pickedBinsRef.current[b.hu_id]).map((b) => b.hu_id);
     setSelectedBinHuIds(unpicked);
   };
 
@@ -486,8 +499,9 @@ export default function PickWorkstationPage() {
   // Mode 1: Batch Pick Selected Bins
   const executeSelectedBinsPick = () => {
     if (isProcessing || !pickPlan) return;
+    const currentPicked = pickedBinsRef.current;
     const unpickedSelected = pickPlan.bins.filter(
-      (b) => selectedBinHuIds.includes(b.hu_id) && !pickedBins[b.hu_id]
+      (b) => selectedBinHuIds.includes(b.hu_id) && !currentPicked[b.hu_id]
     );
     if (unpickedSelected.length === 0) {
       setErrorMsg('Please select at least one unpicked bin.');
@@ -507,7 +521,8 @@ export default function PickWorkstationPage() {
     executeSSEPick(
       endpoint,
       totalCount,
-      `${totalCount} units from ${unpickedSelected.length} bins (${binNames})`
+      `${totalCount} units from ${unpickedSelected.length} bins (${binNames})`,
+      unpickedSelected.map((b) => b.hu_id)
     );
   };
 
@@ -651,7 +666,12 @@ export default function PickWorkstationPage() {
   // -------------------------------------------------------------
   // Universal SSE Execution & File Generation
   // -------------------------------------------------------------
-  const executeSSEPick = (endpoint: string, expectedLineCount: number, label: string) => {
+  const executeSSEPick = (
+    endpoint: string,
+    expectedLineCount: number,
+    label: string,
+    targetBinHuIds?: string[]
+  ) => {
     setLogs([]);
     setIsProcessing(true);
     setIsCompleted(false);
@@ -679,7 +699,6 @@ export default function PickWorkstationPage() {
 
           if (data.activity === 'FILE_GENERATED' && data.status === 'SUCCESS') {
             setIsProcessing(false);
-            setIsCompleted(true);
             const lineCount = data.lineCount || expectedLineCount;
             setCompletedInfo({
               fileName: data.fileName,
@@ -688,33 +707,48 @@ export default function PickWorkstationPage() {
               label: label,
             });
 
-            // If a pick plan is active and bins were selected for batch pick, mark them picked
-            if (pickPlan && selectedBinHuIds.length > 0) {
-              setPickedBins((prev) => {
-                const updatedBinsMap: Record<string, PickedBinRecord> = { ...prev };
-                const affectedBins = pickPlan.bins.filter(b => selectedBinHuIds.includes(b.hu_id));
-                for (const bin of affectedBins) {
-                  updatedBinsMap[bin.hu_id] = {
-                    fileName: data.fileName,
-                    pickId: data.pick_id,
-                    lineCount: bin.qty,
-                    pickedSerials: bin.serials,
-                    pickedAt: new Date().toLocaleTimeString(),
-                  };
-                }
-                return updatedBinsMap;
-              });
+            // If a pick plan is active and bins were selected for pick
+            const targeted =
+              targetBinHuIds && targetBinHuIds.length > 0
+                ? targetBinHuIds
+                : selectedBinHuIds;
 
-              const affected = pickPlan.bins.filter(b => selectedBinHuIds.includes(b.hu_id));
+            if (pickPlan && targeted.length > 0) {
+              const affectedBins = pickPlan.bins.filter((b) => targeted.includes(b.hu_id));
+              const currentPicked = pickedBinsRef.current;
+              const updatedBinsMap: Record<string, PickedBinRecord> = { ...currentPicked };
+              for (const bin of affectedBins) {
+                updatedBinsMap[bin.hu_id] = {
+                  fileName: data.fileName,
+                  pickId: data.pick_id,
+                  lineCount: bin.qty,
+                  pickedSerials: bin.serials,
+                  pickedAt: new Date().toLocaleTimeString(),
+                };
+              }
+              pickedBinsRef.current = updatedBinsMap;
+              setPickedBins(updatedBinsMap);
+
               setCompletedBinFiles((prev) => [
                 ...prev,
                 {
                   fileName: data.fileName,
                   pickId: data.pick_id,
                   lineCount: lineCount,
-                  huId: affected.map(b => b.hu_id).join(', '),
+                  huId: affectedBins.map((b) => b.hu_id).join(', '),
                 },
               ]);
+
+              const remaining = pickPlan.bins.filter((b) => !updatedBinsMap[b.hu_id]);
+              const isAllDone = remaining.length === 0;
+              setIsSessionFinished(isAllDone);
+              setIsCompleted(isAllDone);
+              setSelectedBinHuIds([]);
+              if (!isAllDone) {
+                setActiveBinHuId(remaining[0].hu_id);
+              }
+            } else {
+              setIsCompleted(true);
               setIsSessionFinished(true);
             }
           }
@@ -793,15 +827,21 @@ export default function PickWorkstationPage() {
           margin-top: 2px;
         }
 
-        /* Two-Column Split */
+        /* Two-Column Split: Main workspace gets maximum width, Live MES monitor stays compact */
         .workstation-split {
           display: grid;
-          grid-template-columns: 530px 1fr;
+          grid-template-columns: minmax(0, 1fr) 430px;
           gap: 1.25rem;
           align-items: flex-start;
         }
 
-        @media (max-width: 1080px) {
+        @media (max-width: 1280px) {
+          .workstation-split {
+            grid-template-columns: minmax(0, 1fr) 390px;
+          }
+        }
+
+        @media (max-width: 1024px) {
           .workstation-split {
             grid-template-columns: 1fr;
           }
@@ -816,6 +856,11 @@ export default function PickWorkstationPage() {
           flex-direction: column;
           gap: 1.15rem;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        }
+
+        .panel-card.monitor-panel {
+          position: sticky;
+          top: 1rem;
         }
 
         /* 2-Segment Mode Toggle */
@@ -1403,75 +1448,85 @@ export default function PickWorkstationPage() {
                 )}
               </div>
 
-              {/* Quantity Stepper & Presets */}
+              {/* Quantity to Pick Control */}
               <div>
                 <div className="d-flex justify-content-between align-items-center mb-1">
                   <label className="field-label mb-0">Quantity to Pick</label>
-                  <div className="d-flex align-items-center gap-1">
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>Presets:</span>
-                    {[1, 5, 10, 15, 20].map((q) => (
-                      <button
-                        key={q}
-                        type="button"
-                        className={`preset-chip ${quantity === q ? 'selected' : ''}`}
-                        onClick={() => handleQuantityChange(q)}
-                        disabled={isProcessing}
-                      >
-                        {q}
-                      </button>
-                    ))}
-                  </div>
+                  {availableStock !== null && availableStock > 0 && (
+                    <span className="text-muted" style={{ fontSize: '11.5px' }}>
+                      Max available: <strong>{availableStock} units</strong>
+                    </span>
+                  )}
                 </div>
 
-                <div className="stepper-box">
-                  <button
-                    type="button"
-                    className="stepper-btn"
-                    onClick={() => handleQuantityChange(Math.max(1, quantity - 1))}
-                    disabled={isProcessing || quantity <= 1}
-                  >
-                    <Minus size={14} />
-                  </button>
-                  <input
-                    type="number"
-                    min="1"
-                    max={availableStock || 50}
-                    className="stepper-input"
-                    value={quantity}
-                    onChange={(e) =>
-                      handleQuantityChange(Math.max(1, Math.min(availableStock || 50, Number(e.target.value) || 1)))
-                    }
-                    disabled={isProcessing}
-                  />
-                  <button
-                    type="button"
-                    className="stepper-btn"
-                    onClick={() => handleQuantityChange(Math.min(availableStock || 50, quantity + 1))}
-                    disabled={isProcessing || (availableStock ? quantity >= availableStock : false)}
-                  >
-                    <Plus size={14} />
-                  </button>
+                <div className="d-flex align-items-center gap-2">
+                  <div className="stepper-box" style={{ width: '180px' }}>
+                    <button
+                      type="button"
+                      className="stepper-btn"
+                      onClick={() => handleQuantityChange(Math.max(1, quantity - 1))}
+                      disabled={isProcessing || quantity <= 1}
+                      title="Decrease Quantity"
+                    >
+                      <Minus size={15} />
+                    </button>
+                    <input
+                      type="number"
+                      min="1"
+                      max={availableStock || 9999}
+                      className="stepper-input"
+                      value={quantity}
+                      onChange={(e) =>
+                        handleQuantityChange(Math.max(1, Math.min(availableStock || 9999, Number(e.target.value) || 1)))
+                      }
+                      disabled={isProcessing}
+                    />
+                    <button
+                      type="button"
+                      className="stepper-btn"
+                      onClick={() => handleQuantityChange(Math.min(availableStock || 9999, quantity + 1))}
+                      disabled={isProcessing || (availableStock ? quantity >= availableStock : false)}
+                      title="Increase Quantity"
+                    >
+                      <Plus size={15} />
+                    </button>
+                  </div>
+
+                  {availableStock !== null && availableStock > 1 && (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
+                      style={{ height: '42px', fontSize: '12px', fontWeight: 600, borderRadius: '8px', padding: '0 14px' }}
+                      onClick={() => handleQuantityChange(availableStock)}
+                      disabled={isProcessing || quantity === availableStock}
+                      title="Pick All Available Units"
+                    >
+                      <span>Pick All ({availableStock})</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Primary 1-Click Pick Button (Always visible and actionable) */}
-              <button
-                type="button"
-                className="btn-pick-execute mt-1"
-                onClick={handleExecuteQuickPick}
-                disabled={isProcessing || !barcodeInput.trim()}
-              >
-                <PackageMinus size={18} />
-                <span>
-                  {isProcessing
-                    ? 'Validating & Processing Pick Order...'
-                    : !barcodeInput.trim()
-                    ? 'Scan Model or Serial to Start'
-                    : `Auto-Pick ${quantity} Unit${quantity > 1 ? 's' : ''}${
-                        detectedModel ? ` (${detectedModel})` : ` (${barcodeInput.trim()})`
-                      } → Generate File`}
-                </span>
-              </button>
+              {/* Quick Pick Action Button - Only shown when plan is not yet loaded */}
+              {!pickPlan && (
+                <button
+                  type="button"
+                  className="btn-pick-execute mt-1"
+                  onClick={handleExecuteQuickPick}
+                  disabled={isProcessing || !barcodeInput.trim()}
+                >
+                  <PackageMinus size={18} />
+                  <span>
+                    {isProcessing
+                      ? 'Validating & Processing Pick Order...'
+                      : !barcodeInput.trim()
+                      ? 'Scan Model or Serial to Start'
+                      : `Auto-Pick ${quantity} Unit${quantity > 1 ? 's' : ''}${
+                          detectedModel ? ` (${detectedModel})` : ` (${barcodeInput.trim()})`
+                        } → Generate File`}
+                  </span>
+                </button>
+              )}
 
               {/* BIN ALLOCATION PLAN & BIN-WISE PICKING SECTION */}
               {isLoadingPlan && (
@@ -1899,42 +1954,70 @@ export default function PickWorkstationPage() {
                     const selected = unpicked.filter((b) => selectedBinHuIds.includes(b.hu_id));
                     const selUnits = selected.reduce((sum, b) => sum + b.qty, 0);
 
-                    if (selected.length > 0 && !isSessionFinished) {
-                      return (
-                        <div className="d-flex align-items-center justify-content-between p-2 rounded bg-white border mt-1 flex-wrap gap-2">
-                          <div className="d-flex align-items-center gap-2">
-                            <span className="fw-bold text-dark" style={{ fontSize: '12.5px' }}>
-                              Ready to Pick:
-                            </span>
-                            <span className="badge bg-primary text-white">
-                              {selected.length} of {unpicked.length} Bins ({selUnits} Units)
-                            </span>
-                          </div>
+                    if (unpicked.length > 0 && !isSessionFinished) {
+                      if (selected.length > 0) {
+                        return (
+                          <div className="d-flex align-items-center justify-content-between p-2 rounded bg-white border mt-1 flex-wrap gap-2">
+                            <div className="d-flex align-items-center gap-2">
+                              <span className="fw-bold text-dark" style={{ fontSize: '12.5px' }}>
+                                Ready to Pick:
+                              </span>
+                              <span className="badge bg-primary text-white">
+                                {selected.length} of {unpicked.length} Bins ({selUnits} Units)
+                              </span>
+                            </div>
 
-                          <button
-                            type="button"
-                            className="btn-pick-execute"
-                            style={{ width: 'auto', minWidth: '220px', height: '42px', fontSize: '13px' }}
-                            onClick={executeSelectedBinsPick}
-                            disabled={isProcessing}
-                          >
-                            <PackageMinus size={16} />
-                            <span>
-                              {isProcessing
-                                ? 'Generating Pick Order...'
-                                : selected.length === unpicked.length && unpicked.length === pickPlan.bins.length
-                                ? `Pick All ${selected.length} Bins (${selUnits} Units) → File`
-                                : `Pick ${selected.length} Selected Bins (${selUnits} Units) → File`}
-                            </span>
-                          </button>
-                        </div>
-                      );
+                            <button
+                              type="button"
+                              className="btn-pick-execute"
+                              style={{ width: 'auto', minWidth: '220px', height: '42px', fontSize: '13px' }}
+                              onClick={executeSelectedBinsPick}
+                              disabled={isProcessing}
+                            >
+                              <PackageMinus size={16} />
+                              <span>
+                                {isProcessing
+                                  ? 'Generating Pick Order...'
+                                  : selected.length === unpicked.length && unpicked.length === pickPlan.bins.length
+                                  ? `Pick All ${selected.length} Bins (${selUnits} Units) → File`
+                                  : `Pick ${selected.length} Selected Bins (${selUnits} Units) → File`}
+                              </span>
+                            </button>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div className="d-flex align-items-center justify-content-between p-2 rounded bg-light border mt-1 flex-wrap gap-2">
+                            <div className="d-flex align-items-center gap-2">
+                              <span className="fw-bold text-muted" style={{ fontSize: '12.5px' }}>
+                                Ready to Pick:
+                              </span>
+                              <span className="badge bg-secondary text-white">
+                                0 of {unpicked.length} Bins (0 Units)
+                              </span>
+                              <span className="text-muted" style={{ fontSize: '11.5px' }}>
+                                (Select checkbox on bin to pick)
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              className="btn btn-secondary disabled"
+                              style={{ width: 'auto', minWidth: '220px', height: '42px', fontSize: '13px', opacity: 0.65, cursor: 'not-allowed' }}
+                              disabled={true}
+                            >
+                              <PackageMinus size={16} />
+                              <span>Check Bins to Pick → File</span>
+                            </button>
+                          </div>
+                        );
+                      }
                     }
                     return null;
                   })()}
 
                   {/* PARTIAL PICK ACTION ("Take Half Only") */}
-                  {Object.keys(pickedBins).length > 0 && !pickPlan.bins.every((b) => pickedBins[b.hu_id]) && !isSessionFinished && (
+                  {Object.keys(pickedBins).length > 0 && !pickPlan.bins.every((b) => Boolean(pickedBins[b.hu_id])) && !isSessionFinished && (
                     <div className="p-2 rounded bg-warning-subtle border border-warning-subtle d-flex flex-column gap-2 mt-1">
                       <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
                         <div>
@@ -1959,8 +2042,8 @@ export default function PickWorkstationPage() {
                     </div>
                   )}
 
-                  {/* ALL BINS COMPLETED OR SESSION FINISHED */}
-                  {(pickPlan.bins.every((b) => pickedBins[b.hu_id]) || isSessionFinished) && (
+                  {/* ALL BINS COMPLETED OR USER FINISHED EARLY */}
+                  {(pickPlan.bins.every((b) => Boolean(pickedBins[b.hu_id])) || (isSessionFinished && Object.keys(pickedBins).length > 0)) && (
                     <div className="p-3 rounded bg-success-subtle border border-success-subtle d-flex align-items-center justify-content-between flex-wrap gap-2 mt-1">
                       <div>
                         <div className="fw-bold text-success d-flex align-items-center gap-1" style={{ fontSize: '13px' }}>
@@ -1968,17 +2051,35 @@ export default function PickWorkstationPage() {
                         </div>
                         <div className="text-muted" style={{ fontSize: '11.5px' }}>
                           {Object.values(pickedBins).reduce((sum, b) => sum + b.lineCount, 0)} units picked across {Object.keys(pickedBins).length} bin(s).
+                          {!pickPlan.bins.every((b) => Boolean(pickedBins[b.hu_id])) && ' (Session ended early)'}
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-success d-inline-flex align-items-center gap-1"
-                        onClick={handleResetAll}
-                      >
-                        <span>Pick Next Model</span>
-                        <ArrowRight size={13} />
-                      </button>
+                      <div className="d-flex align-items-center gap-2">
+                        {!pickPlan.bins.every((b) => Boolean(pickedBins[b.hu_id])) && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-success"
+                            onClick={() => {
+                              const unpicked = pickPlan.bins.filter((b) => !pickedBins[b.hu_id]);
+                              setIsSessionFinished(false);
+                              if (unpicked.length > 0) {
+                                setSelectedBinHuIds([unpicked[0].hu_id]);
+                              }
+                            }}
+                          >
+                            Resume Picking
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-success d-inline-flex align-items-center gap-1"
+                          onClick={handleResetAll}
+                        >
+                          <span>Pick Next Model</span>
+                          <ArrowRight size={13} />
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -2168,7 +2269,7 @@ export default function PickWorkstationPage() {
         </div>
 
         {/* Right Column: Live MES Verification & Status Monitor */}
-        <div className="panel-card">
+        <div className="panel-card monitor-panel">
           <div className="d-flex align-items-center justify-content-between pb-2 border-bottom">
             <h2 className="panel-title d-flex align-items-center gap-2 m-0" style={{ fontSize: '15px' }}>
               <ShieldCheck size={18} className="text-success" />
@@ -2246,27 +2347,38 @@ export default function PickWorkstationPage() {
                 {completedBinFiles.map((file, idx) => (
                   <div
                     key={idx}
-                    className="d-flex align-items-center justify-content-between p-2 rounded bg-white border"
+                    className="p-2 rounded bg-white border d-flex flex-column gap-1"
                     style={{ fontSize: '12px' }}
                   >
-                    <div className="d-flex align-items-center gap-2">
+                    <div className="d-flex align-items-center justify-content-between flex-wrap gap-1">
                       <span className="badge bg-secondary-subtle text-secondary border font-monospace">
                         Bin {file.huId}
                       </span>
-                      <span className="font-monospace fw-bold text-dark">{file.fileName}</span>
-                      <span className="text-muted">({file.lineCount} units)</span>
+                      <span className="badge bg-success-subtle text-success border border-success-subtle" style={{ fontSize: '11px' }}>
+                        {file.lineCount} unit{file.lineCount > 1 ? 's' : ''}
+                      </span>
                     </div>
 
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-primary py-0 px-2 d-inline-flex align-items-center gap-1"
-                      style={{ fontSize: '11.5px' }}
-                      onClick={() => handleDownloadFileById(file.pickId)}
-                      disabled={isDownloading}
-                    >
-                      <Download size={12} />
-                      <span>Download</span>
-                    </button>
+                    <div className="d-flex align-items-center justify-content-between gap-2 mt-1">
+                      <span
+                        className="font-monospace fw-bold text-dark text-truncate"
+                        title={file.fileName}
+                        style={{ fontSize: '11.5px', maxWidth: '250px' }}
+                      >
+                        {file.fileName}
+                      </span>
+
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-primary py-1 px-2 d-inline-flex align-items-center gap-1 flex-shrink-0"
+                        style={{ fontSize: '11.5px', borderRadius: '6px' }}
+                        onClick={() => handleDownloadFileById(file.pickId)}
+                        disabled={isDownloading}
+                      >
+                        <Download size={12} />
+                        <span>Download</span>
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
