@@ -1,8 +1,10 @@
 const express = require("express");
 const router = express.Router();
-const { createPick, updatePick, deletePick, getPick, getAll, getUndownloadedPicks, downloadFile, validateSerialForPick } = require("../controllers/pick");
+const { createPick, createBinPick, getPickPlan, updatePick, deletePick, getPick, getAll, getUndownloadedPicks, downloadFile, validateSerialForPick } = require("../controllers/pick");
 const { requireAccess } = require("../middleware/auth");
 
+router.post('/plan', requireAccess('PICK'), getPickPlan);
+router.get('/create-bin/:huId/:modelNumber/:qty', requireAccess('PICK'), createBinPick);
 router.get('/create/:modelNumber/:qty', requireAccess('PICK'), createPick);
 router.post('/validate-serial', requireAccess('PICK'), validateSerialForPick);
 router.put('/update/:id', requireAccess('PICK'), updatePick);

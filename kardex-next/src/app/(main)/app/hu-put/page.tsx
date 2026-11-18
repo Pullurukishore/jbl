@@ -1,23 +1,22 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { apiPost } from '@/lib/api';
+import { apiGet, apiPost, connectSSE } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
-import { HandlingUnit, StorageStatus, HUStatus, HUListResponse, HUStats } from '@/types/hu';
+import { HandlingUnit, StorageStatus, HUStatus, HUListResponse, HUStats, Compartment } from '@/types/hu';
 import { HUStatusBadge } from '@/components/bins/HUStatusBadge';
+import { StorageStatusBadge } from '@/components/bins/StorageStatusBadge';
 import { RegisterBinModal } from '@/components/bins/RegisterBinModal';
+import { SendToKardexModal } from '@/components/bins/SendToKardexModal';
+import { CompartmentGrid } from '@/components/bins/CompartmentGrid';
 import { Loader } from '@/components/shared/Loader';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Pagination } from '@/components/shared/Pagination';
 import {
   Package,
   PackagePlus,
-  Eye,
-  Send,
-  PackageSearch,
-  CheckCircle2,
   Boxes,
   Search,
   RefreshCw,
@@ -27,17 +26,27 @@ import {
   Layers,
   Sparkles,
   Barcode,
-  ArrowUpDown,
-  Archive,
   Clock,
   Zap,
-  Info,
   ChevronRight,
+  Table as TableIcon,
+  LayoutGrid,
+  Send,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  Maximize2,
+  Minimize2,
+  ArrowRight,
+  ExternalLink,
+  SlidersHorizontal,
+  FolderDown,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 
-const PAGE_SIZE = 20;
-
 type SortOption = 'HU_ASC' | 'HU_DESC' | 'CAPACITY_DESC' | 'CAPACITY_ASC' | 'STATUS';
+type ViewMode = 'TABLE' | 'CARDS';
 
 export default function HUPutPage() {
   const router = useRouter();
@@ -45,15 +54,25 @@ export default function HUPutPage() {
   const [hus, setHus] = useState<HandlingUnit[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50); // Default to 50 so 40 bins show without pagination
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
-  // Filters, Search & Sort
+  // Filters, Search & View
   const [storageFilter, setStorageFilter] = useState<StorageStatus | 'ALL'>('ALL');
   const [huStatusFilter, setHuStatusFilter] = useState<HUStatus | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('HU_ASC');
+  const [viewMode, setViewMode] = useState<ViewMode>('TABLE');
   const [copiedHuId, setCopiedHuId] = useState<string | null>(null);
+
+  // Multi-select for batch operations across 40 bins
+  const [selectedBinIds, setSelectedBinIds] = useState<string[]>([]);
+
+  // Universal Barcode Scanner (Top Bar)
+  const [universalScanInput, setUniversalScanInput] = useState('');
+  const [scanFeedback, setScanFeedback] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const universalInputRef = useRef<HTMLInputElement>(null);
 
   // Stats
   const [stats, setStats] = useState<HUStats>({
@@ -66,12 +85,25 @@ export default function HUPutPage() {
     full: 0,
   });
 
-  // Modals
+  // Modals & Slide-over Drawer
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [sendToKardexTargetHu, setSendToKardexTargetHu] = useState<HandlingUnit | null>(null);
+  const [batchSending, setBatchSending] = useState(false);
+  const [batchSendResults, setBatchSendResults] = useState<{ binId: string; file?: string; status: 'OK' | 'ERR'; message: string }[]>([]);
+
+  // Rapid Put Station Drawer State (In-Page Fast Put)
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [activeDrawerHu, setActiveDrawerHu] = useState<HandlingUnit | null>(null);
+  const [drawerLoading, setDrawerLoading] = useState(false);
+  const [drawerSerialInput, setDrawerSerialInput] = useState('');
+  const [drawerScanning, setDrawerScanning] = useState(false);
+  const [drawerScanLog, setDrawerScanLog] = useState<{ status: 'SUCCESS' | 'FAILED' | 'IN_PROGRESS'; message: string } | null>(null);
+  const drawerSerialInputRef = useRef<HTMLInputElement>(null);
 
   const fetchHUs = useCallback(
     async (
       pageNum = page,
+      size = pageSize,
       storage = storageFilter,
       huStatus = huStatusFilter,
       search = searchQuery
@@ -80,7 +112,7 @@ export default function HUPutPage() {
         setLoading(true);
         const body: Record<string, unknown> = {
           page: pageNum,
-          size: PAGE_SIZE,
+          size: size,
         };
         if (storage !== 'ALL') body.storage_status = storage;
         if (huStatus !== 'ALL') body.hu_status = huStatus;
@@ -101,7 +133,7 @@ export default function HUPutPage() {
         setLoading(false);
       }
     },
-    [page, storageFilter, huStatusFilter, searchQuery]
+    [page, pageSize, storageFilter, huStatusFilter, searchQuery]
   );
 
   useEffect(() => {
@@ -109,16 +141,170 @@ export default function HUPutPage() {
       router.replace('/error/403');
       return;
     }
-    fetchHUs(1, storageFilter, huStatusFilter, searchQuery);
-  }, [authLoading, canPut, router, storageFilter, huStatusFilter]);
+    fetchHUs(1, pageSize, storageFilter, huStatusFilter, searchQuery);
+  }, [authLoading, canPut, router, storageFilter, huStatusFilter, pageSize]);
 
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchHUs(1, storageFilter, huStatusFilter, searchQuery);
+      fetchHUs(1, pageSize, storageFilter, huStatusFilter, searchQuery);
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, pageSize]);
+
+  // Refresh active drawer bin layout
+  const refreshActiveDrawerBin = useCallback(async (huId: string) => {
+    try {
+      setDrawerLoading(true);
+      const res = await apiGet<HandlingUnit>(`/hu/${encodeURIComponent(huId)}/layout`);
+      setActiveDrawerHu(res);
+      // Also update in main table list
+      setHus((prev) => prev.map((item) => (item.hu_id === huId ? { ...item, ...res } : item)));
+    } catch (e: any) {
+      console.error('Failed to reload bin layout:', e);
+    } finally {
+      setDrawerLoading(false);
+    }
+  }, []);
+
+  // Open Rapid Put Station Drawer
+  const handleOpenDrawer = (hu: HandlingUnit) => {
+    setActiveDrawerHu(hu);
+    setDrawerOpen(true);
+    setDrawerScanLog(null);
+    setDrawerSerialInput('');
+    refreshActiveDrawerBin(hu.hu_id);
+    setTimeout(() => {
+      drawerSerialInputRef.current?.focus();
+    }, 200);
+  };
+
+  const handleCloseDrawer = () => {
+    setDrawerOpen(false);
+    setActiveDrawerHu(null);
+    setDrawerScanLog(null);
+    setDrawerSerialInput('');
+    fetchHUs(page, pageSize, storageFilter, huStatusFilter, searchQuery);
+  };
+
+  // Continuous Hands-Free Serial Scan inside Drawer
+  const handleDrawerScanSerial = (e: React.FormEvent) => {
+    e.preventDefault();
+    const serial = drawerSerialInput.trim();
+    if (!serial || !activeDrawerHu || drawerScanning) return;
+
+    // Check if bin is full
+    const comps = activeDrawerHu.compartments || [];
+    const emptyComps = comps.filter((c) => c.status === 'EMPTY');
+    if (comps.length > 0 && emptyComps.length === 0) {
+      setDrawerScanLog({
+        status: 'FAILED',
+        message: `Handling Unit ${activeDrawerHu.hu_id} is 100% full (${comps.length}/${comps.length} slots occupied).`,
+      });
+      return;
+    }
+
+    setDrawerScanning(true);
+    setDrawerScanLog({
+      status: 'IN_PROGRESS',
+      message: `Verifying MES PV status & board history for ${serial}...`,
+    });
+
+    const queryParams = new URLSearchParams();
+    queryParams.append('hu_id', activeDrawerHu.hu_id);
+
+    connectSSE(
+      `/put/create/${encodeURIComponent(serial)}?${queryParams.toString()}`,
+      (data: any) => {
+        if (data && typeof data === 'object') {
+          if (data.status === 'FAILED') {
+            setDrawerScanLog({
+              status: 'FAILED',
+              message: data.message || `Failed to put serial ${serial}.`,
+            });
+            setDrawerScanning(false);
+          }
+
+          if (
+            (data.activity === 'CHECKING_AVAILABILITY' ||
+              data.activity === 'FILE_GENERATED' ||
+              data.activity === 'ALLOCATE' ||
+              data.activity === 'COMPLETE' ||
+              data.completed === true) &&
+            data.status === 'SUCCESS'
+          ) {
+            setDrawerScanLog({
+              status: 'SUCCESS',
+              message: `✓ Serial ${serial} verified & allocated to Bin ${activeDrawerHu.hu_id}!`,
+            });
+            setDrawerScanning(false);
+            setDrawerSerialInput('');
+            // Reload bin layout to show new occupied slot immediately
+            refreshActiveDrawerBin(activeDrawerHu.hu_id);
+            // Re-focus scanner field for next serial immediately
+            setTimeout(() => {
+              drawerSerialInputRef.current?.focus();
+            }, 50);
+          }
+        }
+      },
+      () => {
+        setDrawerScanning(false);
+      },
+      () => {
+        setDrawerScanning(false);
+      }
+    );
+  };
+
+  // Universal Barcode Scan Handler (Top Bar)
+  const handleUniversalScan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const barcode = universalScanInput.trim();
+    if (!barcode) return;
+
+    // 1. Check if the scanned string matches a Bin ID (e.g. BIN-001 or hu_id)
+    const matchingBin = hus.find(
+      (h) => h.hu_id.toLowerCase() === barcode.toLowerCase()
+    );
+
+    if (matchingBin) {
+      setScanFeedback({
+        type: 'success',
+        text: `Bin ${matchingBin.hu_id} recognized! Opening Rapid Put Station.`,
+      });
+      setUniversalScanInput('');
+      handleOpenDrawer(matchingBin);
+      return;
+    }
+
+    // 2. If it's a material serial number, find recommended bin:
+    // First priority: Partially filled bin outside Kardex with matching model or capacity
+    // Second priority: Empty bin outside Kardex
+    const readyBins = hus.filter(
+      (h) => (h.storage_status === 'OUTSIDE_KARDEX' || h.storage_status === 'DRAFT') && h.hu_status !== 'FULL'
+    );
+
+    if (readyBins.length > 0) {
+      // Pick best partial bin or first empty bin
+      const recommendedBin =
+        readyBins.find((h) => h.hu_status === 'PARTIALLY_FILLED') || readyBins[0];
+
+      setScanFeedback({
+        type: 'info',
+        text: `Scanned Material ${barcode}. Recommended destination: Bin ${recommendedBin.hu_id}. Opening Rapid Put.`,
+      });
+      setUniversalScanInput('');
+      handleOpenDrawer(recommendedBin);
+      // Pre-fill drawer serial input and auto-trigger
+      setDrawerSerialInput(barcode);
+    } else {
+      setScanFeedback({
+        type: 'error',
+        text: `No open bins available outside Kardex for serial ${barcode}. Please register or retrieve an empty bin.`,
+      });
+    }
+  };
 
   const handleCopyId = (huId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -128,14 +314,10 @@ export default function HUPutPage() {
   };
 
   const handleRefresh = () => {
-    fetchHUs(page, storageFilter, huStatusFilter, searchQuery);
+    fetchHUs(page, pageSize, storageFilter, huStatusFilter, searchQuery);
   };
 
-  const handleSuccess = () => {
-    fetchHUs(page, storageFilter, huStatusFilter, searchQuery);
-  };
-
-  // Client-side sorting for rapid responsiveness
+  // Client-side sorting
   const sortedHUs = useMemo(() => {
     const list = [...hus];
     switch (sortBy) {
@@ -162,66 +344,110 @@ export default function HUPutPage() {
     }
   }, [hus, sortBy]);
 
-  const getTransactionBadge = (status: string | null) => {
-    if (!status) return null;
-    const map: Record<string, { bg: string; text: string; border: string }> = {
-      PENDING: { bg: '#fffbeb', text: '#b45309', border: '#fde68a' },
-      SUCCESSFUL: { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0' },
-      FAILED: { bg: '#fef2f2', text: '#b91c1c', border: '#fecaca' },
-    };
-    const style = map[status] || { bg: '#f8fafc', text: '#475569', border: '#e2e8f0' };
-    return (
-      <span
-        style={{
-          background: style.bg,
-          color: style.text,
-          border: `1px solid ${style.border}`,
-          borderRadius: '5px',
-          fontSize: '10.5px',
-          fontWeight: 700,
-          padding: '2px 6px',
-          letterSpacing: '0.3px',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '3px',
-        }}
-      >
-        <span
-          style={{
-            width: '5px',
-            height: '5px',
-            borderRadius: '50%',
-            background: style.text,
-          }}
-        />
-        {status}
-      </span>
+  // Multi-bin selection helpers
+  const handleToggleSelectBin = (huId: string) => {
+    setSelectedBinIds((prev) =>
+      prev.includes(huId) ? prev.filter((id) => id !== huId) : [...prev, huId]
     );
   };
 
-  const getLastTxBadge = (tx: string | null) => {
-    if (!tx) return <span className="text-muted" style={{ fontSize: '12px' }}>—</span>;
-    const map: Record<string, { bg: string; text: string; border: string }> = {
-      PUT: { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
-      MATERIAL_PICK: { bg: '#ecfeff', text: '#0e7490', border: '#a5f3fc' },
-      HU_PICK: { bg: '#fefce8', text: '#a16207', border: '#fef08a' },
-    };
-    const style = map[tx] || { bg: '#f8fafc', text: '#475569', border: '#e2e8f0' };
+  const handleSelectAllReady = () => {
+    const readyIds = sortedHUs
+      .filter((h) => (h.storage_status === 'OUTSIDE_KARDEX' || h.storage_status === 'DRAFT') && ((h.compartments || []).filter((c) => c.status === 'OCCUPIED').length > 0))
+      .map((h) => h.hu_id);
+    setSelectedBinIds(readyIds);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedBinIds([]);
+  };
+
+  // Batch Send Selected Bins to Kardex
+  const handleBatchSendToKardex = async () => {
+    if (selectedBinIds.length === 0) return;
+    try {
+      setBatchSending(true);
+      setBatchSendResults([]);
+      const results: { binId: string; file?: string; status: 'OK' | 'ERR'; message: string }[] = [];
+
+      for (const binId of selectedBinIds) {
+        try {
+          const res = await apiPost<{ fileName?: string; file_name?: string; message?: string }>(
+            `/hu/${encodeURIComponent(binId)}/send-to-kardex`
+          );
+          results.push({
+            binId,
+            file: res.fileName || res.file_name,
+            status: 'OK',
+            message: res.message || 'Dispatched to Kardex PPS.',
+          });
+        } catch (err: any) {
+          results.push({
+            binId,
+            status: 'ERR',
+            message: err.message || 'Failed to dispatch.',
+          });
+        }
+      }
+      setBatchSendResults(results);
+      setSelectedBinIds([]);
+      fetchHUs(page, pageSize, storageFilter, huStatusFilter, searchQuery);
+    } catch (e: any) {
+      alert(e.message || 'Batch Send failed');
+    } finally {
+      setBatchSending(false);
+    }
+  };
+
+  // Helper to extract unique models contained inside a bin
+  const getBinModelChips = (hu: HandlingUnit) => {
+    const comps = hu.compartments || [];
+    const models = comps
+      .filter((c) => c.status === 'OCCUPIED' && c.material_name)
+      .map((c) => c.material_name as string);
+
+    if (models.length === 0) return null;
+
+    const counts: Record<string, number> = {};
+    models.forEach((m) => {
+      counts[m] = (counts[m] || 0) + 1;
+    });
+
+    const entries = Object.entries(counts);
+    const primary = entries[0];
+    const extraCount = entries.length - 1;
+
     return (
-      <span
-        style={{
-          background: style.bg,
-          color: style.text,
-          border: `1px solid ${style.border}`,
-          padding: '2px 7px',
-          borderRadius: '5px',
-          fontSize: '11px',
-          fontWeight: 700,
-          display: 'inline-block',
-        }}
-      >
-        {tx.replace('_', ' ')}
-      </span>
+      <div className="d-flex align-items-center gap-1 flex-wrap">
+        <span
+          style={{
+            background: '#e0f2fe',
+            color: '#0369a1',
+            border: '1px solid #bae6fd',
+            borderRadius: '4px',
+            fontSize: '11px',
+            fontWeight: 700,
+            padding: '1px 6px',
+            fontFamily: 'monospace',
+          }}
+        >
+          {primary[0]} ({primary[1]})
+        </span>
+        {extraCount > 0 && (
+          <span
+            style={{
+              background: '#f1f5f9',
+              color: '#475569',
+              borderRadius: '4px',
+              fontSize: '10.5px',
+              fontWeight: 600,
+              padding: '1px 5px',
+            }}
+          >
+            +{extraCount} more
+          </span>
+        )}
+      </div>
     );
   };
 
@@ -231,8 +457,9 @@ export default function HUPutPage() {
         .hu-put-container {
           display: flex;
           flex-direction: column;
-          gap: 1.5rem;
+          gap: 1.25rem;
           width: 100%;
+          position: relative;
         }
 
         /* Top Header Card */
@@ -240,7 +467,7 @@ export default function HUPutPage() {
           background: #ffffff;
           border: 1px solid #e2e8f0;
           border-radius: 14px;
-          padding: 1.5rem 1.75rem;
+          padding: 1.25rem 1.5rem;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
           display: flex;
           align-items: center;
@@ -252,24 +479,24 @@ export default function HUPutPage() {
         .header-title-wrap {
           display: flex;
           align-items: center;
-          gap: 1.15rem;
+          gap: 1rem;
         }
 
         .header-icon-box {
-          width: 52px;
-          height: 52px;
+          width: 48px;
+          height: 48px;
           border-radius: 12px;
-          background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #1e40af 100%);
+          background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
           display: flex;
           align-items: center;
           justify-content: center;
           color: #ffffff;
-          box-shadow: 0 4px 14px rgba(37, 99, 235, 0.28);
+          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28);
           flex-shrink: 0;
         }
 
         .page-title {
-          font-size: 23px;
+          font-size: 21px;
           font-weight: 800;
           color: #0f172a;
           letter-spacing: -0.3px;
@@ -278,16 +505,16 @@ export default function HUPutPage() {
         }
 
         .page-subtitle {
-          font-size: 13px;
+          font-size: 12.5px;
           color: #64748b;
-          margin-top: 4px;
+          margin-top: 3px;
           margin-bottom: 0;
         }
 
         .header-actions {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
           flex-wrap: wrap;
         }
 
@@ -295,13 +522,13 @@ export default function HUPutPage() {
           background: #ffffff;
           border: 1px solid #cbd5e1;
           color: #334155;
-          padding: 8px 16px;
-          border-radius: 10px;
-          font-size: 13px;
+          padding: 7px 14px;
+          border-radius: 8px;
+          font-size: 12.5px;
           font-weight: 600;
           display: inline-flex;
           align-items: center;
-          gap: 7px;
+          gap: 6px;
           cursor: pointer;
           transition: all 0.15s ease;
         }
@@ -312,38 +539,17 @@ export default function HUPutPage() {
           color: #0f172a;
         }
 
-        .btn-bins-master {
-          background: #f1f5f9;
-          border: 1px solid #e2e8f0;
-          color: #1e293b;
-          padding: 8px 16px;
-          border-radius: 10px;
-          font-size: 13px;
-          font-weight: 600;
-          display: inline-flex;
-          align-items: center;
-          gap: 7px;
-          text-decoration: none;
-          transition: all 0.15s ease;
-        }
-
-        .btn-bins-master:hover {
-          background: #e2e8f0;
-          color: #0f172a;
-          text-decoration: none;
-        }
-
         .btn-register-primary {
           background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
           border: none;
           color: #ffffff;
-          padding: 8px 18px;
-          border-radius: 10px;
-          font-size: 13px;
+          padding: 7px 16px;
+          border-radius: 8px;
+          font-size: 12.5px;
           font-weight: 700;
           display: inline-flex;
           align-items: center;
-          gap: 8px;
+          gap: 7px;
           cursor: pointer;
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
           box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
@@ -354,47 +560,126 @@ export default function HUPutPage() {
           box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
         }
 
-        /* 6 Interactive Stats Cards */
+        /* Universal Barcode Scanner Command Center */
+        .universal-scanner-card {
+          background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+          border: 1px solid #334155;
+          border-radius: 12px;
+          padding: 1rem 1.25rem;
+          color: #ffffff;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+        }
+
+        .scanner-inner-row {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          flex-wrap: wrap;
+        }
+
+        .scanner-label-cluster {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 220px;
+        }
+
+        .scanner-pulse-icon {
+          width: 34px;
+          height: 34px;
+          border-radius: 8px;
+          background: rgba(59, 130, 246, 0.25);
+          color: #60a5fa;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid rgba(96, 165, 250, 0.3);
+        }
+
+        .scanner-form-wrap {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 280px;
+        }
+
+        .scanner-input-field {
+          width: 100%;
+          background: #020617;
+          border: 1.5px solid #3b82f6;
+          border-radius: 8px;
+          padding: 8px 14px;
+          font-size: 14px;
+          font-family: monospace;
+          color: #38bdf8;
+          font-weight: 700;
+          outline: none;
+          box-shadow: 0 0 12px rgba(59, 130, 246, 0.25);
+          transition: all 0.2s ease;
+        }
+
+        .scanner-input-field:focus {
+          border-color: #60a5fa;
+          box-shadow: 0 0 18px rgba(59, 130, 246, 0.45);
+        }
+
+        .scanner-submit-btn {
+          background: #2563eb;
+          border: none;
+          color: #ffffff;
+          font-weight: 700;
+          font-size: 13px;
+          padding: 8px 16px;
+          border-radius: 8px;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          white-space: nowrap;
+          transition: all 0.15s ease;
+        }
+
+        .scanner-submit-btn:hover {
+          background: #1d4ed8;
+        }
+
+        /* 4 Interactive Stats Cards */
         .stats-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-          gap: 0.85rem;
+          gap: 0.75rem;
           width: 100%;
         }
 
         .interactive-stat-card {
           background: #ffffff;
           border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          padding: 1rem 1.15rem;
+          border-radius: 10px;
+          padding: 0.85rem 1rem;
           display: flex;
           align-items: center;
           justify-content: space-between;
           cursor: pointer;
-          transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+          transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
           user-select: none;
         }
 
         .interactive-stat-card:hover {
-          transform: translateY(-2px);
+          transform: translateY(-1.5px);
           border-color: #cbd5e1;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
         }
 
         .interactive-stat-card.active-stat {
           border-color: #2563eb;
           background: #f8faff;
-          box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.22), 0 4px 12px rgba(37, 99, 235, 0.08);
-        }
-
-        .stat-meta {
-          display: flex;
-          flex-direction: column;
+          box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2), 0 3px 8px rgba(37, 99, 235, 0.06);
         }
 
         .stat-label {
-          font-size: 11px;
+          font-size: 10.5px;
           font-weight: 700;
           text-transform: uppercase;
           letter-spacing: 0.5px;
@@ -403,144 +688,123 @@ export default function HUPutPage() {
         }
 
         .stat-value {
-          font-size: 24px;
+          font-size: 22px;
           font-weight: 800;
           line-height: 1.1;
         }
 
         .stat-icon-well {
-          width: 40px;
-          height: 40px;
-          border-radius: 10px;
+          width: 36px;
+          height: 36px;
+          border-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
         }
 
-        /* Main Table Container Card */
+        /* Main Workspace Card */
         .table-card {
           background: #ffffff;
           border: 1px solid #e2e8f0;
           border-radius: 14px;
-          padding: 1.25rem 1.5rem;
+          padding: 1.25rem;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
         }
 
-        /* Table Toolbar */
+        /* Toolbar */
         .table-toolbar {
           display: flex;
           align-items: center;
           justify-content: space-between;
           flex-wrap: wrap;
-          gap: 1rem;
-          margin-bottom: 1.25rem;
-          padding-bottom: 1rem;
+          gap: 10px;
+          margin-bottom: 1rem;
+          padding-bottom: 0.85rem;
           border-bottom: 1px solid #f1f5f9;
         }
 
         .toolbar-left-cluster {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
           flex-wrap: wrap;
         }
 
-        .filter-tab-pill-group {
-          display: inline-flex;
-          background: #f1f5f9;
-          border: 1px solid #e2e8f0;
-          border-radius: 9px;
-          padding: 3px;
-          gap: 3px;
-        }
-
-        .filter-tab-pill {
-          border: none;
-          background: transparent;
-          padding: 6px 14px;
-          font-size: 12.5px;
-          font-weight: 600;
-          border-radius: 7px;
-          color: #64748b;
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          transition: all 0.15s ease;
-        }
-
-        .filter-tab-pill.active {
-          background: #ffffff;
-          color: #0f172a;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-          font-weight: 700;
-        }
-
-        .tab-badge {
-          font-size: 11px;
-          font-weight: 700;
-          padding: 1px 6px;
-          border-radius: 9999px;
-          background: #e2e8f0;
-          color: #475569;
-        }
-
-        .filter-tab-pill.active .tab-badge {
-          background: #eff6ff;
-          color: #1d4ed8;
-        }
-
         .select-filter-control {
-          padding: 6px 12px;
-          font-size: 12.5px;
-          border-radius: 8px;
+          padding: 6px 10px;
+          font-size: 12px;
+          border-radius: 7px;
           border: 1px solid #e2e8f0;
           background: #ffffff;
           color: #334155;
           font-weight: 600;
           outline: none;
           cursor: pointer;
+        }
+
+        .view-mode-toggle {
+          display: inline-flex;
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          border-radius: 7px;
+          padding: 2px;
+          gap: 2px;
+        }
+
+        .view-btn {
+          border: none;
+          background: transparent;
+          padding: 5px 10px;
+          font-size: 12px;
+          font-weight: 600;
+          border-radius: 5px;
+          color: #64748b;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
           transition: all 0.15s ease;
         }
 
-        .select-filter-control:focus {
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        .view-btn.active {
+          background: #ffffff;
+          color: #0f172a;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+          font-weight: 700;
         }
 
         .toolbar-right-cluster {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
           flex-wrap: wrap;
         }
 
         .search-box-wrapper {
           position: relative;
-          min-width: 240px;
+          min-width: 220px;
         }
 
         .search-input-field {
           width: 100%;
-          padding: 7px 32px 7px 32px;
-          font-size: 12.5px;
-          border-radius: 8px;
+          padding: 6px 30px 6px 30px;
+          font-size: 12px;
+          border-radius: 7px;
           border: 1px solid #e2e8f0;
           background: #f8fafc;
           outline: none;
-          transition: all 0.15s ease;
         }
 
         .search-input-field:focus {
           background: #ffffff;
           border-color: #3b82f6;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
         }
 
         .search-icon-affix {
           position: absolute;
-          left: 10px;
+          left: 9px;
           top: 50%;
           transform: translateY(-50%);
           color: #94a3b8;
@@ -549,7 +813,7 @@ export default function HUPutPage() {
 
         .search-clear-btn {
           position: absolute;
-          right: 8px;
+          right: 7px;
           top: 50%;
           transform: translateY(-50%);
           background: transparent;
@@ -558,18 +822,13 @@ export default function HUPutPage() {
           cursor: pointer;
           display: flex;
           align-items: center;
-          justify-content: center;
-          padding: 2px;
         }
 
-        .search-clear-btn:hover {
-          color: #0f172a;
-        }
-
-        /* Modern Sleek Elevated Table */
-        .table-responsive {
-          overflow-x: auto;
-          border-radius: 10px;
+        /* 40 Bins High-Density Table */
+        .dense-table-container {
+          max-height: 580px;
+          overflow-y: auto;
+          border-radius: 8px;
           border: 1px solid #e2e8f0;
         }
 
@@ -577,144 +836,70 @@ export default function HUPutPage() {
           width: 100%;
           border-collapse: separate;
           border-spacing: 0;
-          font-size: 13px;
+          font-size: 12.5px;
           background: #ffffff;
         }
 
         .hu-put-table th {
+          position: sticky;
+          top: 0;
+          z-index: 10;
           background: #f8fafc;
           color: #475569;
           font-weight: 700;
           font-size: 11px;
           text-transform: uppercase;
-          letter-spacing: 0.6px;
-          padding: 12px 14px;
-          border-bottom: 1.5px solid #e2e8f0;
+          letter-spacing: 0.5px;
+          padding: 9px 12px;
+          border-bottom: 1.5px solid #cbd5e1;
           white-space: nowrap;
           text-align: left;
           user-select: none;
         }
 
         .hu-put-table td {
-          padding: 14px 14px;
+          padding: 8px 12px;
           border-bottom: 1px solid #f1f5f9;
           vertical-align: middle;
           color: #1e293b;
-          transition: background 0.15s ease;
-        }
-
-        .hu-put-table tr.table-row-item {
-          transition: all 0.15s ease;
         }
 
         .hu-put-table tr.table-row-item:hover td {
           background: #f8faff;
         }
 
-        .hu-put-table tr.table-row-item:hover td:first-child {
-          border-left: 3px solid #2563eb;
+        .hu-put-table tr.selected-row td {
+          background: #eff6ff !important;
         }
 
-        .hu-put-table tr:last-child td {
-          border-bottom: none;
-        }
-
-        /* Handling Unit ID Capsule */
         .hu-id-capsule {
           display: inline-flex;
           align-items: center;
-          gap: 6px;
+          gap: 5px;
           background: #eff6ff;
           border: 1px solid #dbeafe;
-          padding: 4px 10px;
-          border-radius: 8px;
-          transition: all 0.15s ease;
-        }
-
-        .hu-id-capsule:hover {
-          border-color: #bfdbfe;
-          background: #dbeafe;
+          padding: 3px 8px;
+          border-radius: 6px;
         }
 
         .hu-id-link {
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          font-family: monospace;
           font-weight: 700;
-          font-size: 13px;
+          font-size: 12.5px;
           color: #1d4ed8;
           text-decoration: none;
-          letter-spacing: 0.3px;
         }
 
         .hu-id-link:hover {
           text-decoration: underline;
         }
 
-        .copy-icon-btn {
-          background: transparent;
-          border: none;
-          color: #94a3b8;
-          cursor: pointer;
-          padding: 2px;
-          display: inline-flex;
-          align-items: center;
-          transition: color 0.15s ease;
-        }
-
-        .copy-icon-btn:hover {
-          color: #0f172a;
-        }
-
-        .bin-name-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          background: #f1f5f9;
-          border: 1px solid #e2e8f0;
-          padding: 2px 7px;
-          border-radius: 5px;
-          font-size: 10.5px;
-          font-weight: 700;
-          color: #334155;
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-        }
-
-        /* Visual Compartment Matrix Dots Preview */
-        .matrix-dots-row {
-          display: flex;
-          align-items: center;
-          gap: 3px;
-          margin-top: 5px;
-        }
-
-        .matrix-dot {
-          width: 7px;
-          height: 7px;
-          border-radius: 2px;
-          transition: all 0.15s ease;
-        }
-
-        .matrix-dot.occupied {
-          background: #10b981;
-        }
-
-        .matrix-dot.empty {
-          background: #e2e8f0;
-        }
-
-        /* Capacity Progress Bar */
+        /* Capacity Bar */
         .capacity-cell-wrap {
           display: flex;
           flex-direction: column;
-          gap: 4px;
-          min-width: 135px;
-        }
-
-        .capacity-numbers-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          font-size: 12px;
-          font-weight: 600;
+          gap: 3px;
+          min-width: 130px;
         }
 
         .mini-track {
@@ -731,195 +916,343 @@ export default function HUPutPage() {
           transition: width 0.3s ease;
         }
 
-        /* Dispatch & Action Buttons */
-        :global(a.btn-scan-fill) {
-          background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-          border: 1px solid #1d4ed8 !important;
-          color: #ffffff !important;
-          padding: 8px 18px !important;
-          border-radius: 8px !important;
-          font-size: 13px !important;
-          font-weight: 700 !important;
-          display: inline-flex !important;
-          align-items: center !important;
-          gap: 7px !important;
-          text-decoration: none !important;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-          box-shadow: 0 2px 6px rgba(37, 99, 235, 0.28) !important;
-          white-space: nowrap !important;
-          cursor: pointer !important;
+        /* Operator Action Buttons */
+        .btn-rapid-put {
+          background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+          border: none;
+          color: #ffffff;
+          padding: 5px 12px;
+          border-radius: 6px;
+          font-size: 12px;
+          font-weight: 700;
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          cursor: pointer;
+          box-shadow: 0 1px 4px rgba(37, 99, 235, 0.25);
+          transition: all 0.15s ease;
         }
 
-        :global(a.btn-scan-fill:hover) {
-          background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
-          border-color: #1e40af !important;
-          color: #ffffff !important;
-          text-decoration: none !important;
-          transform: translateY(-1.5px) !important;
-          box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4) !important;
+        .btn-rapid-put:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 3px 8px rgba(37, 99, 235, 0.35);
         }
 
-        :global(a.btn-view-kardex) {
-          background: #f8fafc !important;
-          border: 1px solid #cbd5e1 !important;
-          color: #334155 !important;
-          padding: 8px 16px !important;
-          border-radius: 8px !important;
-          font-size: 13px !important;
-          font-weight: 600 !important;
-          display: inline-flex !important;
-          align-items: center !important;
-          gap: 6px !important;
-          text-decoration: none !important;
-          transition: all 0.15s ease !important;
-          white-space: nowrap !important;
+        .btn-send-kardex-sm {
+          background: #f0fdf4;
+          border: 1px solid #bbf7d0;
+          color: #166534;
+          padding: 5px 10px;
+          border-radius: 6px;
+          font-size: 12px;
+          font-weight: 700;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          cursor: pointer;
+          transition: all 0.15s ease;
         }
 
-        :global(a.btn-view-kardex:hover) {
-          background: #e2e8f0 !important;
-          color: #0f172a !important;
-          text-decoration: none !important;
-          transform: translateY(-1px) !important;
+        .btn-send-kardex-sm:hover {
+          background: #dcfce7;
+          border-color: #86efac;
         }
 
-        @keyframes pulse {
-          0%, 100% {
+        /* Sticky Batch Action Bar */
+        .batch-sticky-bar {
+          position: sticky;
+          bottom: 12px;
+          z-index: 40;
+          background: #0f172a;
+          border: 1px solid #334155;
+          border-radius: 12px;
+          padding: 10px 18px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          color: #ffffff;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+          animation: slideUp 0.25s ease-out;
+        }
+
+        @keyframes slideUp {
+          from {
+            transform: translateY(20px);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
             opacity: 1;
           }
-          50% {
-            opacity: 0.5;
-          }
         }
 
-        .pulse-dot {
-          width: 7px;
-          height: 7px;
-          border-radius: 50%;
+        /* Slide-over Drawer for Rapid Put Station */
+        .drawer-backdrop {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(15, 23, 42, 0.6);
+          backdrop-filter: blur(4px);
+          z-index: 1000;
+          display: flex;
+          justify-content: flex-end;
+          animation: fadeIn 0.2s ease;
+        }
+
+        .drawer-panel {
+          width: 100%;
+          max-width: 620px;
+          height: 100%;
           background: #ffffff;
-          display: inline-block;
-          animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          box-shadow: -4px 0 25px rgba(0, 0, 0, 0.25);
+          display: flex;
+          flex-direction: column;
+          animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
-        @keyframes spin {
+        @keyframes slideInRight {
+          from {
+            transform: translateX(100%);
+          }
           to {
-            transform: rotate(360deg);
+            transform: translateX(0);
           }
         }
-        :global(.spin-animation) {
-          animation: spin 0.8s linear infinite;
+
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
+        .drawer-header {
+          padding: 1.15rem 1.35rem;
+          background: #0f172a;
+          color: #ffffff;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          border-bottom: 1px solid #1e293b;
+        }
+
+        .drawer-body {
+          padding: 1.25rem;
+          overflow-y: auto;
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 1.15rem;
+          background: #f8fafc;
+        }
+
+        .drawer-footer {
+          padding: 1rem 1.25rem;
+          background: #ffffff;
+          border-top: 1px solid #e2e8f0;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
         }
       `}</style>
 
-      {/* Hero Header Card */}
+      {/* Top Header Card */}
       <div className="page-header-card">
         <div className="header-title-wrap">
           <div className="header-icon-box">
-            <PackagePlus size={26} />
+            <PackagePlus size={24} />
           </div>
           <div>
-            <h1 className="page-title">Handling Unit (HU) Put</h1>
+            <h1 className="page-title">Handling Unit (HU) Put Workstation</h1>
             <p className="page-subtitle">
-              Prepare, scan adapters into compartments, and dispatch Handling Units to Kardex PPS shuttles.
+              Scalable multi-bin put management for 40+ bins with hands-free continuous scanning and Kardex dispatch.
             </p>
           </div>
         </div>
 
         <div className="header-actions">
           <button className="btn-reload" onClick={handleRefresh} title="Sync latest status from server">
-            <RefreshCw size={14} className={loading ? 'spin-animation' : ''} />
+            <RefreshCw size={13} className={loading ? 'spin-animation' : ''} />
             Refresh
           </button>
-          <Link href="/app/bins" className="btn-bins-master" title="View all physical bins master registry">
-            <Boxes size={14} /> Bins Master
-          </Link>
           <button className="btn-register-primary" onClick={() => setIsRegisterOpen(true)}>
-            <PackagePlus size={16} /> Register New Bin
+            <PackagePlus size={15} /> Register New Bin
           </button>
         </div>
       </div>
 
-      {/* Interactive Stats Cards */}
+      {/* Universal Barcode Scanner Command Bar */}
+      <div className="universal-scanner-card">
+        <div className="scanner-inner-row">
+          <div className="scanner-label-cluster">
+            <div className="scanner-pulse-icon">
+              <Barcode size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: 800, color: '#f8fafc' }}>
+                Quick Scan Command Bar
+              </div>
+              <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                Scan Bin Barcode or Board Serial Number
+              </div>
+            </div>
+          </div>
+
+          <form className="scanner-form-wrap" onSubmit={handleUniversalScan}>
+            <input
+              ref={universalInputRef}
+              type="text"
+              className="scanner-input-field"
+              placeholder="Scan Barcode (e.g. BIN-001 or SA005157...)"
+              value={universalScanInput}
+              onChange={(e) => setUniversalScanInput(e.target.value)}
+              autoFocus
+            />
+            <button type="submit" className="scanner-submit-btn">
+              <Zap size={14} /> Scan & Action
+            </button>
+          </form>
+        </div>
+
+        {scanFeedback && (
+          <div
+            style={{
+              marginTop: '10px',
+              padding: '8px 12px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background:
+                scanFeedback.type === 'success'
+                  ? 'rgba(34, 197, 94, 0.2)'
+                  : scanFeedback.type === 'error'
+                  ? 'rgba(239, 68, 68, 0.2)'
+                  : 'rgba(59, 130, 246, 0.2)',
+              color:
+                scanFeedback.type === 'success'
+                  ? '#4ade80'
+                  : scanFeedback.type === 'error'
+                  ? '#f87171'
+                  : '#60a5fa',
+              border:
+                scanFeedback.type === 'success'
+                  ? '1px solid rgba(34, 197, 94, 0.4)'
+                  : scanFeedback.type === 'error'
+                  ? '1px solid rgba(239, 68, 68, 0.4)'
+                  : '1px solid rgba(59, 130, 246, 0.4)',
+            }}
+          >
+            {scanFeedback.type === 'success' ? (
+              <CheckCircle2 size={15} />
+            ) : scanFeedback.type === 'error' ? (
+              <AlertCircle size={15} />
+            ) : (
+              <Sparkles size={15} />
+            )}
+            <span>{scanFeedback.text}</span>
+            <button
+              onClick={() => setScanFeedback(null)}
+              style={{
+                marginLeft: 'auto',
+                background: 'transparent',
+                border: 'none',
+                color: 'inherit',
+                cursor: 'pointer',
+              }}
+            >
+              <X size={13} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 4 Interactive Quick Filter Stats */}
       <div className="stats-grid">
-        {/* Total Put Units */}
+        {/* Total Bins */}
         <div
-          className={`interactive-stat-card ${huStatusFilter === 'ALL' ? 'active-stat' : ''}`}
+          className={`interactive-stat-card ${huStatusFilter === 'ALL' && storageFilter === 'ALL' ? 'active-stat' : ''}`}
           onClick={() => {
             setStorageFilter('ALL');
             setHuStatusFilter('ALL');
           }}
           title="Click to show all handling units"
         >
-          <div className="stat-meta">
-            <span className="stat-label">Total Units</span>
-            <span className="stat-value" style={{ color: '#0f172a' }}>
+          <div>
+            <div className="stat-label">Total Bins</div>
+            <div className="stat-value" style={{ color: '#0f172a' }}>
               {stats.total || totalItems}
-            </span>
+            </div>
           </div>
           <div className="stat-icon-well" style={{ background: '#f1f5f9', color: '#475569' }}>
-            <Boxes size={20} />
+            <Boxes size={18} />
           </div>
         </div>
 
-        {/* Empty */}
+        {/* Ready Outside Kardex */}
         <div
-          className={`interactive-stat-card ${huStatusFilter === 'EMPTY' ? 'active-stat' : ''}`}
-          onClick={() => setHuStatusFilter(huStatusFilter === 'EMPTY' ? 'ALL' : 'EMPTY')}
-          title="Click to filter empty bins ready for loading"
+          className={`interactive-stat-card ${storageFilter === 'OUTSIDE_KARDEX' ? 'active-stat' : ''}`}
+          onClick={() => setStorageFilter(storageFilter === 'OUTSIDE_KARDEX' ? 'ALL' : 'OUTSIDE_KARDEX')}
+          title="Filter bins ready outside Kardex for putting materials"
         >
-          <div className="stat-meta">
-            <span className="stat-label">Empty (0%)</span>
-            <span className="stat-value" style={{ color: '#64748b' }}>
-              {stats.empty}
-            </span>
+          <div>
+            <div className="stat-label">Outside Kardex (Ready)</div>
+            <div className="stat-value" style={{ color: '#2563eb' }}>
+              {stats.outsideKardex}
+            </div>
           </div>
-          <div className="stat-icon-well" style={{ background: '#f8fafc', color: '#64748b' }}>
-            <Package size={20} />
+          <div className="stat-icon-well" style={{ background: '#eff6ff', color: '#2563eb' }}>
+            <Zap size={18} />
           </div>
         </div>
 
-        {/* Partial */}
+        {/* Partially Filled */}
         <div
           className={`interactive-stat-card ${huStatusFilter === 'PARTIALLY_FILLED' ? 'active-stat' : ''}`}
-          onClick={() =>
-            setHuStatusFilter(huStatusFilter === 'PARTIALLY_FILLED' ? 'ALL' : 'PARTIALLY_FILLED')
-          }
-          title="Click to filter partially filled bins"
+          onClick={() => setHuStatusFilter(huStatusFilter === 'PARTIALLY_FILLED' ? 'ALL' : 'PARTIALLY_FILLED')}
+          title="Filter partially filled bins"
         >
-          <div className="stat-meta">
-            <span className="stat-label">Partially Filled</span>
-            <span className="stat-value" style={{ color: '#ea580c' }}>
+          <div>
+            <div className="stat-label">Partially Filled</div>
+            <div className="stat-value" style={{ color: '#ea580c' }}>
               {stats.partial}
-            </span>
+            </div>
           </div>
           <div className="stat-icon-well" style={{ background: '#fff7ed', color: '#ea580c' }}>
-            <Package size={20} />
+            <Package size={18} />
           </div>
         </div>
 
-        {/* Full */}
+        {/* Full (Ready to Dispatch) */}
         <div
           className={`interactive-stat-card ${huStatusFilter === 'FULL' ? 'active-stat' : ''}`}
           onClick={() => setHuStatusFilter(huStatusFilter === 'FULL' ? 'ALL' : 'FULL')}
-          title="Click to filter 100% full bins"
+          title="Filter 100% full bins ready for Kardex storage"
         >
-          <div className="stat-meta">
-            <span className="stat-label">Full (100%)</span>
-            <span className="stat-value" style={{ color: '#16a34a' }}>
+          <div>
+            <div className="stat-label">Full (100%)</div>
+            <div className="stat-value" style={{ color: '#16a34a' }}>
               {stats.full}
-            </span>
+            </div>
           </div>
           <div className="stat-icon-well" style={{ background: '#f0fdf4', color: '#16a34a' }}>
-            <CheckCircle2 size={20} />
+            <CheckCircle2 size={18} />
           </div>
         </div>
       </div>
 
-      {/* Main Table Card */}
+      {/* Main Workspace Card */}
       <div className="table-card">
         {/* Table Toolbar */}
         <div className="table-toolbar">
           <div className="toolbar-left-cluster">
-            {/* HU Fill Status Filter */}
+            {/* Fill Level Filter */}
             <select
               className="select-filter-control"
               value={huStatusFilter}
@@ -927,33 +1260,82 @@ export default function HUPutPage() {
             >
               <option value="ALL">All Fill Levels</option>
               <option value="EMPTY">Only Empty (0%)</option>
-              <option value="PARTIALLY_FILLED">Only Partially Filled</option>
-              <option value="FULL">Only 100% Full</option>
+              <option value="PARTIALLY_FILLED">Partially Filled</option>
+              <option value="FULL">Full (100%)</option>
             </select>
 
-            {/* Quick Sort Control */}
+            {/* Storage Location Filter */}
+            <select
+              className="select-filter-control"
+              value={storageFilter}
+              onChange={(e) => setStorageFilter(e.target.value as StorageStatus | 'ALL')}
+            >
+              <option value="ALL">All Storage Locations</option>
+              <option value="OUTSIDE_KARDEX">Outside Kardex (On Floor)</option>
+              <option value="IN_KARDEX">Inside Kardex (ASRS)</option>
+              <option value="DRAFT">Draft</option>
+            </select>
+
+            {/* Sort Control */}
             <select
               className="select-filter-control"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortOption)}
-              title="Sort table rows"
             >
-              <option value="HU_ASC">Sort: HU ID (A-Z)</option>
-              <option value="HU_DESC">Sort: HU ID (Z-A)</option>
+              <option value="HU_ASC">Sort: Bin ID (A-Z)</option>
+              <option value="HU_DESC">Sort: Bin ID (Z-A)</option>
               <option value="CAPACITY_DESC">Sort: Most Filled First</option>
               <option value="CAPACITY_ASC">Sort: Least Filled First</option>
-              <option value="STATUS">Sort: Storage Status</option>
             </select>
+
+            {/* Page Size Switcher for 40 Bins */}
+            <select
+              className="select-filter-control"
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              title="Show up to 50 or 100 bins without pagination"
+            >
+              <option value={20}>20 Bins/page</option>
+              <option value={50}>50 Bins (All 40)</option>
+              <option value={100}>100 Bins</option>
+            </select>
+
+            {/* View Mode Toggle */}
+            <div className="view-mode-toggle">
+              <button
+                className={`view-btn ${viewMode === 'TABLE' ? 'active' : ''}`}
+                onClick={() => setViewMode('TABLE')}
+                title="Dense table view for 40+ bins"
+              >
+                <TableIcon size={13} /> Dense Table
+              </button>
+              <button
+                className={`view-btn ${viewMode === 'CARDS' ? 'active' : ''}`}
+                onClick={() => setViewMode('CARDS')}
+                title="Grid cards view"
+              >
+                <LayoutGrid size={13} /> Cards
+              </button>
+            </div>
           </div>
 
           <div className="toolbar-right-cluster">
+            {/* Quick multi-select action */}
+            <button
+              className="btn-reload"
+              onClick={selectedBinIds.length > 0 ? handleClearSelection : handleSelectAllReady}
+              style={{ fontSize: '11.5px', padding: '5px 10px' }}
+            >
+              {selectedBinIds.length > 0 ? 'Clear Selection' : 'Select All Ready Bins'}
+            </button>
+
             {/* Search Box */}
             <div className="search-box-wrapper">
-              <Search size={14} className="search-icon-affix" />
+              <Search size={13} className="search-icon-affix" />
               <input
                 type="text"
                 className="search-input-field"
-                placeholder="Search Handling Unit ID or PPS..."
+                placeholder="Filter by Bin ID, Model, PPS..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -963,18 +1345,18 @@ export default function HUPutPage() {
                   onClick={() => setSearchQuery('')}
                   title="Clear search"
                 >
-                  <X size={14} />
+                  <X size={13} />
                 </button>
               )}
             </div>
 
-            <span className="text-muted" style={{ fontSize: '12.5px', fontWeight: 600 }}>
+            <span className="text-muted" style={{ fontSize: '12px', fontWeight: 600 }}>
               {sortedHUs.length} {sortedHUs.length === 1 ? 'bin' : 'bins'}
             </span>
           </div>
         </div>
 
-        {/* Table Body */}
+        {/* Content Body */}
         {loading ? (
           <Loader message="Loading handling units for Put operations..." />
         ) : sortedHUs.length === 0 ? (
@@ -983,128 +1365,113 @@ export default function HUPutPage() {
             description={
               searchQuery || storageFilter !== 'ALL' || huStatusFilter !== 'ALL'
                 ? 'No bins match your current filters. Try resetting the filters or clearing the search.'
-                : 'No handling units are available for Put operations. Click "Register New Bin" to add a new physical bin to the floor.'
+                : 'No handling units are available for Put operations. Click "Register New Bin" to add a new physical bin.'
             }
           />
-        ) : (
-          <div className="table-responsive">
+        ) : viewMode === 'TABLE' ? (
+          /* High-Density Table for 40 Bins */
+          <div className="dense-table-container">
             <table className="hu-put-table">
               <thead>
                 <tr>
-                  <th>
-                    <div className="d-flex align-items-center gap-1">
-                      <Package size={13} className="text-muted" />
-                      <span>Handling Unit</span>
-                    </div>
+                  <th style={{ width: '36px' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedBinIds.length === sortedHUs.length && sortedHUs.length > 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedBinIds(sortedHUs.map((h) => h.hu_id));
+                        } else {
+                          setSelectedBinIds([]);
+                        }
+                      }}
+                      title="Select / Deselect all"
+                    />
                   </th>
-                  <th>
-                    <div className="d-flex align-items-center gap-1">
-                      <Layers size={13} className="text-muted" />
-                      <span>Bin Spec & PPS</span>
-                    </div>
-                  </th>
-                  <th>
-                    <div className="d-flex align-items-center gap-1">
-                      <Boxes size={13} className="text-muted" />
-                      <span>Compartment Load</span>
-                    </div>
-                  </th>
-                  <th>
-                    <div className="d-flex align-items-center gap-1">
-                      <CheckCircle2 size={13} className="text-muted" />
-                      <span>HU Status</span>
-                    </div>
-                  </th>
-                  <th>
-                    <div className="d-flex align-items-center gap-1">
-                      <Clock size={13} className="text-muted" />
-                      <span>Last Activity</span>
-                    </div>
-                  </th>
-                  <th style={{ textAlign: 'right' }}>
-                    <div className="d-flex align-items-center justify-content-end gap-1">
-                      <Zap size={13} className="text-muted" />
-                      <span>Operator Actions</span>
-                    </div>
-                  </th>
+                  <th>Handling Unit ID</th>
+                  <th>Type & PPS Station</th>
+                  <th>Compartment Load</th>
+                  <th>Models Stored</th>
+                  <th>Storage Location</th>
+                  <th>HU Status</th>
+                  <th style={{ textAlign: 'right' }}>Operator Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {sortedHUs.map((hu) => {
                   const compartments = hu.compartments || [];
-                  const total = compartments.length || hu.bin_type?.compartment_count || 15;
+                  const total = compartments.length || hu.bin_type?.compartment_count || 30;
                   const occupied = compartments.filter((c) => c.status === 'OCCUPIED').length;
                   const pct = total > 0 ? Math.round((occupied / total) * 100) : 0;
+                  const isSelected = selectedBinIds.includes(hu.hu_id);
 
                   const isOutsideOrDraft =
                     hu.storage_status === 'DRAFT' || hu.storage_status === 'OUTSIDE_KARDEX';
                   const canSendToKardex = isOutsideOrDraft && occupied > 0;
-                  const isInKardex = hu.storage_status === 'IN_KARDEX';
 
-                  // Progress bar color based on percentage
                   const fillColor =
                     pct === 100 ? '#10b981' : pct > 0 ? '#2563eb' : '#cbd5e1';
 
-                  // Dot matrix preview (previewing up to 15 slots)
-                  const dotCount = Math.min(total, 15);
-                  const occupiedCount = Math.min(occupied, dotCount);
-
                   return (
-                    <tr key={hu.id} className="table-row-item">
-                      {/* Handling Unit ID Capsule */}
+                    <tr
+                      key={hu.id}
+                      className={`table-row-item ${isSelected ? 'selected-row' : ''}`}
+                    >
+                      {/* Checkbox */}
                       <td>
-                        <div className="d-flex align-items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelectBin(hu.hu_id)}
+                        />
+                      </td>
+
+                      {/* Bin ID Capsule */}
+                      <td>
+                        <div className="d-flex align-items-center gap-1.5">
                           <div className="hu-id-capsule">
-                            <Barcode size={13} className="text-primary flex-shrink-0" />
-                            <Link
-                              href={`/app/bins/${hu.hu_id}`}
-                              className="hu-id-link"
-                              title="Click to open bin layout and scan parts"
-                            >
-                              {hu.hu_id}
-                            </Link>
+                            <Barcode size={12} className="text-primary flex-shrink-0" />
+                            <span className="hu-id-link">{hu.hu_id}</span>
                           </div>
                           <button
-                            className="copy-icon-btn"
+                            className="btn-reload"
+                            style={{ padding: '2px 4px', border: 'none', background: 'transparent' }}
                             onClick={(e) => handleCopyId(hu.hu_id, e)}
-                            title="Copy Handling Unit ID"
+                            title="Copy Bin ID"
                           >
                             {copiedHuId === hu.hu_id ? (
-                              <Check size={13} className="text-success" />
+                              <Check size={12} className="text-success" />
                             ) : (
-                              <Copy size={13} />
+                              <Copy size={12} className="text-muted" />
                             )}
                           </button>
                         </div>
                       </td>
 
-                      {/* Bin Specification & PPS Station */}
+                      {/* Spec & PPS */}
                       <td>
-                        <div className="d-flex flex-column gap-1">
-                          <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
-                            {hu.bin_type?.name || `Type #${hu.bin_type_id}`}
-                          </span>
-                          <span className="bin-name-badge">
-                            PPS: {hu.bin_type?.bin_name || 'CON_BINA'}
-                          </span>
+                        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '12px' }}>
+                          {hu.bin_type?.name || `Type #${hu.bin_type_id}`}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748b' }}>
+                          PPS: {hu.bin_type?.bin_name || 'CON_BINA'}
                         </div>
                       </td>
 
-                      {/* Compartment Load with Mini Dots & Progress Meter */}
+                      {/* Compartment Load with Mini Progress Meter */}
                       <td>
                         <div className="capacity-cell-wrap">
-                          <div className="capacity-numbers-row">
+                          <div className="d-flex align-items-center justify-content-between" style={{ fontSize: '11.5px' }}>
                             <span>
                               <strong style={{ color: occupied > 0 ? '#16a34a' : '#64748b' }}>
                                 {occupied}
                               </strong>
-                              <span className="text-muted"> / {total} filled</span>
+                              <span className="text-muted"> / {total} slots</span>
                             </span>
                             <span
                               style={{
-                                fontSize: '11px',
-                                color: pct === 100 ? '#15803d' : pct > 0 ? '#1d4ed8' : '#64748b',
                                 fontWeight: 800,
+                                color: pct === 100 ? '#15803d' : pct > 0 ? '#1d4ed8' : '#64748b',
                               }}
                             >
                               {pct}%
@@ -1116,47 +1483,55 @@ export default function HUPutPage() {
                               style={{ width: `${pct}%`, background: fillColor }}
                             />
                           </div>
-
-                          {/* Visual 15-Dot Matrix Slot Indicator */}
-                          <div className="matrix-dots-row" title={`${occupied} of ${total} slots occupied`}>
-                            {Array.from({ length: dotCount }).map((_, idx) => (
-                              <div
-                                key={idx}
-                                className={`matrix-dot ${idx < occupiedCount ? 'occupied' : 'empty'}`}
-                              />
-                            ))}
-                          </div>
                         </div>
                       </td>
 
-                      {/* HU Status Badge */}
+                      {/* Stored Models Preview */}
+                      <td>{getBinModelChips(hu) || <span className="text-muted" style={{ fontSize: '11.5px' }}>Empty</span>}</td>
+
+                      {/* Storage Status */}
+                      <td>
+                        <StorageStatusBadge status={hu.storage_status} />
+                      </td>
+
+                      {/* HU Status */}
                       <td>
                         <HUStatusBadge status={hu.hu_status} />
                       </td>
 
-                      {/* Last Activity & Status */}
+                      {/* Operator Actions */}
                       <td>
-                        <div className="d-flex flex-column gap-1">
-                          <div className="d-flex align-items-center gap-1">
-                            {getLastTxBadge(hu.last_transaction)}
-                          </div>
-                          {hu.transaction_status && (
-                            <div>{getTransactionBadge(hu.transaction_status)}</div>
-                          )}
-                        </div>
-                      </td>
+                        <div className="d-flex align-items-center justify-content-end gap-1.5">
+                          {/* 1-Click Rapid Put (Opens In-Page Drawer) */}
+                          <button
+                            className="btn-rapid-put"
+                            onClick={() => handleOpenDrawer(hu)}
+                            title="Open hands-free rapid continuous scan station"
+                          >
+                            <Zap size={13} />
+                            <span>Rapid Put</span>
+                          </button>
 
-                      {/* Operator Actions Cluster */}
-                      <td>
-                        <div className="d-flex align-items-center justify-content-end gap-2">
+                          {/* Send to Kardex direct button */}
+                          {canSendToKardex && (
+                            <button
+                              className="btn-send-kardex-sm"
+                              onClick={() => setSendToKardexTargetHu(hu)}
+                              title="Generate Kardex PUT file and store bin in Kardex"
+                            >
+                              <Send size={12} />
+                              <span>To Kardex</span>
+                            </button>
+                          )}
+
+                          {/* Full Page Link */}
                           <Link
                             href={`/app/bins/${hu.hu_id}`}
-                            className="btn-scan-fill"
-                            title="Open bin to scan parts and fill compartments"
+                            className="btn-reload"
+                            style={{ padding: '5px 8px' }}
+                            title="View complete bin detail and slot history"
                           >
-                            <PackagePlus size={15} />
-                            <span>Fill / Scan</span>
-                            <ChevronRight size={14} />
+                            <ExternalLink size={12} />
                           </Link>
                         </div>
                       </td>
@@ -1165,6 +1540,99 @@ export default function HUPutPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        ) : (
+          /* Cards Grid View */
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+              gap: '12px',
+            }}
+          >
+            {sortedHUs.map((hu) => {
+              const compartments = hu.compartments || [];
+              const total = compartments.length || hu.bin_type?.compartment_count || 30;
+              const occupied = compartments.filter((c) => c.status === 'OCCUPIED').length;
+              const pct = total > 0 ? Math.round((occupied / total) * 100) : 0;
+              const isSelected = selectedBinIds.includes(hu.hu_id);
+              const isOutsideOrDraft =
+                hu.storage_status === 'DRAFT' || hu.storage_status === 'OUTSIDE_KARDEX';
+              const canSendToKardex = isOutsideOrDraft && occupied > 0;
+
+              return (
+                <div
+                  key={hu.id}
+                  style={{
+                    background: '#ffffff',
+                    border: isSelected ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                    borderRadius: '10px',
+                    padding: '12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                  }}
+                >
+                  <div className="d-flex align-items-center justify-content-between">
+                    <div className="d-flex align-items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleToggleSelectBin(hu.hu_id)}
+                      />
+                      <span style={{ fontWeight: 800, fontFamily: 'monospace', color: '#1d4ed8' }}>
+                        {hu.hu_id}
+                      </span>
+                    </div>
+                    <HUStatusBadge status={hu.hu_status} />
+                  </div>
+
+                  <div className="d-flex align-items-center justify-content-between text-muted" style={{ fontSize: '11.5px' }}>
+                    <span>{hu.bin_type?.name || 'Standard Tote'}</span>
+                    <StorageStatusBadge status={hu.storage_status} />
+                  </div>
+
+                  {/* Capacity Bar */}
+                  <div className="capacity-cell-wrap">
+                    <div className="d-flex align-items-center justify-content-between" style={{ fontSize: '11.5px' }}>
+                      <span>{occupied} of {total} slots</span>
+                      <strong>{pct}%</strong>
+                    </div>
+                    <div className="mini-track">
+                      <div
+                        className="mini-fill"
+                        style={{
+                          width: `${pct}%`,
+                          background: pct === 100 ? '#10b981' : '#2563eb',
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {getBinModelChips(hu)}
+
+                  <div className="d-flex align-items-center gap-2 mt-1">
+                    <button
+                      className="btn-rapid-put"
+                      style={{ flex: 1, justifyContent: 'center' }}
+                      onClick={() => handleOpenDrawer(hu)}
+                    >
+                      <Zap size={13} /> Rapid Put
+                    </button>
+                    {canSendToKardex && (
+                      <button
+                        className="btn-send-kardex-sm"
+                        onClick={() => setSendToKardexTargetHu(hu)}
+                        title="Send to Kardex"
+                      >
+                        <Send size={12} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -1175,19 +1643,294 @@ export default function HUPutPage() {
             totalPages={totalPages}
             onPageChange={(p) => {
               setPage(p);
-              fetchHUs(p, storageFilter, huStatusFilter, searchQuery);
+              fetchHUs(p, pageSize, storageFilter, huStatusFilter, searchQuery);
             }}
             totalItems={totalItems}
-            pageSize={PAGE_SIZE}
+            pageSize={pageSize}
           />
         </div>
       </div>
 
-      {/* Modals */}
+      {/* Sticky Batch Action Bar (Appears when 1 or more bins are checked) */}
+      {selectedBinIds.length > 0 && (
+        <div className="batch-sticky-bar">
+          <div className="d-flex align-items-center gap-3">
+            <CheckSquare size={18} className="text-primary" />
+            <div>
+              <span style={{ fontWeight: 800, fontSize: '14px' }}>
+                {selectedBinIds.length} {selectedBinIds.length === 1 ? 'Bin' : 'Bins'} Selected
+              </span>
+              <div style={{ fontSize: '11.5px', color: '#94a3b8' }}>
+                Batch actions across physical storage floor
+              </div>
+            </div>
+          </div>
+
+          <div className="d-flex align-items-center gap-2">
+            <button
+              className="btn-reload"
+              onClick={handleClearSelection}
+              style={{ background: '#1e293b', color: '#e2e8f0', borderColor: '#475569' }}
+            >
+              Clear
+            </button>
+            <button
+              className="btn-register-primary"
+              onClick={handleBatchSendToKardex}
+              disabled={batchSending}
+              style={{
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.4)',
+              }}
+            >
+              {batchSending ? (
+                <>
+                  <Loader2 size={14} className="spin-animation" /> Dispatching...
+                </>
+              ) : (
+                <>
+                  <Send size={14} /> Batch Send {selectedBinIds.length} Bins to Kardex
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Slide-over Drawer: Hands-Free Rapid Put Station */}
+      {drawerOpen && activeDrawerHu && (
+        <div className="drawer-backdrop" onClick={handleCloseDrawer}>
+          <div className="drawer-panel" onClick={(e) => e.stopPropagation()}>
+            {/* Drawer Header */}
+            <div className="drawer-header">
+              <div className="d-flex align-items-center gap-2">
+                <Zap size={20} className="text-warning" />
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '15px' }}>
+                    Rapid Put Station — {activeDrawerHu.hu_id}
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: '#94a3b8' }}>
+                    {activeDrawerHu.bin_type?.name || '30-Slot ESD Tote'} (PPS:{' '}
+                    {activeDrawerHu.bin_type?.bin_name || 'CON_BINA'})
+                  </div>
+                </div>
+              </div>
+
+              <div className="d-flex align-items-center gap-2">
+                {/* 1-Click Send to Kardex from Drawer */}
+                {(activeDrawerHu.compartments || []).some((c) => c.status === 'OCCUPIED') && (
+                  <button
+                    className="btn-send-kardex-sm"
+                    style={{ background: '#10b981', color: '#ffffff', borderColor: '#059669' }}
+                    onClick={() => {
+                      setSendToKardexTargetHu(activeDrawerHu);
+                    }}
+                    title="Generate Kardex Put File"
+                  >
+                    <Send size={12} /> Send Bin to Kardex
+                  </button>
+                )}
+                <button
+                  onClick={handleCloseDrawer}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    padding: '4px',
+                  }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Drawer Body */}
+            <div className="drawer-body">
+              {/* Hands-Free Scanner Bar */}
+              <div
+                style={{
+                  background: '#ffffff',
+                  border: '1.5px solid #2563eb',
+                  borderRadius: '10px',
+                  padding: '1rem',
+                  boxShadow: '0 4px 12px rgba(37, 99, 235, 0.08)',
+                }}
+              >
+                <div className="d-flex align-items-center justify-content-between mb-2">
+                  <div className="d-flex align-items-center gap-2">
+                    <Barcode size={18} className="text-primary" />
+                    <strong style={{ fontSize: '13px', color: '#0f172a' }}>
+                      Hands-Free Continuous Scan
+                    </strong>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      background: '#eff6ff',
+                      color: '#1d4ed8',
+                      padding: '2px 8px',
+                      borderRadius: '5px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    Auto-Slotting Active
+                  </span>
+                </div>
+
+                <form onSubmit={handleDrawerScanSerial} className="d-flex gap-2">
+                  <input
+                    ref={drawerSerialInputRef}
+                    type="text"
+                    className="scanner-input-field"
+                    style={{
+                      background: '#ffffff',
+                      color: '#0f172a',
+                      border: '1.5px solid #cbd5e1',
+                    }}
+                    placeholder="Scan Board Serial (e.g. SA00515701...)"
+                    value={drawerSerialInput}
+                    onChange={(e) => setDrawerSerialInput(e.target.value)}
+                    disabled={drawerScanning}
+                    autoFocus
+                  />
+                  <button
+                    type="submit"
+                    className="btn-rapid-put"
+                    disabled={drawerScanning || !drawerSerialInput.trim()}
+                    style={{ padding: '0 18px' }}
+                  >
+                    {drawerScanning ? (
+                      <Loader2 size={16} className="spin-animation" />
+                    ) : (
+                      <Zap size={16} />
+                    )}
+                    <span>Put</span>
+                  </button>
+                </form>
+
+                {/* Scan Status Log Notification */}
+                {drawerScanLog && (
+                  <div
+                    style={{
+                      marginTop: '10px',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      background:
+                        drawerScanLog.status === 'SUCCESS'
+                          ? '#f0fdf4'
+                          : drawerScanLog.status === 'FAILED'
+                          ? '#fef2f2'
+                          : '#eff6ff',
+                      color:
+                        drawerScanLog.status === 'SUCCESS'
+                          ? '#15803d'
+                          : drawerScanLog.status === 'FAILED'
+                          ? '#b91c1c'
+                          : '#1d4ed8',
+                      border: `1px solid ${
+                        drawerScanLog.status === 'SUCCESS'
+                          ? '#bbf7d0'
+                          : drawerScanLog.status === 'FAILED'
+                          ? '#fecaca'
+                          : '#bfdbfe'
+                      }`,
+                    }}
+                  >
+                    {drawerScanLog.status === 'SUCCESS' ? (
+                      <CheckCircle2 size={15} />
+                    ) : drawerScanLog.status === 'FAILED' ? (
+                      <AlertCircle size={15} />
+                    ) : (
+                      <Loader2 size={15} className="spin-animation" />
+                    )}
+                    <span>{drawerScanLog.message}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Real-time 30-Slot Compartment Tote Grid */}
+              <div
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  padding: '1rem',
+                }}
+              >
+                <div className="d-flex align-items-center justify-content-between mb-2">
+                  <div className="d-flex align-items-center gap-2">
+                    <Layers size={16} className="text-muted" />
+                    <strong style={{ fontSize: '13px', color: '#0f172a' }}>
+                      Real-Time Compartment Matrix
+                    </strong>
+                  </div>
+                  <span className="text-muted" style={{ fontSize: '11.5px' }}>
+                    {(activeDrawerHu.compartments || []).filter((c) => c.status === 'OCCUPIED').length} of{' '}
+                    {(activeDrawerHu.compartments || []).length || 30} slots occupied
+                  </span>
+                </div>
+
+                {drawerLoading ? (
+                  <Loader message="Refreshing tote slots..." />
+                ) : (
+                  <CompartmentGrid
+                    compartments={activeDrawerHu.compartments || []}
+                    huId={activeDrawerHu.hu_id}
+                    binName={activeDrawerHu.bin_type?.bin_name}
+                    binType={activeDrawerHu.bin_type?.name}
+                    onSelectEmpty={(slotNum) => {
+                      // Clicking an empty slot pre-selects it
+                      drawerSerialInputRef.current?.focus();
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Drawer Footer */}
+            <div className="drawer-footer">
+              <Link
+                href={`/app/bins/${activeDrawerHu.hu_id}`}
+                className="btn-reload"
+                style={{ fontSize: '12px' }}
+              >
+                Open Full Detail Page <ChevronRight size={13} />
+              </Link>
+              <button className="btn-reload" onClick={handleCloseDrawer}>
+                Done & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Send to Kardex Modal */}
+      {sendToKardexTargetHu && (
+        <SendToKardexModal
+          isOpen={!!sendToKardexTargetHu}
+          hu={sendToKardexTargetHu}
+          onClose={() => setSendToKardexTargetHu(null)}
+          onSuccess={() => {
+            setSendToKardexTargetHu(null);
+            fetchHUs(page, pageSize, storageFilter, huStatusFilter, searchQuery);
+            if (activeDrawerHu) {
+              refreshActiveDrawerBin(activeDrawerHu.hu_id);
+            }
+          }}
+        />
+      )}
+
+      {/* Register New Bin Modal */}
       <RegisterBinModal
         isOpen={isRegisterOpen}
         onClose={() => setIsRegisterOpen(false)}
-        onSuccess={handleSuccess}
+        onSuccess={() => fetchHUs(page, pageSize, storageFilter, huStatusFilter, searchQuery)}
       />
     </div>
   );

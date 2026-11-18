@@ -848,9 +848,11 @@ exports.findByModelAndQty = asyncHandler(async (req, res) => {
         const offset = (Number(page) - 1) * limit;
 
         // Fetch paginated rows (putting seed serial first if one was scanned)
+        const isPg = db.sequelize.getDialect() === 'postgres';
+        const putSerialCol = isPg ? '"put"."serial_number"' : 'put.serial_number';
         const orderClause = seedSerial
             ? [
-                [db.sequelize.literal(`CASE WHEN serial_number = ${db.sequelize.escape(seedSerial)} THEN 0 ELSE 1 END`), 'ASC'],
+                [db.sequelize.literal(`CASE WHEN ${putSerialCol} = ${db.sequelize.escape(seedSerial)} THEN 0 ELSE 1 END`), 'ASC'],
                 ['birth_date', 'ASC']
             ]
             : [['birth_date', 'ASC']];
