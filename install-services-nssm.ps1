@@ -78,6 +78,12 @@ if (-not $SkipBuild) {
 Write-Host ""
 Write-Host "[2/4] Registering Backend Service (KardexJblBackend)..." -ForegroundColor Yellow
 
+Set-Location $backendPath
+if (-not (Test-Path "node_modules")) {
+    Write-Host "Installing backend dependencies..." -ForegroundColor Gray
+    npm install
+}
+
 # Stop and remove if previously installed
 & $nssmPath stop KardexJblBackend 2>$null
 & $nssmPath remove KardexJblBackend confirm 2>$null
