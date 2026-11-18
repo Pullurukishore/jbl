@@ -54,10 +54,12 @@ exports.updateUser = asyncHandler(async (req, res) => {
         if (!user) return res.status(404).json({ error: 'User not found' });
         const role = req.body.role || user.role;
         const access_type = normalizeAccessType(role, req.body.access_type || user.access_type);
+        const is_active = req.body.is_active !== undefined ? Boolean(req.body.is_active) : user.is_active;
         await user.update({
             ...req.body,
             role,
             access_type,
+            is_active,
             password: user.password,
             updated_by: req.user?.id
         });
@@ -86,24 +88,39 @@ exports.getAll = asyncHandler(async (req, res) => {
             const [column, operation] = key.split('.');
             if (operation) {
                 if (!whereConditions[column]) whereConditions[column] = {};
+                let val = filters[key];
+                if (val === 'true') val = true;
+                else if (val === 'false') val = false;
+
                 switch (operation) {
                     case 'greaterThan':
-                        whereConditions[column][Op.gt] = filters[key];
+                        whereConditions[column][Op.gt] = val;
                         break;
                     case 'lessThan':
-                        whereConditions[column][Op.lt] = filters[key];
+                        whereConditions[column][Op.lt] = val;
                         break;
                     case 'contains':
-                        whereConditions[column][Op.like] = `%${filters[key]}%`;
+                        whereConditions[column][Op.like] = `%${val}%`;
                         break;
                     case 'equals':
-                        whereConditions[column][Op.eq] = filters[key];
+                        whereConditions[column][Op.eq] = val;
                         break;
                     default:
                         throw new Error(`Unsupported filter operation: ${operation}`);
                 }
             }
         });
+
+        if (req.query.search && req.query.search.trim()) {
+            const s = req.query.search.trim();
+            const likeOp = dialect === 'postgres' ? Op.iLike : Op.like;
+            whereConditions[Op.or] = [
+                { user_id: { [likeOp]: `%${s}%` } },
+                { first_name: { [likeOp]: `%${s}%` } },
+                { last_name: { [likeOp]: `%${s}%` } },
+                { email: { [likeOp]: `%${s}%` } }
+            ];
+        }
 
         // Calculate pagination values
         const offset = (page - 1) * size;
@@ -154,10 +171,37 @@ exports.getAll = asyncHandler(async (req, res) => {
 });
 
 
+exports.toggleStatus = asyncHandler(async (req, res) => {
+    try {
+        const user = await db.user.findByPk(req.params.id);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        if (req.user?.id == user.id) {
+            return res.status(400).json({ error: 'You cannot change your own active status.' });
+        }
+        const is_active = req.body.is_active !== undefined ? Boolean(req.body.is_active) : !user.is_active;
+        await user.update({ is_active, updated_by: req.user?.id });
+        res.status(200).json({
+            success: true,
+            is_active,
+            message: `User is now ${is_active ? 'ACTIVE' : 'INACTIVE'}.`
+        });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
 exports.deleteUser = asyncHandler(async (req, res) => {
     try {
         const user = await db.user.findByPk(req.params.id);
         if (!user) return res.status(404).json({ error: 'User not found' });
+        if (req.user?.id == user.id) {
+            return res.status(400).json({ error: 'You cannot delete your own account.' });
+        }
+        if (user.is_active !== false) {
+            return res.status(400).json({
+                error: 'Active users cannot be deleted. Please set user to INACTIVE first before deleting.'
+            });
+        }
         await user.destroy();
         res.status(204).send();
     } catch (err) {

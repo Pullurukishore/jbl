@@ -8,6 +8,7 @@ export interface User {
   access_type?: AccessType;
   user_id: string;
   email: string | null;
+  is_active?: boolean;
   created_by: string;
   updated_by: string;
   created_at: string;
@@ -34,6 +35,7 @@ export interface CreateUserPayload {
   user_id: string;
   email?: string;
   password: string;
+  is_active?: boolean;
 }
 
 export interface UpdateUserPayload {
@@ -43,6 +45,7 @@ export interface UpdateUserPayload {
   access_type?: AccessType;
   user_id?: string;
   email?: string;
+  is_active?: boolean;
 }
 
 export interface ChangePasswordPayload {

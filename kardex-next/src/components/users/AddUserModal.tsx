@@ -26,6 +26,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'ADMIN' | 'USER'>('USER');
   const [accessType, setAccessType] = useState<AccessType>('BOTH');
+  const [isActive, setIsActive] = useState<boolean>(true);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -41,6 +42,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         setPassword('');
         setRole(userToEdit.role || 'USER');
         setAccessType(userToEdit.role === 'ADMIN' ? 'BOTH' : userToEdit.access_type || 'BOTH');
+        setIsActive(userToEdit.is_active !== false);
       } else {
         setFirstName('');
         setLastName('');
@@ -49,6 +51,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         setPassword('');
         setRole('USER');
         setAccessType('BOTH');
+        setIsActive(true);
       }
       setErrorMsg('');
     }
@@ -75,6 +78,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
           email,
           role,
           access_type: effectiveAccess,
+          is_active: isActive,
         });
 
         if (password) {
@@ -92,6 +96,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
           password,
           role,
           access_type: effectiveAccess,
+          is_active: isActive,
         };
         await apiPost('/user/create', payload);
       }
@@ -218,6 +223,38 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
             align-items: center;
             gap: 8px;
           }
+
+          .status-toggle-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+          }
+
+          .status-btn {
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            border: 1.5px solid #e2e8f0;
+            background: #ffffff;
+            color: #64748b;
+            cursor: pointer;
+            transition: all 0.15s ease;
+          }
+
+          .status-btn.active-on {
+            background: #f0fdf4;
+            border-color: #22c55e;
+            color: #15803d;
+            box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15);
+          }
+
+          .status-btn.active-off {
+            background: #fef2f2;
+            border-color: #ef4444;
+            color: #b91c1c;
+            box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
+          }
         `}</style>
 
         {errorMsg && <div className="error-box">{errorMsg}</div>}
@@ -339,6 +376,44 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
             onChange={(e) => setPassword(e.target.value)}
             required={!isEdit}
           />
+        </div>
+
+        <div>
+          <label className="form-label d-flex justify-content-between align-items-center mb-1">
+            <span>Account Status</span>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                color: isActive ? '#15803d' : '#b91c1c',
+                textTransform: 'uppercase',
+                letterSpacing: '0.4px',
+              }}
+            >
+              {isActive ? '● Active' : '○ Inactive'}
+            </span>
+          </label>
+          <div className="status-toggle-row">
+            <button
+              type="button"
+              className={`status-btn ${isActive ? 'active-on' : ''}`}
+              onClick={() => setIsActive(true)}
+            >
+              Active
+            </button>
+            <button
+              type="button"
+              className={`status-btn ${!isActive ? 'active-off' : ''}`}
+              onClick={() => setIsActive(false)}
+            >
+              Inactive
+            </button>
+          </div>
+          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '5px' }}>
+            {isActive
+              ? 'Active users can sign in and perform operations. Active users cannot be deleted.'
+              : 'Inactive users cannot sign in. Only inactive user accounts can be permanently deleted.'}
+          </div>
         </div>
 
         <button type="submit" className="btn-submit" disabled={loading}>

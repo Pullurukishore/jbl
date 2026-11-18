@@ -43,6 +43,11 @@ module.exports = (sequelize, DataTypes) => {
         created_at: {
             type: DataTypes.DATE,
             defaultValue: DataTypes.NOW,
+        },
+        is_active: {
+            type: DataTypes.BOOLEAN,
+            allowNull: false,
+            defaultValue: true,
         }
     },
         {
@@ -70,6 +75,10 @@ module.exports = (sequelize, DataTypes) => {
                     ALTER TABLE "user"
                     ADD COLUMN IF NOT EXISTS "access_type" "enum_user_access_type" NOT NULL DEFAULT 'BOTH';
                 `);
+                await sequelize.query(`
+                    ALTER TABLE "user"
+                    ADD COLUMN IF NOT EXISTS "is_active" BOOLEAN NOT NULL DEFAULT TRUE;
+                `);
             } else {
                 const qi = sequelize.getQueryInterface();
                 const tableDesc = await qi.describeTable('user');
@@ -78,6 +87,13 @@ module.exports = (sequelize, DataTypes) => {
                         type: DataTypes.ENUM(['PUT_ONLY', 'PICK_ONLY', 'BOTH']),
                         allowNull: false,
                         defaultValue: 'BOTH',
+                    });
+                }
+                if (!tableDesc.is_active) {
+                    await qi.addColumn('user', 'is_active', {
+                        type: DataTypes.BOOLEAN,
+                        allowNull: false,
+                        defaultValue: true,
                     });
                 }
             }

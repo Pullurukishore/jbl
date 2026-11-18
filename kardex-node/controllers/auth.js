@@ -28,6 +28,11 @@ exports.authenticate = asyncHandler(async (req, res) => {
         return res.status(401).json('Invalid password!');
     }
 
+    // Check if the user account is active
+    if (user.is_active === false) {
+        return res.status(403).json('Account is deactivated. Please contact an administrator.');
+    }
+
     // Sign a JWT token
     const userData = user.get();
     delete userData.password;
