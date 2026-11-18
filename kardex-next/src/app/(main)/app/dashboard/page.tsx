@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ViewLogsModal } from '@/components/dashboard/ViewLogsModal';
 import { PartScanLogsModal } from '@/components/dashboard/PartScanLogsModal';
 import { ScanModal } from '@/components/dashboard/ScanModal';
 import { ScanAndStoreModal } from '@/components/dashboard/ScanAndStoreModal';
@@ -137,10 +137,6 @@ export default function DashboardPage() {
   const [isHUPutModalOpen, setIsHUPutModalOpen] = useState(false);
   const [isPutModalOpen, setIsPutModalOpen] = useState(false);
   const [isPickModalOpen, setIsPickModalOpen] = useState(false);
-  const [viewLogPutId, setViewLogPutId] = useState<number | null>(null);
-  const [viewLogPickId, setViewLogPickId] = useState<number | null>(null);
-  const [selectedPutForLogs, setSelectedPutForLogs] = useState<Put | null>(null);
-  const [isViewLogModalOpen, setIsViewLogModalOpen] = useState(false);
   const [partLogSerial, setPartLogSerial] = useState<string | undefined>(undefined);
   const [isPartLogModalOpen, setIsPartLogModalOpen] = useState(false);
 
@@ -896,18 +892,13 @@ export default function DashboardPage() {
                   <tr key={row.id}>
                     <td>
                       <div className="d-flex align-items-center justify-content-between gap-1">
-                        <span
-                          className="btn-link-custom"
-                          onClick={() => {
-                            setSelectedPutForLogs(row);
-                            setViewLogPutId(row.id);
-                            setViewLogPickId(row.pick_id);
-                            setIsViewLogModalOpen(true);
-                          }}
-                          title="Click to view PUT & PICK process logs"
+                        <Link
+                          href={`/app/logs/${encodeURIComponent(row.serial_number)}?putId=${row.id}`}
+                          className="btn-link-custom text-decoration-none fw-semibold"
+                          title="Click to view complete PUT & PICK process page"
                         >
                           {row.serial_number}
-                        </span>
+                        </Link>
 
                         <button
                           className="btn btn-sm p-1 border-0 text-muted ms-1"
@@ -1094,18 +1085,6 @@ export default function DashboardPage() {
           fetchCounts();
           fetchPuts(1);
         }}
-      />
-
-      <ViewLogsModal
-        isOpen={isViewLogModalOpen}
-        onClose={() => {
-          setIsViewLogModalOpen(false);
-          setSelectedPutForLogs(null);
-        }}
-        put={selectedPutForLogs}
-        putId={viewLogPutId}
-        pickId={viewLogPickId}
-        onRefresh={() => fetchPuts(page)}
       />
 
       <PartScanLogsModal

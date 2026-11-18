@@ -983,7 +983,9 @@ exports.searchAll = asyncHandler(async (req, res) => {
                     ],
                 },
                 { model: db.files, as: 'put_text_file', foreignKey: 'text_file_id' },
-                { model: db.files, as: 'put_po_file', foreignKey: 'po_file_id' }
+                { model: db.files, as: 'put_po_file', foreignKey: 'po_file_id' },
+                { model: db.handling_unit, required: false, include: [{ model: db.bin_type, required: false }] },
+                { model: db.compartment, required: false }
             ],
             attributes: {
                 include: [

@@ -32,7 +32,8 @@ Thumbs.db
 *.sublime-workspace
 
 # Logs
-logs/
+/logs/
+kardex-node/logs/
 *.log
 npm-debug.log*
 

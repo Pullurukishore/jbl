@@ -25,7 +25,25 @@ export interface Put {
   pick_id: number | null;
   text_file_id: number | null;
   po_file_id: number | null;
+  handling_unit_id?: number | null;
+  compartment_id?: number | null;
   // Joined fields
+  handling_unit?: {
+    id: number;
+    hu_id: string;
+    status: string;
+    capacity: number;
+    bin_type?: {
+      id: number;
+      name: string;
+      compartments: number;
+    };
+  };
+  compartment?: {
+    id: number;
+    compartment_number: number;
+    status: string;
+  };
   user_first_name?: string;
   user_last_name?: string;
   user_id?: string;
