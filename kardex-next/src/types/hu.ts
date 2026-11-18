@@ -35,6 +35,7 @@ export interface HandlingUnit {
   registered_by: string;
   created_at: string;
   updated_at: string;
+  put_order_seq?: number;
   bin_type?: BinType;
   compartments?: Compartment[];
 }

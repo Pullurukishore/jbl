@@ -17,8 +17,10 @@ import {
   Send,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   Loader2,
   RefreshCw,
+  RotateCw,
   Copy,
   Check,
   Layers,
@@ -56,6 +58,8 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
   const [isScanPickModalOpen, setIsScanPickModalOpen] = useState(false);
   const [selectedPickCompartment, setSelectedPickCompartment] = useState<number | null>(null);
   const [isSendToKardexOpen, setIsSendToKardexOpen] = useState(false);
+  const [isResendConfirmOpen, setIsResendConfirmOpen] = useState(false);
+  const [resendAcknowledge, setResendAcknowledge] = useState(false);
   const [pickCompartmentTarget, setPickCompartmentTarget] = useState<Compartment | null>(null);
   const [pickingSlot, setPickingSlot] = useState(false);
   const [sendingPick, setSendingPick] = useState(false);
@@ -264,6 +268,19 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
   const isLocked = !canPut;
   const isFloorBin = hu.storage_status === 'DRAFT' || hu.storage_status === 'OUTSIDE_KARDEX';
   const canSendToKardex = canPut && occupiedCount > 0;
+  const isAlreadySent =
+    hu.storage_status === 'IN_KARDEX' ||
+    hu.last_transaction === 'PUT' ||
+    Boolean(hu.put_order_seq && hu.put_order_seq > 0);
+
+  const handleInitiateSend = () => {
+    if (isAlreadySent) {
+      setResendAcknowledge(false);
+      setIsResendConfirmOpen(true);
+    } else {
+      setIsSendToKardexOpen(true);
+    }
+  };
 
   return (
     <div className="hu-detail-fullscreen">
@@ -638,17 +655,33 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
 
           {canSendToKardex && (
             <button
-              className="btn btn-sm btn-success fw-bold d-flex align-items-center gap-1"
-              onClick={() => setIsSendToKardexOpen(true)}
+              className={`btn btn-sm fw-bold d-flex align-items-center gap-1 ${
+                isAlreadySent ? 'btn-warning' : 'btn-success'
+              }`}
+              onClick={handleInitiateSend}
               disabled={occupiedCount === 0}
+              title={
+                isAlreadySent
+                  ? 'Bin was previously sent to Kardex. Click to initiate re-dispatch confirmation.'
+                  : 'Transmit PUT order file and store bin in Kardex'
+              }
               style={{
                 fontSize: '11.5px',
                 padding: '4px 12px',
                 borderRadius: '7px',
                 opacity: occupiedCount === 0 ? 0.6 : 1,
+                background: isAlreadySent
+                  ? 'linear-gradient(135deg, #d97706 0%, #b45309 100%)'
+                  : 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                borderColor: isAlreadySent ? '#b45309' : '#15803d',
+                color: '#ffffff',
+                boxShadow: isAlreadySent
+                  ? '0 2px 6px rgba(217, 119, 6, 0.28)'
+                  : '0 2px 6px rgba(22, 163, 74, 0.28)',
               }}
             >
-              <Send size={13} /> Send to Kardex ({occupiedCount})
+              {isAlreadySent ? <RotateCw size={13} /> : <Send size={13} />}
+              <span>{isAlreadySent ? `Resend to Kardex (${occupiedCount})` : `Send to Kardex (${occupiedCount})`}</span>
             </button>
           )}
 
@@ -801,11 +834,166 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
               compartmentNumber={selectedCompartment}
               embedded={true}
               isFull={isBinFull}
-              onSendToKardex={() => setIsSendToKardexOpen(true)}
+              onSendToKardex={handleInitiateSend}
             />
           </div>
         )}
       </div>
+
+      {/* Resend Double Confirmation Modal */}
+      {isResendConfirmOpen && (
+        <Modal
+          isOpen={isResendConfirmOpen}
+          onClose={() => {
+            setIsResendConfirmOpen(false);
+            setResendAcknowledge(false);
+          }}
+          title={
+            <div className="d-flex align-items-center gap-2">
+              <div
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  background: '#fef3c7',
+                  color: '#b45309',
+                  border: '1px solid #fde68a',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <AlertTriangle size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: '15.5px', fontWeight: 800, color: '#92400e' }}>
+                  Resend Confirmation Required
+                </div>
+                <div style={{ fontSize: '11.5px', color: '#b45309' }}>
+                  Handling Unit {hu.hu_id} was already dispatched to Kardex
+                </div>
+              </div>
+            </div>
+          }
+          maxWidth="520px"
+        >
+          <div className="d-flex flex-column gap-3">
+            {/* Warning Callout Box */}
+            <div
+              style={{
+                background: '#fffbeb',
+                border: '1.5px solid #fde68a',
+                borderRadius: '10px',
+                padding: '12px 14px',
+                fontSize: '13px',
+                color: '#92400e',
+                lineHeight: 1.45,
+              }}
+            >
+              <div className="fw-bold mb-1 d-flex align-items-center gap-1.5">
+                <AlertCircle size={15} className="text-warning flex-shrink-0" />
+                <span>Notice: This bin has already been sent to Kardex!</span>
+              </div>
+              <p className="mb-0" style={{ fontSize: '12.5px', color: '#78350f' }}>
+                Storage status is currently <strong>{hu.storage_status}</strong> and last transaction was <strong>{hu.last_transaction || 'PUT'}</strong>.
+                Resending will generate a <strong>new PUT sequence order batch</strong> and re-transmit all <strong>{occupiedCount} occupied part(s)</strong> to the Kardex PPS shuttle.
+              </p>
+            </div>
+
+            {/* Quick Summary of Dispatched Load */}
+            <div
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '9px',
+                padding: '10px 14px',
+                fontSize: '12.5px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+              }}
+            >
+              <div className="d-flex justify-content-between">
+                <span className="text-muted">Handling Unit:</span>
+                <strong className="font-monospace text-primary">{hu.hu_id}</strong>
+              </div>
+              <div className="d-flex justify-content-between">
+                <span className="text-muted">PPS Station:</span>
+                <span className="font-monospace fw-bold">{hu.bin_type?.bin_name || 'CON_BINC'}</span>
+              </div>
+              <div className="d-flex justify-content-between">
+                <span className="text-muted">Occupied Parts to Dispatch:</span>
+                <strong className="text-success">{occupiedCount} parts</strong>
+              </div>
+              {hu.put_order_seq != null && (
+                <div className="d-flex justify-content-between">
+                  <span className="text-muted">Previous Batch Sequence:</span>
+                  <span className="badge bg-secondary">Sequence #{hu.put_order_seq}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Double Confirmation Checkbox Guard */}
+            <label
+              className="d-flex align-items-start gap-2.5 p-2 rounded-2 border"
+              style={{
+                background: resendAcknowledge ? '#f0fdf4' : '#ffffff',
+                borderColor: resendAcknowledge ? '#86efac' : '#cbd5e1',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <input
+                type="checkbox"
+                className="form-check-input mt-0.5"
+                checked={resendAcknowledge}
+                onChange={(e) => setResendAcknowledge(e.target.checked)}
+                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: '12.5px', fontWeight: 600, color: resendAcknowledge ? '#15803d' : '#334155' }}>
+                I understand this bin was already sent and confirm re-dispatching to Kardex.
+              </span>
+            </label>
+
+            {/* Action Buttons */}
+            <div className="d-flex justify-content-end gap-2 pt-2 border-top">
+              <button
+                type="button"
+                className="btn btn-sm btn-light border px-3"
+                onClick={() => {
+                  setIsResendConfirmOpen(false);
+                  setResendAcknowledge(false);
+                }}
+                style={{ fontWeight: 600 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm px-3 d-flex align-items-center gap-1.5 fw-bold"
+                disabled={!resendAcknowledge}
+                onClick={() => {
+                  setIsResendConfirmOpen(false);
+                  setResendAcknowledge(false);
+                  setIsSendToKardexOpen(true);
+                }}
+                style={{
+                  background: resendAcknowledge
+                    ? 'linear-gradient(135deg, #d97706 0%, #b45309 100%)'
+                    : '#f3f4f6',
+                  borderColor: resendAcknowledge ? '#b45309' : '#e5e7eb',
+                  color: resendAcknowledge ? '#ffffff' : '#9ca3af',
+                  boxShadow: resendAcknowledge ? '0 2px 6px rgba(217, 119, 6, 0.3)' : 'none',
+                  cursor: resendAcknowledge ? 'pointer' : 'not-allowed',
+                }}
+              >
+                <RotateCw size={13} />
+                <span>Confirm & Resend to Kardex</span>
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Send to Kardex Modal */}
       {isSendToKardexOpen && (
@@ -817,6 +1005,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
             fetchLayout(true);
           }}
           hu={hu}
+          isResend={isAlreadySent}
         />
       )}
 

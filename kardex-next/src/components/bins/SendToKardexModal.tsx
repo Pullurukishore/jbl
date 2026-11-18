@@ -18,6 +18,8 @@ import {
   ArrowRight,
   ShieldCheck,
   CheckCircle,
+  RotateCw,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface SendResult {
@@ -35,6 +37,7 @@ interface SendToKardexModalProps {
   onClose: () => void;
   onSuccess: (result?: SendResult) => void;
   hu: HandlingUnit;
+  isResend?: boolean;
 }
 
 type Step = 'preview' | 'sent';
@@ -44,6 +47,7 @@ export const SendToKardexModal: React.FC<SendToKardexModalProps> = ({
   onClose,
   onSuccess,
   hu,
+  isResend = false,
 }) => {
   const [step, setStep] = useState<Step>('preview');
   const [sending, setSending] = useState(false);
@@ -141,22 +145,24 @@ export const SendToKardexModal: React.FC<SendToKardexModalProps> = ({
                 width: '32px',
                 height: '32px',
                 borderRadius: '8px',
-                background: 'rgba(37, 99, 235, 0.12)',
-                color: '#2563eb',
-                border: '1px solid rgba(37, 99, 235, 0.25)',
+                background: isResend ? '#fef3c7' : 'rgba(37, 99, 235, 0.12)',
+                color: isResend ? '#b45309' : '#2563eb',
+                border: isResend ? '1px solid #fde68a' : '1px solid rgba(37, 99, 235, 0.25)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Send size={18} />
+              {isResend ? <RotateCw size={17} /> : <Send size={18} />}
             </div>
             <div>
               <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
-                Send to Kardex — {hu.hu_id}
+                {isResend ? 'Resend to Kardex' : 'Send to Kardex'} — {hu.hu_id}
               </div>
-              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
-                Generate PUT file and store bin in Kardex
+              <div style={{ fontSize: '12px', color: isResend ? '#b45309' : '#64748b', marginTop: '1px' }}>
+                {isResend
+                  ? 'Re-generating PUT file and re-transmitting to Kardex PPS'
+                  : 'Generate PUT file and store bin in Kardex'}
               </div>
             </div>
           </div>
@@ -471,6 +477,27 @@ export const SendToKardexModal: React.FC<SendToKardexModalProps> = ({
         {/* STEP: PREVIEW */}
         {step === 'preview' && (
           <>
+            {isResend && (
+              <div
+                style={{
+                  background: '#fffbeb',
+                  border: '1.5px solid #fde68a',
+                  borderRadius: '9px',
+                  padding: '9px 13px',
+                  fontSize: '12.5px',
+                  color: '#92400e',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <AlertTriangle size={16} className="text-warning flex-shrink-0" />
+                <span>
+                  <strong>Re-dispatch Notice:</strong> This bin was previously transmitted. Confirming will generate Order Batch Sequence #{(hu.put_order_seq || 1) + 1}.
+                </span>
+              </div>
+            )}
+
             <div className="info-card">
               <div className="info-row">
                 <span className="info-label">Bin ID</span>
@@ -531,9 +558,27 @@ export const SendToKardexModal: React.FC<SendToKardexModalProps> = ({
               className="btn-send-custom"
               onClick={handleSendToKardex}
               disabled={sending || occupiedCompartments.length === 0}
+              style={{
+                background: isResend
+                  ? 'linear-gradient(135deg, #d97706 0%, #b45309 100%)'
+                  : 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                boxShadow: isResend
+                  ? '0 4px 12px rgba(217, 119, 6, 0.28)'
+                  : '0 4px 12px rgba(22, 163, 74, 0.25)',
+              }}
             >
-              {sending ? <Loader2 size={17} className="spin-ani" /> : <Send size={17} />}
-              {sending ? 'Generating PUT File...' : `Generate PUT File & Send (${occupiedCompartments.length} Parts)`}
+              {sending ? (
+                <Loader2 size={17} className="spin-ani" />
+              ) : isResend ? (
+                <RotateCw size={17} />
+              ) : (
+                <Send size={17} />
+              )}
+              {sending
+                ? 'Generating PUT File...'
+                : isResend
+                ? `Generate PUT File & Resend (${occupiedCompartments.length} Parts)`
+                : `Generate PUT File & Send (${occupiedCompartments.length} Parts)`}
             </button>
           </>
         )}
