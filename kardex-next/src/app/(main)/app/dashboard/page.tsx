@@ -30,7 +30,6 @@ import {
   CheckCircle2,
   Layers,
   Box,
-  History,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -140,6 +139,7 @@ export default function DashboardPage() {
   const [isPickModalOpen, setIsPickModalOpen] = useState(false);
   const [viewLogPutId, setViewLogPutId] = useState<number | null>(null);
   const [viewLogPickId, setViewLogPickId] = useState<number | null>(null);
+  const [selectedPutForLogs, setSelectedPutForLogs] = useState<Put | null>(null);
   const [isViewLogModalOpen, setIsViewLogModalOpen] = useState(false);
   const [partLogSerial, setPartLogSerial] = useState<string | undefined>(undefined);
   const [isPartLogModalOpen, setIsPartLogModalOpen] = useState(false);
@@ -889,7 +889,6 @@ export default function DashboardPage() {
                   <th>PUT File</th>
                   <th>Pick Status</th>
                   <th>Pick File</th>
-                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -900,9 +899,12 @@ export default function DashboardPage() {
                         <span
                           className="btn-link-custom"
                           onClick={() => {
-                            setPartLogSerial(row.serial_number);
-                            setIsPartLogModalOpen(true);
+                            setSelectedPutForLogs(row);
+                            setViewLogPutId(row.id);
+                            setViewLogPickId(row.pick_id);
+                            setIsViewLogModalOpen(true);
                           }}
+                          title="Click to view PUT & PICK process logs"
                         >
                           {row.serial_number}
                         </span>
@@ -1038,29 +1040,6 @@ export default function DashboardPage() {
                         '-'
                       )}
                     </td>
-                    <td className="text-center">
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-light border d-inline-flex align-items-center justify-content-center p-0"
-                        style={{
-                          width: '32px',
-                          height: '32px',
-                          borderRadius: '6px',
-                          backgroundColor: '#f8fafc',
-                          borderColor: '#cbd5e1',
-                          color: '#475569',
-                          transition: 'all 0.15s ease',
-                        }}
-                        onClick={() => {
-                          setViewLogPutId(row.id);
-                          setViewLogPickId(null);
-                          setIsViewLogModalOpen(true);
-                        }}
-                        title="View Process Activity Logs"
-                      >
-                        <History size={15} className="text-primary" />
-                      </button>
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1119,9 +1098,14 @@ export default function DashboardPage() {
 
       <ViewLogsModal
         isOpen={isViewLogModalOpen}
-        onClose={() => setIsViewLogModalOpen(false)}
+        onClose={() => {
+          setIsViewLogModalOpen(false);
+          setSelectedPutForLogs(null);
+        }}
+        put={selectedPutForLogs}
         putId={viewLogPutId}
         pickId={viewLogPickId}
+        onRefresh={() => fetchPuts(page)}
       />
 
       <PartScanLogsModal
