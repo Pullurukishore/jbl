@@ -81,7 +81,7 @@ exports.registerHU = asyncHandler(async (req, res) => {
             await db.put.update(
                 { compartment_id: null },
                 { where: { compartment_id: { [Op.in]: oldCompIds } } }
-            ).catch(() => {});
+            ).catch(() => { });
         }
 
         // Delete old compartments and re-register
@@ -302,7 +302,7 @@ exports.scanCompartment = asyncHandler(async (req, res) => {
                     log_type: 'PUT_PROCESS'
                 });
             }
-        } catch (_) {}
+        } catch (_) { }
     };
 
     const sendEvent = (payload) => {
@@ -795,7 +795,7 @@ exports.pickCompartment = asyncHandler(async (req, res) => {
                 endTime: moment().format('MM/DD/YYYY hh:mm:ss A'),
                 result: 'P'
             });
-        } catch (_) {}
+        } catch (_) { }
     }
 
     // Generate Kardex Pick Order File for this specific serial
@@ -904,7 +904,7 @@ exports.pickAllCompartments = asyncHandler(async (req, res) => {
                     endTime: moment().format('MM/DD/YYYY hh:mm:ss A'),
                     result: 'P'
                 });
-            } catch (_) {}
+            } catch (_) { }
         }
     }
 
@@ -1114,7 +1114,7 @@ exports.pickScanGet = asyncHandler(async (req, res) => {
             message: `Serial ${serial_number} picked from compartment #${compNumber} of Bin ${hu.hu_id}.`,
             log_type: 'PICK_PROCESS',
             process_id
-        }).catch(() => {});
+        }).catch(() => { });
 
         sendEvent({
             activity: 'FILE_GENERATED',
