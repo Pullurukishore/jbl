@@ -357,24 +357,32 @@ export const ScanAndStoreModal: React.FC<ScanAndStoreModalProps> = ({
               >
                 <Minus size={14} />
               </button>
-              <input
-                type="number"
-                min="1"
-                max="50"
-                className="form-control text-center fw-bold fs-6"
-                value={quantity}
-                onChange={(e) => setQuantity(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-                disabled={isProcessing}
-                required
-              />
-              <button
-                type="button"
-                className="btn btn-outline-secondary"
-                onClick={() => setQuantity((q) => Math.min(50, q + 1))}
-                disabled={isProcessing || quantity >= 50}
-              >
-                <Plus size={14} />
-              </button>
+              {/* Maximum pick limit dynamically bounded by available stock or high safety ceiling */}
+              {(() => {
+                const maxAllowed = previewPuts.length > 0 ? previewPuts.length : 500;
+                return (
+                  <>
+                    <input
+                      type="number"
+                      min="1"
+                      max={maxAllowed}
+                      className="form-control text-center fw-bold fs-6"
+                      value={quantity}
+                      onChange={(e) => setQuantity(Math.max(1, Math.min(maxAllowed, Number(e.target.value) || 1)))}
+                      disabled={isProcessing}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={() => setQuantity((q) => Math.min(maxAllowed, q + 1))}
+                      disabled={isProcessing || quantity >= maxAllowed}
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </>
+                );
+              })()}
             </div>
           </div>
 

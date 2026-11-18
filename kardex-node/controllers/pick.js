@@ -49,12 +49,29 @@ exports.createPick = asyncHandler(async (req, res) => {
         }) + "\n\n");
         if (typeof res.flush === 'function') res.flush();
 
-        if (!quantity || isNaN(quantity) || quantity <= 0 || quantity > 50) {
+        if (!quantity || isNaN(quantity) || quantity <= 0) {
             logs.push(await createAndSendLog({
                 entity_number: resolvedModelNumber,
                 activity: 'CHECK_QTY',
                 status: 'FAILED',
-                message: `Invalid quantity requested (${quantity}). Allowed range is 1 to 50.`,
+                message: `Invalid quantity requested (${quantity}). Quantity must be at least 1.`,
+                logged_by: req.user?.id,
+                log_type: 'PICK_PROCESS',
+                user_first_name: req.user?.first_name,
+                user_last_name: req.user?.last_name,
+                user_id: req.user?.user_id,
+                process_id
+            }, res));
+            return res.end();
+        }
+
+        const maxPickLimit = parseInt(process.env.MAX_PICK_QUANTITY, 10) || 500;
+        if (quantity > maxPickLimit) {
+            logs.push(await createAndSendLog({
+                entity_number: resolvedModelNumber,
+                activity: 'CHECK_QTY',
+                status: 'FAILED',
+                message: `Requested quantity (${quantity}) exceeds maximum safety limit of ${maxPickLimit}.`,
                 logged_by: req.user?.id,
                 log_type: 'PICK_PROCESS',
                 user_first_name: req.user?.first_name,

@@ -311,6 +311,7 @@ exports.scanCompartment = asyncHandler(async (req, res) => {
             return res.end();
         }
         const serialNumber = serial_number.trim();
+        const startTime = moment().format('MM/DD/YYYY hh:mm:ss A');
 
         // ── 2. Find HU and compartment ────────────────────────────────────
         const hu = await db.handling_unit.findOne({ where: { hu_id: huId } });
@@ -435,7 +436,23 @@ exports.scanCompartment = asyncHandler(async (req, res) => {
         sendEvent({ entity_number: serialNumber, activity: 'FIND_MODEL', status: 'SUCCESS', model_number: modelNumber, completed: true });
 
         // ── 7. ALLOCATE ───────────────────────────────────────────────────
-        sendEvent({ entity_number: serialNumber, activity: 'ALLOCATE', status: 'IN_PROGRESS', message: 'Allocating compartment...', completed: false });
+        sendEvent({ entity_number: serialNumber, activity: 'ALLOCATE', status: 'IN_PROGRESS', message: `Updating MES Kanban history to ${testProcess}...`, completed: false });
+
+        // Update MES Kanban Board History (matches production Kardex.zip put.js line 402)
+        const updateResponse = await updateBoardHistory({
+            serialNumber,
+            processName: testProcess,
+            userId: req.user?.user_id || 'SYSTEM',
+            startTime: startTime,
+            endTime: moment().format('MM/DD/YYYY hh:mm:ss A'),
+            result: 'P'
+        });
+
+        if (updateResponse?.isError || (typeof updateResponse === 'string' && updateResponse.toLowerCase() !== 'pass')) {
+            const errMsg = updateResponse?.error?.message || (typeof updateResponse === 'string' ? updateResponse : 'Failed to update MES Kanban history.');
+            sendEvent({ entity_number: serialNumber, activity: 'ALLOCATE', status: 'FAILED', message: `MES Board History Update to ${testProcess} Failed: ${errMsg}` });
+            return res.end();
+        }
 
         await compartment.update({
             status: 'OCCUPIED',
