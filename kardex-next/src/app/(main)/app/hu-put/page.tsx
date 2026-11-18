@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation';
 import { apiPost } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { HandlingUnit, StorageStatus, HUStatus, HUListResponse, HUStats } from '@/types/hu';
-import { HUStatusBadge } from '@/components/bins/HUStatusBadge';
 import { RegisterBinModal } from '@/components/bins/RegisterBinModal';
+import { SendToKardexModal } from '@/components/bins/SendToKardexModal';
 import { Loader } from '@/components/shared/Loader';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Pagination } from '@/components/shared/Pagination';
@@ -16,7 +16,6 @@ import {
   PackagePlus,
   Eye,
   Send,
-  PackageSearch,
   CheckCircle2,
   Boxes,
   Search,
@@ -25,19 +24,16 @@ import {
   Check,
   X,
   Layers,
-  Sparkles,
   Barcode,
-  ArrowUpDown,
-  Archive,
   Clock,
   Zap,
-  Info,
   ChevronRight,
+  CornerDownLeft,
+  Activity,
+  Cpu,
 } from 'lucide-react';
 
-const PAGE_SIZE = 20;
-
-type SortOption = 'HU_ASC' | 'HU_DESC' | 'CAPACITY_DESC' | 'CAPACITY_ASC' | 'STATUS';
+const DEFAULT_PAGE_SIZE = 100;
 
 export default function HUPutPage() {
   const router = useRouter();
@@ -45,15 +41,16 @@ export default function HUPutPage() {
   const [hus, setHus] = useState<HandlingUnit[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
-  // Filters, Search & Sort
-  const [storageFilter, setStorageFilter] = useState<StorageStatus | 'ALL'>('ALL');
-  const [huStatusFilter, setHuStatusFilter] = useState<HUStatus | 'ALL'>('ALL');
+  // Search
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<SortOption>('HU_ASC');
   const [copiedHuId, setCopiedHuId] = useState<string | null>(null);
+
+  // Banner message for actions
+  const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
   // Stats
   const [stats, setStats] = useState<HUStats>({
@@ -68,23 +65,24 @@ export default function HUPutPage() {
 
   // Modals
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [dispatchModalHU, setDispatchModalHU] = useState<HandlingUnit | null>(null);
 
   const fetchHUs = useCallback(
     async (
       pageNum = page,
-      storage = storageFilter,
-      huStatus = huStatusFilter,
+      limit = pageSize,
       search = searchQuery
     ) => {
       try {
         setLoading(true);
         const body: Record<string, unknown> = {
           page: pageNum,
-          size: PAGE_SIZE,
+          size: limit,
         };
-        if (storage !== 'ALL') body.storage_status = storage;
-        if (huStatus !== 'ALL') body.hu_status = huStatus;
-        if (search.trim()) body.search = search.trim();
+
+        if (search.trim()) {
+          body.search = search.trim();
+        }
 
         const res = await apiPost<HUListResponse>('/hu/list', body);
         setHus(res.data || []);
@@ -101,7 +99,7 @@ export default function HUPutPage() {
         setLoading(false);
       }
     },
-    [page, storageFilter, huStatusFilter, searchQuery]
+    [page, pageSize, searchQuery]
   );
 
   useEffect(() => {
@@ -109,16 +107,16 @@ export default function HUPutPage() {
       router.replace('/error/403');
       return;
     }
-    fetchHUs(1, storageFilter, huStatusFilter, searchQuery);
-  }, [authLoading, canPut, router, storageFilter, huStatusFilter]);
+    fetchHUs(1, pageSize, searchQuery);
+  }, [authLoading, canPut, router]);
 
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchHUs(1, storageFilter, huStatusFilter, searchQuery);
-    }, 300);
+      fetchHUs(1, pageSize, searchQuery);
+    }, 250);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, pageSize]);
 
   const handleCopyId = (huId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -128,70 +126,70 @@ export default function HUPutPage() {
   };
 
   const handleRefresh = () => {
-    fetchHUs(page, storageFilter, huStatusFilter, searchQuery);
+    fetchHUs(page, pageSize, searchQuery);
   };
 
-  const handleSuccess = () => {
-    fetchHUs(page, storageFilter, huStatusFilter, searchQuery);
+  const handleSuccessRegister = () => {
+    setSuccessBanner('New handling unit registered successfully and ready for Put operations.');
+    fetchHUs(page, pageSize, searchQuery);
   };
 
-  // Client-side sorting for rapid responsiveness
-  const sortedHUs = useMemo(() => {
-    const list = [...hus];
-    switch (sortBy) {
-      case 'HU_ASC':
-        return list.sort((a, b) => a.hu_id.localeCompare(b.hu_id));
-      case 'HU_DESC':
-        return list.sort((a, b) => b.hu_id.localeCompare(a.hu_id));
-      case 'CAPACITY_DESC':
-        return list.sort((a, b) => {
-          const occA = (a.compartments || []).filter((c) => c.status === 'OCCUPIED').length;
-          const occB = (b.compartments || []).filter((c) => c.status === 'OCCUPIED').length;
-          return occB - occA;
-        });
-      case 'CAPACITY_ASC':
-        return list.sort((a, b) => {
-          const occA = (a.compartments || []).filter((c) => c.status === 'OCCUPIED').length;
-          const occB = (b.compartments || []).filter((c) => c.status === 'OCCUPIED').length;
-          return occA - occB;
-        });
-      case 'STATUS':
-        return list.sort((a, b) => a.storage_status.localeCompare(b.storage_status));
-      default:
-        return list;
+  // Immediate jump to bin layout on scan/submit
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const query = searchQuery.trim();
+    if (!query) return;
+
+    // Check if there is an exact or matching bin in currently loaded list
+    const exactMatch = hus.find((h) => h.hu_id.toLowerCase() === query.toLowerCase());
+    if (exactMatch) {
+      router.push(`/app/bins/${encodeURIComponent(exactMatch.hu_id)}`);
+    } else {
+      // Direct jump to bin layout
+      router.push(`/app/bins/${encodeURIComponent(query)}`);
     }
-  }, [hus, sortBy]);
+  };
+
+  // Natural numeric sorting for Handling Unit IDs (e.g., BIN1, BIN2, BIN10)
+  const sortedHUs = useMemo(() => {
+    return [...hus].sort((a, b) =>
+      a.hu_id.localeCompare(b.hu_id, undefined, { numeric: true, sensitivity: 'base' })
+    );
+  }, [hus]);
 
   const getTransactionBadge = (status: string | null) => {
     if (!status) return null;
-    const map: Record<string, { bg: string; text: string; border: string }> = {
-      PENDING: { bg: '#fffbeb', text: '#b45309', border: '#fde68a' },
-      SUCCESSFUL: { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0' },
-      FAILED: { bg: '#fef2f2', text: '#b91c1c', border: '#fecaca' },
+    const map: Record<string, { bg: string; text: string; border: string; dot: string }> = {
+      PENDING: { bg: '#fffbeb', text: '#b45309', border: '#fde68a', dot: '#f59e0b' },
+      SUCCESSFUL: { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0', dot: '#16a34a' },
+      FAILED: { bg: '#fef2f2', text: '#b91c1c', border: '#fecaca', dot: '#dc2626' },
     };
-    const style = map[status] || { bg: '#f8fafc', text: '#475569', border: '#e2e8f0' };
+    const style = map[status] || { bg: '#f8fafc', text: '#475569', border: '#e2e8f0', dot: '#94a3b8' };
     return (
       <span
         style={{
           background: style.bg,
           color: style.text,
           border: `1px solid ${style.border}`,
-          borderRadius: '5px',
-          fontSize: '10.5px',
+          borderRadius: '6px',
+          fontSize: '11px',
           fontWeight: 700,
-          padding: '2px 6px',
-          letterSpacing: '0.3px',
+          padding: '2.5px 8px',
+          letterSpacing: '0.2px',
           display: 'inline-flex',
           alignItems: 'center',
-          gap: '3px',
+          gap: '5px',
+          whiteSpace: 'nowrap',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
         }}
       >
         <span
           style={{
-            width: '5px',
-            height: '5px',
+            width: '6px',
+            height: '6px',
             borderRadius: '50%',
-            background: style.text,
+            background: style.dot,
+            display: 'inline-block',
           }}
         />
         {status}
@@ -213,16 +211,45 @@ export default function HUPutPage() {
           background: style.bg,
           color: style.text,
           border: `1px solid ${style.border}`,
-          padding: '2px 7px',
-          borderRadius: '5px',
+          padding: '2.5px 9px',
+          borderRadius: '6px',
           fontSize: '11px',
-          fontWeight: 700,
+          fontWeight: 800,
           display: 'inline-block',
+          whiteSpace: 'nowrap',
+          letterSpacing: '0.3px',
         }}
       >
         {tx.replace('_', ' ')}
       </span>
     );
+  };
+
+  const getHUStatusPill = (status: HUStatus) => {
+    switch (status) {
+      case 'FULL':
+        return (
+          <span className="status-pill full">
+            <CheckCircle2 size={12} className="text-emerald-600" />
+            <span>Full (100%)</span>
+          </span>
+        );
+      case 'PARTIALLY_FILLED':
+        return (
+          <span className="status-pill partial">
+            <span className="pulse-indicator amber" />
+            <span>Partial</span>
+          </span>
+        );
+      case 'EMPTY':
+      default:
+        return (
+          <span className="status-pill empty">
+            <span className="pulse-indicator slate" />
+            <span>Empty (0%)</span>
+          </span>
+        );
+    }
   };
 
   return (
@@ -231,8 +258,9 @@ export default function HUPutPage() {
         .hu-put-container {
           display: flex;
           flex-direction: column;
-          gap: 1.5rem;
+          gap: 1.25rem;
           width: 100%;
+          max-width: 100%;
         }
 
         /* Top Header Card */
@@ -240,8 +268,8 @@ export default function HUPutPage() {
           background: #ffffff;
           border: 1px solid #e2e8f0;
           border-radius: 14px;
-          padding: 1.5rem 1.75rem;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+          padding: 1.35rem 1.65rem;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -264,7 +292,7 @@ export default function HUPutPage() {
           align-items: center;
           justify-content: center;
           color: #ffffff;
-          box-shadow: 0 4px 14px rgba(37, 99, 235, 0.28);
+          box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
           flex-shrink: 0;
         }
 
@@ -272,7 +300,7 @@ export default function HUPutPage() {
           font-size: 23px;
           font-weight: 800;
           color: #0f172a;
-          letter-spacing: -0.3px;
+          letter-spacing: -0.4px;
           margin: 0;
           line-height: 1.2;
         }
@@ -280,7 +308,7 @@ export default function HUPutPage() {
         .page-subtitle {
           font-size: 13px;
           color: #64748b;
-          margin-top: 4px;
+          margin-top: 3px;
           margin-bottom: 0;
         }
 
@@ -295,7 +323,7 @@ export default function HUPutPage() {
           background: #ffffff;
           border: 1px solid #cbd5e1;
           color: #334155;
-          padding: 8px 16px;
+          padding: 8px 15px;
           border-radius: 10px;
           font-size: 13px;
           font-weight: 600;
@@ -312,26 +340,6 @@ export default function HUPutPage() {
           color: #0f172a;
         }
 
-        .btn-bins-master {
-          background: #f1f5f9;
-          border: 1px solid #e2e8f0;
-          color: #1e293b;
-          padding: 8px 16px;
-          border-radius: 10px;
-          font-size: 13px;
-          font-weight: 600;
-          display: inline-flex;
-          align-items: center;
-          gap: 7px;
-          text-decoration: none;
-          transition: all 0.15s ease;
-        }
-
-        .btn-bins-master:hover {
-          background: #e2e8f0;
-          color: #0f172a;
-          text-decoration: none;
-        }
 
         .btn-register-primary {
           background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
@@ -354,38 +362,66 @@ export default function HUPutPage() {
           box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
         }
 
-        /* 6 Interactive Stats Cards */
+        /* Banner Notification */
+        .notification-banner {
+          background: #ecfdf5;
+          border: 1px solid #a7f3d0;
+          color: #065f46;
+          padding: 10px 16px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-size: 13px;
+          font-weight: 600;
+          box-shadow: 0 1px 3px rgba(16, 185, 129, 0.1);
+        }
+
+        .notification-banner-left {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .notification-close-btn {
+          background: transparent;
+          border: none;
+          color: #059669;
+          cursor: pointer;
+          padding: 2px;
+          display: flex;
+          align-items: center;
+        }
+
+        /* 4 Clean Summary KPI Cards */
         .stats-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+          grid-template-columns: repeat(4, 1fr);
           gap: 0.85rem;
           width: 100%;
         }
 
-        .interactive-stat-card {
+        @media (max-width: 900px) {
+          .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+
+        .stat-card {
           background: #ffffff;
           border: 1px solid #e2e8f0;
           border-radius: 12px;
-          padding: 1rem 1.15rem;
+          padding: 1.05rem 1.25rem;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          cursor: pointer;
-          transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
-          user-select: none;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+          transition: transform 0.15s ease, box-shadow 0.15s ease;
         }
 
-        .interactive-stat-card:hover {
+        .stat-card:hover {
           transform: translateY(-2px);
-          border-color: #cbd5e1;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-        }
-
-        .interactive-stat-card.active-stat {
-          border-color: #2563eb;
-          background: #f8faff;
-          box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.22), 0 4px 12px rgba(37, 99, 235, 0.08);
         }
 
         .stat-meta {
@@ -397,21 +433,28 @@ export default function HUPutPage() {
           font-size: 11px;
           font-weight: 700;
           text-transform: uppercase;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.6px;
           color: #64748b;
-          margin-bottom: 2px;
+          margin-bottom: 3px;
         }
 
         .stat-value {
-          font-size: 24px;
+          font-size: 26px;
           font-weight: 800;
           line-height: 1.1;
         }
 
+        .stat-subtext {
+          font-size: 11px;
+          color: #94a3b8;
+          font-weight: 600;
+          margin-top: 3px;
+        }
+
         .stat-icon-well {
-          width: 40px;
-          height: 40px;
-          border-radius: 10px;
+          width: 44px;
+          height: 44px;
+          border-radius: 11px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -423,135 +466,69 @@ export default function HUPutPage() {
           background: #ffffff;
           border: 1px solid #e2e8f0;
           border-radius: 14px;
-          padding: 1.25rem 1.5rem;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+          padding: 1.35rem 1.65rem;
+          box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04);
+          width: 100%;
         }
 
-        /* Table Toolbar */
-        .table-toolbar {
+        /* Improved High-Visibility Search Toolbar */
+        .search-toolbar {
           display: flex;
           align-items: center;
           justify-content: space-between;
           flex-wrap: wrap;
           gap: 1rem;
           margin-bottom: 1.25rem;
-          padding-bottom: 1rem;
-          border-bottom: 1px solid #f1f5f9;
+          padding-bottom: 1.15rem;
+          border-bottom: 1.5px solid #f1f5f9;
         }
 
-        .toolbar-left-cluster {
+        .search-form-full {
           display: flex;
           align-items: center;
           gap: 10px;
-          flex-wrap: wrap;
+          flex: 1;
+          min-width: 280px;
+          max-width: 680px;
         }
 
-        .filter-tab-pill-group {
-          display: inline-flex;
-          background: #f1f5f9;
-          border: 1px solid #e2e8f0;
-          border-radius: 9px;
-          padding: 3px;
-          gap: 3px;
-        }
-
-        .filter-tab-pill {
-          border: none;
-          background: transparent;
-          padding: 6px 14px;
-          font-size: 12.5px;
-          font-weight: 600;
-          border-radius: 7px;
-          color: #64748b;
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          transition: all 0.15s ease;
-        }
-
-        .filter-tab-pill.active {
-          background: #ffffff;
-          color: #0f172a;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-          font-weight: 700;
-        }
-
-        .tab-badge {
-          font-size: 11px;
-          font-weight: 700;
-          padding: 1px 6px;
-          border-radius: 9999px;
-          background: #e2e8f0;
-          color: #475569;
-        }
-
-        .filter-tab-pill.active .tab-badge {
-          background: #eff6ff;
-          color: #1d4ed8;
-        }
-
-        .select-filter-control {
-          padding: 6px 12px;
-          font-size: 12.5px;
-          border-radius: 8px;
-          border: 1px solid #e2e8f0;
-          background: #ffffff;
-          color: #334155;
-          font-weight: 600;
-          outline: none;
-          cursor: pointer;
-          transition: all 0.15s ease;
-        }
-
-        .select-filter-control:focus {
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-        }
-
-        .toolbar-right-cluster {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          flex-wrap: wrap;
-        }
-
-        .search-box-wrapper {
+        .search-box-input-group {
           position: relative;
-          min-width: 240px;
-        }
-
-        .search-input-field {
+          display: flex;
+          align-items: center;
           width: 100%;
-          padding: 7px 32px 7px 32px;
-          font-size: 12.5px;
-          border-radius: 8px;
-          border: 1px solid #e2e8f0;
+        }
+
+        .search-input-elevated {
+          width: 100%;
+          height: 44px;
+          padding: 0 40px 0 42px;
+          font-size: 14px;
+          font-weight: 500;
+          border-radius: 10px;
+          border: 1.5px solid #cbd5e1;
           background: #f8fafc;
+          color: #0f172a;
           outline: none;
-          transition: all 0.15s ease;
+          transition: all 0.2s ease;
         }
 
-        .search-input-field:focus {
+        .search-input-elevated:focus {
           background: #ffffff;
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+          border-color: #2563eb;
+          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
         }
 
-        .search-icon-affix {
+        .search-icon-left {
           position: absolute;
-          left: 10px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: #94a3b8;
+          left: 14px;
+          color: #64748b;
           pointer-events: none;
         }
 
-        .search-clear-btn {
+        .search-clear-button {
           position: absolute;
-          right: 8px;
-          top: 50%;
-          transform: translateY(-50%);
+          right: 12px;
           background: transparent;
           border: none;
           color: #94a3b8;
@@ -559,90 +536,152 @@ export default function HUPutPage() {
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 2px;
+          padding: 4px;
+          border-radius: 4px;
         }
 
-        .search-clear-btn:hover {
+        .search-clear-button:hover {
           color: #0f172a;
+          background: #e2e8f0;
         }
 
-        /* Modern Sleek Elevated Table */
-        .table-responsive {
-          overflow-x: auto;
+        .btn-search-jump {
+          height: 44px;
+          padding: 0 20px;
           border-radius: 10px;
-          border: 1px solid #e2e8f0;
+          background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+          color: #ffffff;
+          border: none;
+          font-size: 13.5px;
+          font-weight: 700;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: all 0.2s ease;
+          box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
         }
 
-        .hu-put-table {
+        .btn-search-jump:hover {
+          background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.38);
+        }
+
+        .search-meta-cluster {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .bins-counter-badge {
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          padding: 7px 16px;
+          border-radius: 9px;
+          font-size: 13px;
+          font-weight: 700;
+          color: #334155;
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          white-space: nowrap;
+        }
+
+        /* High-End Enterprise Elevated Table (Zero Side Scroll) */
+        .table-responsive {
+          width: 100%;
+          overflow-x: hidden;
+          border-radius: 11px;
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+        }
+
+        .hu-singleline-table {
           width: 100%;
           border-collapse: separate;
           border-spacing: 0;
-          font-size: 13px;
+          font-size: 13.5px;
           background: #ffffff;
+          table-layout: auto;
         }
 
-        .hu-put-table th {
-          background: #f8fafc;
-          color: #475569;
-          font-weight: 700;
+        /* Sleek Gradient Header */
+        .hu-singleline-table th {
+          background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+          color: #334155;
+          font-weight: 800;
           font-size: 11px;
           text-transform: uppercase;
-          letter-spacing: 0.6px;
-          padding: 12px 14px;
-          border-bottom: 1.5px solid #e2e8f0;
+          letter-spacing: 0.7px;
+          padding: 13px 16px;
+          border-bottom: 2px solid #e2e8f0;
           white-space: nowrap;
           text-align: left;
           user-select: none;
         }
 
-        .hu-put-table td {
-          padding: 14px 14px;
+        .hu-singleline-table td {
+          padding: 13px 16px;
           border-bottom: 1px solid #f1f5f9;
           vertical-align: middle;
+          white-space: nowrap;
           color: #1e293b;
+          height: 56px;
           transition: background 0.15s ease;
         }
 
-        .hu-put-table tr.table-row-item {
-          transition: all 0.15s ease;
+        /* Subtle Alternating Zebra Striping for 100 Bins Scanning */
+        .hu-singleline-table tr.table-row-item:nth-child(even) td {
+          background-color: #fafbfc;
         }
 
-        .hu-put-table tr.table-row-item:hover td {
-          background: #f8faff;
+        /* Interactive Row Hover with Accent Bar */
+        .hu-singleline-table tr.table-row-item:hover td {
+          background-color: #f0f7ff !important;
         }
 
-        .hu-put-table tr.table-row-item:hover td:first-child {
-          border-left: 3px solid #2563eb;
+        .hu-singleline-table tr.table-row-item:hover td:first-child {
+          border-left: 3.5px solid #2563eb;
         }
 
-        .hu-put-table tr:last-child td {
+        .hu-singleline-table tr:last-child td {
           border-bottom: none;
         }
 
-        /* Handling Unit ID Capsule */
+        /* Cell 1: High-Tech Handling Unit Capsule */
+        .single-line-hu {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+
         .hu-id-capsule {
           display: inline-flex;
           align-items: center;
-          gap: 6px;
-          background: #eff6ff;
-          border: 1px solid #dbeafe;
-          padding: 4px 10px;
+          gap: 7px;
+          background: linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%);
+          border: 1.5px solid #bfdbfe;
+          padding: 5px 12px;
           border-radius: 8px;
-          transition: all 0.15s ease;
+          box-shadow: 0 1px 3px rgba(37, 99, 235, 0.08);
+          transition: all 0.2s ease;
         }
 
         .hu-id-capsule:hover {
-          border-color: #bfdbfe;
-          background: #dbeafe;
+          border-color: #93c5fd;
+          box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+          transform: translateY(-0.5px);
         }
 
         .hu-id-link {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-weight: 700;
-          font-size: 13px;
+          font-weight: 800;
+          font-size: 14.5px;
           color: #1d4ed8;
           text-decoration: none;
-          letter-spacing: 0.3px;
+          letter-spacing: 0.4px;
         }
 
         .hu-id-link:hover {
@@ -650,79 +689,94 @@ export default function HUPutPage() {
         }
 
         .copy-icon-btn {
-          background: transparent;
-          border: none;
-          color: #94a3b8;
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          color: #64748b;
           cursor: pointer;
-          padding: 2px;
+          padding: 4px;
           display: inline-flex;
           align-items: center;
-          transition: color 0.15s ease;
+          justify-content: center;
+          border-radius: 6px;
+          transition: all 0.15s ease;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
         }
 
         .copy-icon-btn:hover {
           color: #0f172a;
+          border-color: #cbd5e1;
+          background: #f8fafc;
+        }
+
+        /* Cell 2: Bin Profile & PPS Dual Tag */
+        .single-line-spec {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          white-space: nowrap;
+        }
+
+        .spec-icon-badge {
+          width: 22px;
+          height: 22px;
+          border-radius: 6px;
+          background: #f1f5f9;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: #475569;
+          flex-shrink: 0;
+        }
+
+        .spec-name {
+          font-weight: 800;
+          color: #0f172a;
+          font-size: 13.5px;
+        }
+
+        .spec-divider {
+          color: #cbd5e1;
+          font-weight: 800;
         }
 
         .bin-name-badge {
           display: inline-flex;
           align-items: center;
-          gap: 4px;
-          background: #f1f5f9;
-          border: 1px solid #e2e8f0;
-          padding: 2px 7px;
-          border-radius: 5px;
-          font-size: 10.5px;
+          gap: 5px;
+          background: #f8fafc;
+          border: 1px solid #cbd5e1;
+          padding: 3.5px 9px;
+          border-radius: 6px;
+          font-size: 11px;
           font-weight: 700;
-          color: #334155;
+          color: #1e293b;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
         }
 
-        /* Visual Compartment Matrix Dots Preview */
-        .matrix-dots-row {
-          display: flex;
+        .pps-active-dot {
+          width: 5px;
+          height: 5px;
+          border-radius: 50%;
+          background: #2563eb;
+        }
+
+        /* Cell 3: Telemetry Capacity Gauge */
+        .single-line-load {
+          display: inline-flex;
           align-items: center;
-          gap: 3px;
-          margin-top: 5px;
-        }
-
-        .matrix-dot {
-          width: 7px;
-          height: 7px;
-          border-radius: 2px;
-          transition: all 0.15s ease;
-        }
-
-        .matrix-dot.occupied {
-          background: #10b981;
-        }
-
-        .matrix-dot.empty {
-          background: #e2e8f0;
-        }
-
-        /* Capacity Progress Bar */
-        .capacity-cell-wrap {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-          min-width: 135px;
-        }
-
-        .capacity-numbers-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          font-size: 12px;
-          font-weight: 600;
+          gap: 10px;
+          white-space: nowrap;
         }
 
         .mini-track {
-          width: 100%;
-          height: 6px;
-          background: #f1f5f9;
+          width: 85px;
+          height: 8px;
+          background: #e2e8f0;
           border-radius: 9999px;
           overflow: hidden;
+          flex-shrink: 0;
+          box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
         }
 
         .mini-fill {
@@ -731,18 +785,100 @@ export default function HUPutPage() {
           transition: width 0.3s ease;
         }
 
-        /* Dispatch & Action Buttons */
+        .load-count-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 2px;
+          font-size: 13px;
+          font-weight: 700;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          padding: 2px 7px;
+          border-radius: 5px;
+        }
+
+        .load-pct-chip {
+          font-size: 11.5px;
+          font-weight: 800;
+          padding: 2px 7px;
+          border-radius: 5px;
+        }
+
+        /* Cell 4: Visual Status Badges */
+        .status-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 11.5px;
+          font-weight: 700;
+          padding: 3.5px 10px;
+          border-radius: 7px;
+          white-space: nowrap;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+        }
+
+        .status-pill.full {
+          background: #f0fdf4;
+          color: #15803d;
+          border: 1px solid #bbf7d0;
+        }
+
+        .status-pill.partial {
+          background: #fffbeb;
+          color: #b45309;
+          border: 1px solid #fde68a;
+        }
+
+        .status-pill.empty {
+          background: #f8fafc;
+          color: #475569;
+          border: 1px solid #e2e8f0;
+        }
+
+        .pulse-indicator {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          display: inline-block;
+        }
+
+        .pulse-indicator.amber {
+          background: #f59e0b;
+          box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+        }
+
+        .pulse-indicator.slate {
+          background: #94a3b8;
+        }
+
+        /* Cell 5: Last Activity Terminal Badges */
+        .single-line-activity {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          white-space: nowrap;
+        }
+
+        /* Cell 6: Operator Action Buttons */
+        .single-line-actions {
+          display: inline-flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 7px;
+          white-space: nowrap;
+        }
+
         :global(a.btn-scan-fill) {
           background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
           border: 1px solid #1d4ed8 !important;
           color: #ffffff !important;
-          padding: 8px 18px !important;
+          padding: 7px 16px !important;
           border-radius: 8px !important;
-          font-size: 13px !important;
+          font-size: 12.5px !important;
           font-weight: 700 !important;
           display: inline-flex !important;
           align-items: center !important;
-          gap: 7px !important;
+          gap: 6px !important;
           text-decoration: none !important;
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
           box-shadow: 0 2px 6px rgba(37, 99, 235, 0.28) !important;
@@ -755,49 +891,53 @@ export default function HUPutPage() {
           border-color: #1e40af !important;
           color: #ffffff !important;
           text-decoration: none !important;
-          transform: translateY(-1.5px) !important;
-          box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4) !important;
+          transform: translateY(-1px) !important;
+          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4) !important;
         }
 
-        :global(a.btn-view-kardex) {
+        .btn-dispatch-kardex {
+          background: #f0fdf4;
+          border: 1px solid #86efac;
+          color: #15803d;
+          padding: 6.5px 13px;
+          border-radius: 8px;
+          font-size: 12px;
+          font-weight: 700;
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          white-space: nowrap;
+        }
+
+        .btn-dispatch-kardex:hover {
+          background: #dcfce7;
+          border-color: #4ade80;
+          color: #166534;
+          transform: translateY(-1px);
+        }
+
+        :global(a.btn-view-layout) {
           background: #f8fafc !important;
           border: 1px solid #cbd5e1 !important;
           color: #334155 !important;
-          padding: 8px 16px !important;
+          padding: 6.5px 14px !important;
           border-radius: 8px !important;
-          font-size: 13px !important;
+          font-size: 12px !important;
           font-weight: 600 !important;
           display: inline-flex !important;
           align-items: center !important;
-          gap: 6px !important;
+          gap: 5px !important;
           text-decoration: none !important;
           transition: all 0.15s ease !important;
           white-space: nowrap !important;
         }
 
-        :global(a.btn-view-kardex:hover) {
+        :global(a.btn-view-layout:hover) {
           background: #e2e8f0 !important;
           color: #0f172a !important;
           text-decoration: none !important;
-          transform: translateY(-1px) !important;
-        }
-
-        @keyframes pulse {
-          0%, 100% {
-            opacity: 1;
-          }
-          50% {
-            opacity: 0.5;
-          }
-        }
-
-        .pulse-dot {
-          width: 7px;
-          height: 7px;
-          border-radius: 50%;
-          background: #ffffff;
-          display: inline-block;
-          animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
 
         @keyframes spin {
@@ -829,84 +969,73 @@ export default function HUPutPage() {
             <RefreshCw size={14} className={loading ? 'spin-animation' : ''} />
             Refresh
           </button>
-          <Link href="/app/bins" className="btn-bins-master" title="View all physical bins master registry">
-            <Boxes size={14} /> Bins Master
-          </Link>
           <button className="btn-register-primary" onClick={() => setIsRegisterOpen(true)}>
             <PackagePlus size={16} /> Register New Bin
           </button>
         </div>
       </div>
 
-      {/* Interactive Stats Cards */}
+      {/* Notification Banner */}
+      {successBanner && (
+        <div className="notification-banner">
+          <div className="notification-banner-left">
+            <CheckCircle2 size={16} />
+            <span>{successBanner}</span>
+          </div>
+          <button className="notification-close-btn" onClick={() => setSuccessBanner(null)}>
+            <X size={15} />
+          </button>
+        </div>
+      )}
+
+      {/* 4 Clean Summary KPI Cards */}
       <div className="stats-grid">
-        {/* Total Put Units */}
-        <div
-          className={`interactive-stat-card ${huStatusFilter === 'ALL' ? 'active-stat' : ''}`}
-          onClick={() => {
-            setStorageFilter('ALL');
-            setHuStatusFilter('ALL');
-          }}
-          title="Click to show all handling units"
-        >
+        <div className="stat-card">
           <div className="stat-meta">
             <span className="stat-label">Total Units</span>
             <span className="stat-value" style={{ color: '#0f172a' }}>
               {stats.total || totalItems}
             </span>
+            <span className="stat-subtext">All Registered Bins</span>
           </div>
           <div className="stat-icon-well" style={{ background: '#f1f5f9', color: '#475569' }}>
             <Boxes size={20} />
           </div>
         </div>
 
-        {/* Empty */}
-        <div
-          className={`interactive-stat-card ${huStatusFilter === 'EMPTY' ? 'active-stat' : ''}`}
-          onClick={() => setHuStatusFilter(huStatusFilter === 'EMPTY' ? 'ALL' : 'EMPTY')}
-          title="Click to filter empty bins ready for loading"
-        >
+        <div className="stat-card">
           <div className="stat-meta">
             <span className="stat-label">Empty (0%)</span>
             <span className="stat-value" style={{ color: '#64748b' }}>
               {stats.empty}
             </span>
+            <span className="stat-subtext">Ready for Materials</span>
           </div>
           <div className="stat-icon-well" style={{ background: '#f8fafc', color: '#64748b' }}>
             <Package size={20} />
           </div>
         </div>
 
-        {/* Partial */}
-        <div
-          className={`interactive-stat-card ${huStatusFilter === 'PARTIALLY_FILLED' ? 'active-stat' : ''}`}
-          onClick={() =>
-            setHuStatusFilter(huStatusFilter === 'PARTIALLY_FILLED' ? 'ALL' : 'PARTIALLY_FILLED')
-          }
-          title="Click to filter partially filled bins"
-        >
+        <div className="stat-card">
           <div className="stat-meta">
             <span className="stat-label">Partially Filled</span>
-            <span className="stat-value" style={{ color: '#ea580c' }}>
+            <span className="stat-value" style={{ color: '#d97706' }}>
               {stats.partial}
             </span>
+            <span className="stat-subtext">Put In Progress</span>
           </div>
-          <div className="stat-icon-well" style={{ background: '#fff7ed', color: '#ea580c' }}>
-            <Package size={20} />
+          <div className="stat-icon-well" style={{ background: '#fffbeb', color: '#d97706' }}>
+            <Clock size={20} />
           </div>
         </div>
 
-        {/* Full */}
-        <div
-          className={`interactive-stat-card ${huStatusFilter === 'FULL' ? 'active-stat' : ''}`}
-          onClick={() => setHuStatusFilter(huStatusFilter === 'FULL' ? 'ALL' : 'FULL')}
-          title="Click to filter 100% full bins"
-        >
+        <div className="stat-card">
           <div className="stat-meta">
             <span className="stat-label">Full (100%)</span>
             <span className="stat-value" style={{ color: '#16a34a' }}>
               {stats.full}
             </span>
+            <span className="stat-subtext">100% Loaded</span>
           </div>
           <div className="stat-icon-well" style={{ background: '#f0fdf4', color: '#16a34a' }}>
             <CheckCircle2 size={20} />
@@ -916,115 +1045,103 @@ export default function HUPutPage() {
 
       {/* Main Table Card */}
       <div className="table-card">
-        {/* Table Toolbar */}
-        <div className="table-toolbar">
-          <div className="toolbar-left-cluster">
-            {/* HU Fill Status Filter */}
-            <select
-              className="select-filter-control"
-              value={huStatusFilter}
-              onChange={(e) => setHuStatusFilter(e.target.value as HUStatus | 'ALL')}
-            >
-              <option value="ALL">All Fill Levels</option>
-              <option value="EMPTY">Only Empty (0%)</option>
-              <option value="PARTIALLY_FILLED">Only Partially Filled</option>
-              <option value="FULL">Only 100% Full</option>
-            </select>
-
-            {/* Quick Sort Control */}
-            <select
-              className="select-filter-control"
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
-              title="Sort table rows"
-            >
-              <option value="HU_ASC">Sort: HU ID (A-Z)</option>
-              <option value="HU_DESC">Sort: HU ID (Z-A)</option>
-              <option value="CAPACITY_DESC">Sort: Most Filled First</option>
-              <option value="CAPACITY_ASC">Sort: Least Filled First</option>
-              <option value="STATUS">Sort: Storage Status</option>
-            </select>
-          </div>
-
-          <div className="toolbar-right-cluster">
-            {/* Search Box */}
-            <div className="search-box-wrapper">
-              <Search size={14} className="search-icon-affix" />
+        {/* Improved Search Toolbar */}
+        <div className="search-toolbar">
+          <form onSubmit={handleSearchSubmit} className="search-form-full">
+            <div className="search-box-input-group">
+              <Search size={18} className="search-icon-left" />
               <input
                 type="text"
-                className="search-input-field"
-                placeholder="Search Handling Unit ID or PPS..."
+                className="search-input-elevated"
+                placeholder="Scan HU Barcode or search by Unit ID, PPS Station (e.g. BIN1)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                autoFocus
               />
               {searchQuery && (
                 <button
-                  className="search-clear-btn"
+                  type="button"
+                  className="search-clear-button"
                   onClick={() => setSearchQuery('')}
                   title="Clear search"
                 >
-                  <X size={14} />
+                  <X size={16} />
                 </button>
               )}
             </div>
 
-            <span className="text-muted" style={{ fontSize: '12.5px', fontWeight: 600 }}>
-              {sortedHUs.length} {sortedHUs.length === 1 ? 'bin' : 'bins'}
-            </span>
+            <button
+              type="submit"
+              className="btn-search-jump"
+              title="Scan or search and press Enter to immediately open bin layout"
+            >
+              <Barcode size={15} />
+              <span>Open Bin</span>
+              <CornerDownLeft size={13} />
+            </button>
+          </form>
+
+          <div className="search-meta-cluster">
+            <div className="bins-counter-badge">
+              <Boxes size={15} className="text-primary" />
+              <span>
+                {totalItems} {totalItems === 1 ? 'bin registered' : 'bins registered'}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Table Body */}
+        {/* Table Body (Enterprise Polish, Zero Horizontal Scroll, Single Line Per Row) */}
         {loading ? (
           <Loader message="Loading handling units for Put operations..." />
         ) : sortedHUs.length === 0 ? (
           <EmptyState
             title="No Handling Units Found"
             description={
-              searchQuery || storageFilter !== 'ALL' || huStatusFilter !== 'ALL'
-                ? 'No bins match your current filters. Try resetting the filters or clearing the search.'
-                : 'No handling units are available for Put operations. Click "Register New Bin" to add a new physical bin to the floor.'
+              searchQuery.trim()
+                ? `No handling units match "${searchQuery}". Check the ID or scan another barcode.`
+                : 'No handling units are registered yet for Put operations. Click "Register New Bin" above to initialize a physical bin.'
             }
           />
         ) : (
           <div className="table-responsive">
-            <table className="hu-put-table">
+            <table className="hu-singleline-table">
               <thead>
                 <tr>
-                  <th>
-                    <div className="d-flex align-items-center gap-1">
-                      <Package size={13} className="text-muted" />
+                  <th style={{ width: '18%' }}>
+                    <div className="d-flex align-items-center gap-1.5">
+                      <Barcode size={14} className="text-primary" />
                       <span>Handling Unit</span>
                     </div>
                   </th>
-                  <th>
-                    <div className="d-flex align-items-center gap-1">
-                      <Layers size={13} className="text-muted" />
+                  <th style={{ width: '25%' }}>
+                    <div className="d-flex align-items-center gap-1.5">
+                      <Layers size={14} className="text-slate-600" />
                       <span>Bin Spec & PPS</span>
                     </div>
                   </th>
-                  <th>
-                    <div className="d-flex align-items-center gap-1">
-                      <Boxes size={13} className="text-muted" />
+                  <th style={{ width: '22%' }}>
+                    <div className="d-flex align-items-center gap-1.5">
+                      <Activity size={14} className="text-emerald-600" />
                       <span>Compartment Load</span>
                     </div>
                   </th>
-                  <th>
-                    <div className="d-flex align-items-center gap-1">
-                      <CheckCircle2 size={13} className="text-muted" />
-                      <span>HU Status</span>
+                  <th style={{ width: '12%' }}>
+                    <div className="d-flex align-items-center gap-1.5">
+                      <CheckCircle2 size={14} className="text-slate-600" />
+                      <span>Fill Status</span>
                     </div>
                   </th>
-                  <th>
-                    <div className="d-flex align-items-center gap-1">
-                      <Clock size={13} className="text-muted" />
+                  <th style={{ width: '11%' }}>
+                    <div className="d-flex align-items-center gap-1.5">
+                      <Clock size={14} className="text-slate-600" />
                       <span>Last Activity</span>
                     </div>
                   </th>
-                  <th style={{ textAlign: 'right' }}>
-                    <div className="d-flex align-items-center justify-content-end gap-1">
-                      <Zap size={13} className="text-muted" />
-                      <span>Operator Actions</span>
+                  <th style={{ width: '12%', textAlign: 'right' }}>
+                    <div className="d-flex align-items-center justify-content-end gap-1.5">
+                      <Zap size={14} className="text-amber-600" />
+                      <span>Actions</span>
                     </div>
                   </th>
                 </tr>
@@ -1032,32 +1149,40 @@ export default function HUPutPage() {
               <tbody>
                 {sortedHUs.map((hu) => {
                   const compartments = hu.compartments || [];
-                  const total = compartments.length || hu.bin_type?.compartment_count || 15;
+                  const total = compartments.length || hu.bin_type?.compartment_count || 30;
                   const occupied = compartments.filter((c) => c.status === 'OCCUPIED').length;
                   const pct = total > 0 ? Math.round((occupied / total) * 100) : 0;
 
-                  const isOutsideOrDraft =
+                  const isAtStation =
                     hu.storage_status === 'DRAFT' || hu.storage_status === 'OUTSIDE_KARDEX';
-                  const canSendToKardex = isOutsideOrDraft && occupied > 0;
+                  const canSendToKardex = isAtStation && occupied > 0;
                   const isInKardex = hu.storage_status === 'IN_KARDEX';
 
-                  // Progress bar color based on percentage
-                  const fillColor =
-                    pct === 100 ? '#10b981' : pct > 0 ? '#2563eb' : '#cbd5e1';
+                  // Dynamic gradient fill for progress gauge
+                  const fillGradient =
+                    pct === 100
+                      ? 'linear-gradient(90deg, #10b981 0%, #059669 100%)'
+                      : pct > 0
+                      ? 'linear-gradient(90deg, #3b82f6 0%, #1d4ed8 100%)'
+                      : '#cbd5e1';
 
-                  // Dot matrix preview (previewing up to 15 slots)
-                  const dotCount = Math.min(total, 15);
-                  const occupiedCount = Math.min(occupied, dotCount);
+                  // Pill background for percentage chip
+                  const pctBg =
+                    pct === 100 ? '#f0fdf4' : pct > 0 ? '#eff6ff' : '#f8fafc';
+                  const pctColor =
+                    pct === 100 ? '#15803d' : pct > 0 ? '#1d4ed8' : '#64748b';
+                  const pctBorder =
+                    pct === 100 ? '#bbf7d0' : pct > 0 ? '#bfdbfe' : '#e2e8f0';
 
                   return (
                     <tr key={hu.id} className="table-row-item">
-                      {/* Handling Unit ID Capsule */}
+                      {/* Handling Unit ID - Tech Capsule */}
                       <td>
-                        <div className="d-flex align-items-center gap-2">
+                        <div className="single-line-hu">
                           <div className="hu-id-capsule">
-                            <Barcode size={13} className="text-primary flex-shrink-0" />
+                            <Barcode size={15} className="text-primary flex-shrink-0" />
                             <Link
-                              href={`/app/bins/${hu.hu_id}`}
+                              href={`/app/bins/${encodeURIComponent(hu.hu_id)}`}
                               className="hu-id-link"
                               title="Click to open bin layout and scan parts"
                             >
@@ -1070,94 +1195,110 @@ export default function HUPutPage() {
                             title="Copy Handling Unit ID"
                           >
                             {copiedHuId === hu.hu_id ? (
-                              <Check size={13} className="text-success" />
+                              <Check size={14} className="text-success" />
                             ) : (
-                              <Copy size={13} />
+                              <Copy size={14} />
                             )}
                           </button>
                         </div>
                       </td>
 
-                      {/* Bin Specification & PPS Station */}
+                      {/* Bin Specification & PPS Station - Dual Badge */}
                       <td>
-                        <div className="d-flex flex-column gap-1">
-                          <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
+                        <div className="single-line-spec">
+                          <span className="spec-icon-badge">
+                            <Layers size={13} />
+                          </span>
+                          <span className="spec-name">
                             {hu.bin_type?.name || `Type #${hu.bin_type_id}`}
                           </span>
+                          <span className="spec-divider">·</span>
                           <span className="bin-name-badge">
-                            PPS: {hu.bin_type?.bin_name || 'CON_BINA'}
+                            <span className="pps-active-dot" />
+                            PPS: {hu.bin_type?.bin_name || 'CON_BINC'}
                           </span>
                         </div>
                       </td>
 
-                      {/* Compartment Load with Mini Dots & Progress Meter */}
+                      {/* Compartment Load - High-Res Gauge */}
                       <td>
-                        <div className="capacity-cell-wrap">
-                          <div className="capacity-numbers-row">
-                            <span>
-                              <strong style={{ color: occupied > 0 ? '#16a34a' : '#64748b' }}>
-                                {occupied}
-                              </strong>
-                              <span className="text-muted"> / {total} filled</span>
-                            </span>
-                            <span
-                              style={{
-                                fontSize: '11px',
-                                color: pct === 100 ? '#15803d' : pct > 0 ? '#1d4ed8' : '#64748b',
-                                fontWeight: 800,
-                              }}
-                            >
-                              {pct}%
-                            </span>
-                          </div>
+                        <div
+                          className="single-line-load"
+                          title={`${occupied} of ${total} compartments filled (${pct}%)`}
+                        >
                           <div className="mini-track">
                             <div
                               className="mini-fill"
-                              style={{ width: `${pct}%`, background: fillColor }}
+                              style={{ width: `${pct}%`, background: fillGradient }}
                             />
                           </div>
-
-                          {/* Visual 15-Dot Matrix Slot Indicator */}
-                          <div className="matrix-dots-row" title={`${occupied} of ${total} slots occupied`}>
-                            {Array.from({ length: dotCount }).map((_, idx) => (
-                              <div
-                                key={idx}
-                                className={`matrix-dot ${idx < occupiedCount ? 'occupied' : 'empty'}`}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* HU Status Badge */}
-                      <td>
-                        <HUStatusBadge status={hu.hu_status} />
-                      </td>
-
-                      {/* Last Activity & Status */}
-                      <td>
-                        <div className="d-flex flex-column gap-1">
-                          <div className="d-flex align-items-center gap-1">
-                            {getLastTxBadge(hu.last_transaction)}
-                          </div>
-                          {hu.transaction_status && (
-                            <div>{getTransactionBadge(hu.transaction_status)}</div>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Operator Actions Cluster */}
-                      <td>
-                        <div className="d-flex align-items-center justify-content-end gap-2">
-                          <Link
-                            href={`/app/bins/${hu.hu_id}`}
-                            className="btn-scan-fill"
-                            title="Open bin to scan parts and fill compartments"
+                          <span className="load-count-chip">
+                            <strong style={{ color: occupied > 0 ? '#16a34a' : '#64748b' }}>
+                              {occupied}
+                            </strong>
+                            <span className="text-muted">/{total}</span>
+                          </span>
+                          <span
+                            className="load-pct-chip"
+                            style={{
+                              background: pctBg,
+                              color: pctColor,
+                              border: `1px solid ${pctBorder}`,
+                            }}
                           >
-                            <PackagePlus size={15} />
-                            <span>Fill / Scan</span>
-                            <ChevronRight size={14} />
-                          </Link>
+                            {pct}%
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Fill Status */}
+                      <td>{getHUStatusPill(hu.hu_status)}</td>
+
+                      {/* Last Activity */}
+                      <td>
+                        <div className="single-line-activity">
+                          {getLastTxBadge(hu.last_transaction)}
+                          {hu.transaction_status && getTransactionBadge(hu.transaction_status)}
+                        </div>
+                      </td>
+
+                      {/* Operator Actions */}
+                      <td>
+                        <div className="single-line-actions">
+                          {/* Dispatch button if parts are loaded and bin is outside */}
+                          {canSendToKardex && (
+                            <button
+                              type="button"
+                              className="btn-dispatch-kardex"
+                              onClick={() => setDispatchModalHU(hu)}
+                              title="Generate Kardex transfer file and dispatch bin"
+                            >
+                              <Send size={12} />
+                              <span>Dispatch</span>
+                            </button>
+                          )}
+
+                          {/* Primary Scan / View Action */}
+                          {!isInKardex ? (
+                            <Link
+                              href={`/app/bins/${encodeURIComponent(hu.hu_id)}`}
+                              className="btn-scan-fill"
+                              title="Open bin to scan parts and fill compartments"
+                            >
+                              <PackagePlus size={14} />
+                              <span>Fill / Scan</span>
+                              <ChevronRight size={13} />
+                            </Link>
+                          ) : (
+                            <Link
+                              href={`/app/bins/${encodeURIComponent(hu.hu_id)}`}
+                              className="btn-view-layout"
+                              title="View bin compartments and parts stored inside Kardex"
+                            >
+                              <Eye size={13} />
+                              <span>View Bin</span>
+                            </Link>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1168,17 +1309,23 @@ export default function HUPutPage() {
           </div>
         )}
 
-        {/* Pagination */}
+        {/* Pagination (100 per page limit) */}
         <div className="mt-3">
           <Pagination
             currentPage={page}
             totalPages={totalPages}
             onPageChange={(p) => {
               setPage(p);
-              fetchHUs(p, storageFilter, huStatusFilter, searchQuery);
+              fetchHUs(p, pageSize, searchQuery);
             }}
             totalItems={totalItems}
-            pageSize={PAGE_SIZE}
+            pageSize={pageSize}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setPage(1);
+              fetchHUs(1, newSize, searchQuery);
+            }}
+            pageSizeOptions={[50, 100, 200, 500]}
           />
         </div>
       </div>
@@ -1187,8 +1334,26 @@ export default function HUPutPage() {
       <RegisterBinModal
         isOpen={isRegisterOpen}
         onClose={() => setIsRegisterOpen(false)}
-        onSuccess={handleSuccess}
+        onSuccess={handleSuccessRegister}
       />
+
+      {dispatchModalHU && (
+        <SendToKardexModal
+          isOpen={Boolean(dispatchModalHU)}
+          onClose={() => setDispatchModalHU(null)}
+          hu={dispatchModalHU}
+          onSuccess={(result) => {
+            const fileName = result?.fileName || result?.file_name;
+            setSuccessBanner(
+              fileName
+                ? `Handling Unit ${dispatchModalHU.hu_id} dispatched to Kardex shuttle! Transfer order file "${fileName}" created.`
+                : `Handling Unit ${dispatchModalHU.hu_id} dispatched to Kardex shuttle successfully.`
+            );
+            setDispatchModalHU(null);
+            fetchHUs(page, pageSize, searchQuery);
+          }}
+        />
+      )}
     </div>
   );
 }

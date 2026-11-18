@@ -185,8 +185,14 @@ exports.getPartialHUs = asyncHandler(async (req, res) => {
 exports.getAllHUs = asyncHandler(async (req, res) => {
     const { page = 1, size = 20, search = '', hu_status, storage_status } = req.body;
     const where = {};
-    if (hu_status) where.hu_status = hu_status;
-    if (storage_status) where.storage_status = storage_status;
+    if (hu_status) {
+        if (Array.isArray(hu_status)) where.hu_status = { [Op.in]: hu_status };
+        else where.hu_status = hu_status;
+    }
+    if (storage_status) {
+        if (Array.isArray(storage_status)) where.storage_status = { [Op.in]: storage_status };
+        else where.storage_status = storage_status;
+    }
     if (search && search.trim()) {
         const likeOp = Op.iLike || Op.like;
         where.hu_id = { [likeOp]: `%${search.trim()}%` };
@@ -201,7 +207,8 @@ exports.getAllHUs = asyncHandler(async (req, res) => {
             include: huIncludes(),
             order: [['id', 'DESC']],
             limit,
-            offset
+            offset,
+            distinct: true
         }),
         db.handling_unit.count({ where: { storage_status: 'IN_KARDEX' } }).catch(() => 0),
         db.handling_unit.count({ where: { storage_status: 'DRAFT' } }).catch(() => 0),
