@@ -4,8 +4,9 @@ const { Op } = require('sequelize');
 
 exports.getAllCounts = asyncHandler(async (req, res) => {
     try {
-        const { startDate, endDate } = req.body;
-        // If the dates are provided, ensure they're in a valid format
+        const { startDate, endDate } = req.body || {};
+
+        // If dates are provided, parse them into full day boundary timestamps
         const parsedStartDate = startDate
             ? new Date(new Date(startDate).setHours(0, 0, 0, 0))
             : null;
@@ -14,38 +15,24 @@ exports.getAllCounts = asyncHandler(async (req, res) => {
             ? new Date(new Date(endDate).setHours(23, 59, 59, 999))
             : null;
 
-        if (!parsedStartDate || !parsedEndDate) {
-            return res.status(400).json({ error: 'No body sent' });
+        const dateFilter = {};
+        const logDateFilter = {};
+
+        if (parsedStartDate && parsedEndDate) {
+            dateFilter.scanned_at = { [Op.gte]: parsedStartDate, [Op.lte]: parsedEndDate };
+            logDateFilter.log_date_time = { [Op.gte]: parsedStartDate, [Op.lte]: parsedEndDate };
+        } else if (parsedStartDate) {
+            dateFilter.scanned_at = { [Op.gte]: parsedStartDate };
+            logDateFilter.log_date_time = { [Op.gte]: parsedStartDate };
+        } else if (parsedEndDate) {
+            dateFilter.scanned_at = { [Op.lte]: parsedEndDate };
+            logDateFilter.log_date_time = { [Op.lte]: parsedEndDate };
         }
 
-        const [validScanCount, invalidScanCount] = await Promise.all([
-            db.log.count({
-                where: {
-                    log_type: 'PUT_PROCESS',
-                    status: 'SUCCESS',
-                    ...(parsedStartDate && { log_date_time: { [Op.gte]: parsedStartDate } }),
-                    ...(parsedEndDate && { log_date_time: { [Op.lte]: parsedEndDate } })
-                },
-                distinct: true,
-                col: 'process_id'
-            }),
-            db.log.count({
-                where: {
-                    log_type: 'PUT_PROCESS',
-                    status: 'FAILED',
-                    ...(parsedStartDate && { log_date_time: { [Op.gte]: parsedStartDate } }),
-                    ...(parsedEndDate && { log_date_time: { [Op.lte]: parsedEndDate } })
-                },
-                distinct: true,
-                col: 'process_id',
-            })
-        ]);
-
-        const dateFilter = (parsedStartDate && parsedEndDate)
-            ? { scanned_at: { [Op.gte]: parsedStartDate, [Op.lte]: parsedEndDate } }
-            : {};
-
         const [
+            putValidScans,
+            logValidScans,
+            invalidScanCount,
             availablePartsCount,
             pickedPartsCount,
             holdPartsCount,
@@ -56,6 +43,25 @@ exports.getAllCounts = asyncHandler(async (req, res) => {
             fullHUs,
             draftHUs
         ] = await Promise.all([
+            db.put.count({ where: dateFilter }),
+            db.log.count({
+                where: {
+                    log_type: 'PUT_PROCESS',
+                    status: 'SUCCESS',
+                    ...logDateFilter
+                },
+                distinct: true,
+                col: 'process_id'
+            }),
+            db.log.count({
+                where: {
+                    log_type: 'PUT_PROCESS',
+                    status: 'FAILED',
+                    ...logDateFilter
+                },
+                distinct: true,
+                col: 'process_id',
+            }),
             db.put.count({ where: { pick_status: 'AVAILABLE', ...dateFilter } }),
             db.put.count({ where: { pick_status: 'PICKED', ...dateFilter } }),
             db.put.count({ where: { pick_status: 'HOLD', ...dateFilter } }),
@@ -67,6 +73,8 @@ exports.getAllCounts = asyncHandler(async (req, res) => {
             db.handling_unit.count({ where: { storage_status: 'DRAFT' } })
         ]);
 
+        // Valid scans: highest between actual recorded put operations and successful logs for this date range
+        const validScanCount = Math.max(putValidScans, logValidScans);
         const totalPartsCount = availablePartsCount + pickedPartsCount + holdPartsCount;
 
         res.json({

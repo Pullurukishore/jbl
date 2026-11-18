@@ -149,8 +149,8 @@ export default function DashboardPage() {
     try {
       setCountsLoading(true);
       const res = await apiPost<DashboardCounts>('/dashboard/get-all-counts', {
-        startDate: startDate ? startDate.toISOString() : new Date('2000-01-01').toISOString(),
-        endDate: endDate ? endDate.toISOString() : new Date().toISOString(),
+        startDate: startDate ? startDate.toISOString() : undefined,
+        endDate: endDate ? endDate.toISOString() : undefined,
       });
       setCounts(res);
     } catch {

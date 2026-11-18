@@ -281,9 +281,27 @@ exports.scanCompartment = asyncHandler(async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
 
+    const logScanEvent = async (payload) => {
+        try {
+            if (payload.status === 'FAILED' || (payload.activity === 'COMPLETE' && payload.status === 'SUCCESS')) {
+                await db.log.create({
+                    entity_number: payload.entity_number || serial_number || 'UNKNOWN',
+                    activity: payload.activity || 'SCAN',
+                    status: payload.status,
+                    message: typeof payload.message === 'string' ? payload.message.slice(0, 250) : (payload.activity || ''),
+                    logged_by: req.user?.user_id || req.user?.id || 'SYSTEM',
+                    log_date_time: new Date(),
+                    process_id,
+                    log_type: 'PUT_PROCESS'
+                });
+            }
+        } catch (_) {}
+    };
+
     const sendEvent = (payload) => {
         res.write('data: ' + JSON.stringify({ process_id, ...payload }) + '\n\n');
         if (typeof res.flush === 'function') res.flush();
+        logScanEvent(payload);
     };
 
     try {
