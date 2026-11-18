@@ -40,14 +40,29 @@ function huIncludes() {
 // ─────────────────────────────────────────────────────────────────────────────
 exports.registerHU = asyncHandler(async (req, res) => {
     const { hu_id, bin_type_id } = req.body;
-    if (!hu_id || !bin_type_id) {
-        return res.status(400).json({ error: 'hu_id and bin_type_id are required.' });
+    if (!hu_id) {
+        return res.status(400).json({ error: 'hu_id is required.' });
     }
 
-    const binType = await db.bin_type.findByPk(bin_type_id);
-    if (!binType) {
-        return res.status(404).json({ error: 'Bin type not found.' });
+    // Resolve bin specification (defaulting to fixed 30-compartment Kardex Type-C profile)
+    let binType = null;
+    if (bin_type_id) {
+        binType = await db.bin_type.findByPk(bin_type_id);
     }
+    if (!binType) {
+        binType = await db.bin_type.findOne({ where: { compartment_count: 30 } });
+    }
+    if (!binType) {
+        // Auto-create standard 30-compartment profile if it doesn't exist yet
+        binType = await db.bin_type.create({
+            name: 'Type-C (30 Compartments)',
+            compartment_count: 30,
+            bin_name: 'CON_BINC',
+            description: 'Standard 30-compartment bin'
+        });
+    }
+
+    const effectiveBinTypeId = binType.id;
 
     const existing = await db.handling_unit.findOne({ where: { hu_id } });
     if (existing && existing.storage_status !== 'DRAFT') {
@@ -72,7 +87,7 @@ exports.registerHU = asyncHandler(async (req, res) => {
         // Delete old compartments and re-register
         await db.compartment.destroy({ where: { handling_unit_id: existing.id } });
         await existing.update({
-            bin_type_id,
+            bin_type_id: effectiveBinTypeId,
             hu_status: 'EMPTY',
             storage_status: 'DRAFT',
             last_transaction: null,
@@ -83,7 +98,7 @@ exports.registerHU = asyncHandler(async (req, res) => {
     } else {
         hu = await db.handling_unit.create({
             hu_id,
-            bin_type_id,
+            bin_type_id: effectiveBinTypeId,
             hu_status: 'EMPTY',
             storage_status: 'DRAFT',
             registered_by: req.user?.user_id || 'SYSTEM'

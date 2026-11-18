@@ -2,17 +2,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from '@/components/shared/Modal';
-import { apiGet, apiPost } from '@/lib/api';
-import { BinType } from '@/types/hu';
+import { apiPost } from '@/lib/api';
 import {
-  Package,
   PackagePlus,
   Loader2,
   Barcode,
   Layers,
   Check,
   AlertCircle,
-  Tag,
   Info,
   Boxes,
 } from 'lucide-react';
@@ -31,9 +28,6 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
   initialHuId,
 }) => {
   const [huId, setHuId] = useState('');
-  const [binTypeId, setBinTypeId] = useState<number | null>(null);
-  const [binTypes, setBinTypes] = useState<BinType[]>([]);
-  const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -41,32 +35,13 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
   useEffect(() => {
     if (!isOpen) {
       setHuId('');
-      setBinTypeId(null);
       setError('');
       setSubmitting(false);
     } else {
       setHuId(initialHuId || '');
-      fetchBinTypes();
       setTimeout(() => inputRef.current?.focus(), 150);
     }
   }, [isOpen, initialHuId]);
-
-  const fetchBinTypes = async () => {
-    try {
-      setLoading(true);
-      const res = await apiGet<BinType[]>('/hu/bin-types');
-      const types = (res || []).filter((t) => t.compartment_count === 30);
-      setBinTypes(types);
-      // Auto-select the 30-compartment tray specification
-      if (types.length > 0) {
-        setBinTypeId(types[0].id);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load bin types from server');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,14 +51,10 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
       inputRef.current?.focus();
       return;
     }
-    if (!binTypeId) {
-      setError('Please select a bin specification type');
-      return;
-    }
     try {
       setSubmitting(true);
       setError('');
-      await apiPost('/hu/register', { hu_id: cleanId, bin_type_id: binTypeId });
+      await apiPost('/hu/register', { hu_id: cleanId });
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -92,8 +63,6 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
       setSubmitting(false);
     }
   };
-
-  const selectedType = binTypes.find((bt) => bt.id === binTypeId);
 
   return (
     <Modal
@@ -122,12 +91,12 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
               Register New Physical Bin
             </div>
             <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
-              Assign a unique Handling Unit ID and physical tray specification
+              Assign a unique Handling Unit ID with standard 30-slot tray specification
             </div>
           </div>
         </div>
       }
-      maxWidth="520px"
+      maxWidth="500px"
       footer={
         <div className="d-flex gap-2 justify-content-end w-100">
           <button
@@ -142,7 +111,7 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
             type="submit"
             form="register-bin-form"
             className="btn-submit-register"
-            disabled={submitting || !huId.trim() || !binTypeId}
+            disabled={submitting || !huId.trim()}
           >
             {submitting ? (
               <>
@@ -164,7 +133,7 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
           .register-bin-content {
             display: flex;
             flex-direction: column;
-            gap: 1.25rem;
+            gap: 1.2rem;
             padding: 4px 0;
           }
 
@@ -208,15 +177,15 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
 
           .input-clean-field {
             width: 100%;
-            padding: 10px 14px 10px 38px;
-            font-size: 14px;
+            padding: 11px 14px 11px 38px;
+            font-size: 15px;
             font-weight: 700;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             color: #0f172a;
             letter-spacing: 0.5px;
-            border: 1.5px solid #e2e8f0;
+            border: 1.5px solid #cbd5e1;
             border-radius: 9px;
-            background: #f8fafc;
+            background: #ffffff;
             outline: none;
             transition: all 0.2s ease;
           }
@@ -236,97 +205,59 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
             gap: 4px;
           }
 
-          /* Interactive Bin Type Selection Cards */
-          .type-cards-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 8px;
-            width: 100%;
-          }
-
-          .type-select-card {
-            background: #ffffff;
+          /* Fixed Tray Specification Card */
+          .fixed-spec-card {
+            background: #f8fafc;
             border: 1.5px solid #e2e8f0;
             border-radius: 10px;
-            padding: 10px 14px;
+            padding: 12px 14px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            cursor: pointer;
-            transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-            user-select: none;
+            gap: 12px;
           }
 
-          .type-select-card:hover {
-            border-color: #cbd5e1;
-            background: #f8fafc;
-            transform: translateY(-1px);
-          }
-
-          .type-select-card.selected {
-            border-color: #2563eb;
+          .spec-icon-box {
+            width: 36px;
+            height: 36px;
+            border-radius: 9px;
             background: #eff6ff;
-            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
-          }
-
-          .card-main-meta {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-          }
-
-          .type-avatar-box {
-            width: 34px;
-            height: 34px;
-            border-radius: 8px;
-            background: #f1f5f9;
-            color: #475569;
+            color: #2563eb;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 700;
-            font-size: 12px;
             flex-shrink: 0;
-            transition: all 0.15s ease;
+            border: 1px solid #bfdbfe;
           }
 
-          .type-select-card.selected .type-avatar-box {
-            background: #2563eb;
-            color: #ffffff;
-          }
-
-          .type-title-text {
+          .spec-title {
             font-size: 13.5px;
             font-weight: 700;
             color: #0f172a;
             line-height: 1.2;
           }
 
-          .type-sub-meta {
+          .spec-sub-meta {
             font-size: 11.5px;
             color: #64748b;
-            margin-top: 2px;
+            margin-top: 3px;
             display: flex;
             align-items: center;
             gap: 6px;
           }
 
-          .radio-indicator-circle {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            border: 2px solid #cbd5e1;
-            display: flex;
+          .spec-active-badge {
+            display: inline-flex;
             align-items: center;
-            justify-content: center;
-            transition: all 0.15s ease;
+            gap: 4px;
+            background: #ecfdf5;
+            color: #059669;
+            border: 1px solid #a7f3d0;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
             flex-shrink: 0;
-          }
-
-          .type-select-card.selected .radio-indicator-circle {
-            border-color: #2563eb;
-            background: #2563eb;
-            color: #ffffff;
           }
 
           /* Kardex Integration Info Banner */
@@ -360,7 +291,7 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
             background: #ffffff !important;
             border: 1.5px solid #cbd5e1 !important;
             color: #475569 !important;
-            padding: 7px 16px !important;
+            padding: 8px 16px !important;
             border-radius: 8px !important;
             font-size: 13px !important;
             font-weight: 600 !important;
@@ -368,17 +299,16 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
             transition: all 0.15s ease !important;
           }
 
-          :global(.btn-cancel:hover) {
-            background: #f8fafc !important;
-            color: #0f172a !important;
-            border-color: #94a3b8 !important;
+          :global(.btn-cancel:hover:not(:disabled)) {
+            background: #f1f5f9 !important;
+            color: #1e293b !important;
           }
 
           :global(.btn-submit-register) {
             background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-            border: 1px solid #1d4ed8 !important;
+            border: none !important;
             color: #ffffff !important;
-            padding: 7px 20px !important;
+            padding: 8px 22px !important;
             border-radius: 8px !important;
             font-size: 13px !important;
             font-weight: 700 !important;
@@ -445,70 +375,46 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
 
               <span className="helper-text">
                 <Info size={12} className="text-muted" />
-                Must match the barcode / physical label printed on the tray.
+                Scan or enter the barcode printed on the physical tray.
               </span>
             </div>
 
-            {/* Bin Type Selection */}
+            {/* Fixed Tray Specification Info */}
             <div className="form-group-wrap">
               <label className="field-label">
-                <span>Select Tray Specification</span>
-                <span className="field-label-desc">Kardex PPS Shuttle Profile</span>
+                <span>Tray Specification</span>
+                <span className="field-label-desc font-monospace">Kardex PPS Shuttle Profile</span>
               </label>
 
-              {loading ? (
-                <div
-                  className="d-flex align-items-center justify-content-center gap-2 py-4 text-muted bg-light rounded-3 border"
-                  style={{ fontSize: '13px' }}
-                >
-                  <Loader2 size={16} className="spin-inline text-primary" />
-                  <span>Loading tray profiles from server...</span>
+              <div className="fixed-spec-card">
+                <div className="d-flex align-items-center gap-3">
+                  <div className="spec-icon-box">
+                    <Layers size={18} />
+                  </div>
+                  <div>
+                    <div className="spec-title">Type-C (30 Compartments)</div>
+                    <div className="spec-sub-meta">
+                      <span><strong>30</strong> Compartments (Slots 1–30)</span>
+                      <span>•</span>
+                      <span className="badge bg-white text-dark border font-monospace" style={{ fontSize: '10.5px' }}>
+                        PPS: CON_BINC
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              ) : binTypes.length === 0 ? (
-                <div className="p-3 bg-light rounded-3 border text-center text-muted" style={{ fontSize: '13px' }}>
-                  No 30-compartment bin type found. Please ensure the 30-compartment profile exists.
-                </div>
-              ) : (
-                <div className="type-cards-grid">
-                  {binTypes.map((bt) => {
-                    const isSelected = binTypeId === bt.id;
-                    return (
-                      <div
-                        key={bt.id}
-                        className={`type-select-card ${isSelected ? 'selected' : ''}`}
-                        onClick={() => setBinTypeId(bt.id)}
-                      >
-                        <div className="card-main-meta">
-                          <div className="type-avatar-box">
-                            <Layers size={17} />
-                          </div>
-                          <div>
-                            <div className="type-title-text">{bt.name}</div>
-                            <div className="type-sub-meta">
-                              <span><strong>{bt.compartment_count}</strong> Compartments</span>
-                              <span>•</span>
-                              <span className="badge bg-light text-dark border font-monospace" style={{ fontSize: '10.5px' }}>
-                                PPS: {bt.bin_name}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
 
-                        <div className="radio-indicator-circle">
-                          {isSelected && <Check size={12} strokeWidth={3} />}
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="spec-active-badge">
+                  <Check size={12} strokeWidth={3} />
+                  <span>Standard</span>
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Quick Status Info */}
             <div className="info-deployment-banner">
               <Boxes size={16} className="text-success flex-shrink-0" />
               <span>
-                New bin starts in <strong>Draft (Floor)</strong> status. It will immediately appear in <strong>HU Put</strong> ready to scan parts.
+                New bin starts in <strong>Draft (Floor)</strong> status and will immediately appear in <strong>HU Put</strong> ready to scan parts.
               </span>
             </div>
           </div>
