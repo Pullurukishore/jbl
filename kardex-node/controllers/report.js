@@ -654,3 +654,113 @@ exports.getAgingExportData = asyncHandler(async (req, res) => {
         return res.status(500).json({ error: err.message || 'Failed to export aging data.' });
     }
 });
+
+/**
+ * GET /api/report/serial-audit/:serialNumber
+ * Returns complete database record and audit history for a single serial number
+ */
+exports.getSerialAuditDetails = asyncHandler(async (req, res) => {
+    try {
+        const rawSerial = req.params.serialNumber;
+        if (!rawSerial || rawSerial.trim() === '') {
+            return res.status(400).json({ error: 'Serial number is required.' });
+        }
+        const serialNumber = decodeURIComponent(rawSerial).trim();
+        const now = new Date();
+
+        // 1. Find the latest put record for this serial number
+        const put = await db.put.findOne({
+            where: {
+                serial_number: { [Op.iLike ? Op.iLike : Op.like]: serialNumber }
+            },
+            order: [['id', 'DESC']],
+            include: [
+                {
+                    model: db.handling_unit,
+                    include: [{ model: db.bin_type, required: false }]
+                },
+                {
+                    model: db.compartment
+                },
+                {
+                    model: db.pick,
+                    include: [{ model: db.files, as: 'pick_text_file' }]
+                },
+                { model: db.files, as: 'put_text_file' },
+                { model: db.files, as: 'put_po_file' }
+            ]
+        });
+
+        // 2. Fetch all logs for this serial number (by entity_number or put_id)
+        const logWhere = {
+            [Op.or]: [
+                { entity_number: serialNumber },
+                ...(put?.id ? [{ put_id: put.id }] : []),
+                ...(put?.pick_id ? [{ pick_id: put.pick_id }] : [])
+            ]
+        };
+
+        const dialect = db.sequelize.getDialect();
+        const uTable = dialect === 'postgres' ? '"user"' : 'user';
+        const castText = dialect === 'postgres' ? '::TEXT' : '';
+
+        const logs = await db.log.findAll({
+            where: logWhere,
+            order: [['log_date_time', 'ASC']],
+            attributes: {
+                include: [
+                    [
+                        db.sequelize.literal(
+                            `(SELECT first_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
+                        ),
+                        'user_first_name'
+                    ],
+                    [
+                        db.sequelize.literal(
+                            `(SELECT last_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
+                        ),
+                        'user_last_name'
+                    ],
+                    [
+                        db.sequelize.literal(
+                            `(SELECT user_id FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
+                        ),
+                        'operator_user_id'
+                    ]
+                ]
+            }
+        });
+
+        // 3. Calculate exact aging metrics
+        let aging = null;
+        if (put) {
+            const kardexAge = calculateAge(put.scanned_at, now);
+            const birthAge = put.birth_date ? calculateAge(put.birth_date, now) : null;
+            const isKanban = ['KANBAN-IN', 'KANBAN_IN', 'KANBAN-RTN', 'KANBAN_RTN'].some(k =>
+                put.process_status?.toUpperCase()?.includes(k)
+            );
+
+            aging = {
+                storage_age_days: kardexAge.days,
+                storage_age_hours: kardexAge.hours,
+                storage_total_hours: kardexAge.totalHours,
+                storage_formatted: `${kardexAge.days}d ${kardexAge.hours}h`,
+                birth_date: put.birth_date,
+                birth_age_days: birthAge ? birthAge.days : null,
+                is_kanban: isKanban,
+                kanban_dwell_hours: isKanban ? kardexAge.totalHours : null,
+                kanban_dwell_days: isKanban ? kardexAge.days : null
+            };
+        }
+
+        return res.status(200).json({
+            serialNumber,
+            put: put || null,
+            aging: aging || null,
+            logs: logs || []
+        });
+    } catch (err) {
+        console.error('getSerialAuditDetails error:', err);
+        return res.status(500).json({ error: err.message || 'Failed to fetch serial audit details.' });
+    }
+});

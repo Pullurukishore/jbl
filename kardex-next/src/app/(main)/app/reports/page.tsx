@@ -182,7 +182,6 @@ export default function ReportsPage() {
         'Status': r.pick_status,
         'Storage Age (Days)': r.kardex_age_days,
         'Storage Age (Detail)': `${r.kardex_age_days}d ${r.kardex_age_hours}h`,
-        'Kanban Age (Hours)': r.kanban_dwell_hours !== 'N/A' ? `${r.kanban_dwell_hours} hrs` : '—',
         'Birth Date': r.birth_date && r.birth_date !== 'N/A' ? new Date(r.birth_date).toLocaleDateString() : 'N/A',
         'Board Age (Days)': r.birth_age_days,
         'Put Scanned At': r.scanned_at ? new Date(r.scanned_at).toLocaleString() : 'N/A',
@@ -628,7 +627,7 @@ export default function ReportsPage() {
           <div>
             <h1 className="page-title">Inventory Aging Report</h1>
             <p className="page-subtitle">
-              Monitor both Serial Number Storage Aging and Kanban In Aging side-by-side
+              Monitor inventory storage duration in Kardex and manufacturing birth age
             </p>
           </div>
         </div>
@@ -860,7 +859,6 @@ export default function ReportsPage() {
                 <th>Location</th>
                 <th>Process</th>
                 <th>Storage Age</th>
-                <th>Kanban Age</th>
                 <th>Birth Date</th>
                 <th>Status</th>
                 <th style={{ width: '50px' }}>Log</th>
@@ -924,16 +922,6 @@ export default function ReportsPage() {
                       <span className={`badge ${ageClass}`}>
                         {row.kardex_age_days}d {row.kardex_age_hours}h
                       </span>
-                    </td>
-                    {/* Kanban Age */}
-                    <td>
-                      {row.is_kanban ? (
-                        <span style={{ fontWeight: 600, color: '#0f172a' }}>
-                          {row.kanban_dwell_hours} hrs
-                        </span>
-                      ) : (
-                        <span style={{ color: '#94a3b8' }}>—</span>
-                      )}
                     </td>
                     {/* Birth Date */}
                     <td>

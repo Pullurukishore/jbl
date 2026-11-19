@@ -4,7 +4,8 @@ const {
     getAgingStats,
     getSerialAgingList,
     getKanbanAgingList,
-    getAgingExportData
+    getAgingExportData,
+    getSerialAuditDetails
 } = require('../controllers/report');
 
 // Aging Dashboard Metrics & Bucket Statistics
@@ -18,5 +19,8 @@ router.post('/aging/kanban', getKanbanAgingList);
 
 // Excel Export Data Extraction
 router.post('/aging/export', getAgingExportData);
+
+// Single Serial Number Complete Audit & Aging Details
+router.get('/serial-audit/:serialNumber', getSerialAuditDetails);
 
 module.exports = router;

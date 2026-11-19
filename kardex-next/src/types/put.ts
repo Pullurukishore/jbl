@@ -32,6 +32,8 @@ export interface Put {
     id: number;
     hu_id: string;
     status: string;
+    storage_status?: string;
+    hu_status?: string;
     capacity: number;
     bin_type?: {
       id: number;
