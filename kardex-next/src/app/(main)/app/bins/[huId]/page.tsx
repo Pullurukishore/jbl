@@ -259,7 +259,8 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
   const isSlotOccupied = (c: Compartment) =>
     c.status === 'OCCUPIED' && !isSlotPicked(c);
 
-  const occupiedCount = compartments.filter(isSlotOccupied).length;
+  const occupiedCompartments = compartments.filter(isSlotOccupied);
+  const occupiedCount = occupiedCompartments.length;
   const pickedCount = compartments.filter(isSlotPicked).length;
   const totalCount = compartments.length;
   const emptyCount = totalCount - occupiedCount - pickedCount;
@@ -268,10 +269,21 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
   const isLocked = !canPut;
   const isFloorBin = hu.storage_status === 'DRAFT' || hu.storage_status === 'OUTSIDE_KARDEX';
   const canSendToKardex = canPut && occupiedCount > 0;
+
+  // Distinguish newly scanned/unsent serial numbers vs units already included in a prior Kardex PUT order
+  const unsentUnitsCount = occupiedCompartments.filter((c) => !c.put?.text_file_id).length;
+  const alreadySentUnitsCount = occupiedCompartments.filter((c) => Boolean(c.put?.text_file_id)).length;
+  const hasNewUnits = unsentUnitsCount > 0;
+
+  // It is ONLY considered a Resend if ALL occupied units in this bin have already been dispatched before,
+  // there are NO new units, and the bin has a recorded prior PUT dispatch.
   const isAlreadySent =
-    hu.storage_status === 'IN_KARDEX' ||
-    hu.last_transaction === 'PUT' ||
-    Boolean(hu.put_order_seq && hu.put_order_seq > 0);
+    occupiedCount > 0 &&
+    !hasNewUnits &&
+    alreadySentUnitsCount > 0 &&
+    (hu.storage_status === 'IN_KARDEX' ||
+      hu.last_transaction === 'PUT' ||
+      Boolean(hu.put_order_seq && hu.put_order_seq > 0));
 
   const handleInitiateSend = () => {
     if (isAlreadySent) {
@@ -662,7 +674,9 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
               disabled={occupiedCount === 0}
               title={
                 isAlreadySent
-                  ? 'Bin was previously sent to Kardex. Click to initiate re-dispatch confirmation.'
+                  ? 'All occupied parts were previously sent to Kardex. Click to initiate re-dispatch confirmation.'
+                  : hasNewUnits && alreadySentUnitsCount > 0
+                  ? `Transmit PUT order file to Kardex (${unsentUnitsCount} new part(s), ${alreadySentUnitsCount} previously sent)`
                   : 'Transmit PUT order file and store bin in Kardex'
               }
               style={{
@@ -681,7 +695,13 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
               }}
             >
               {isAlreadySent ? <RotateCw size={13} /> : <Send size={13} />}
-              <span>{isAlreadySent ? `Resend to Kardex (${occupiedCount})` : `Send to Kardex (${occupiedCount})`}</span>
+              <span>
+                {isAlreadySent
+                  ? `Resend to Kardex (${occupiedCount})`
+                  : hasNewUnits && alreadySentUnitsCount > 0
+                  ? `Send to Kardex (${occupiedCount} • ${unsentUnitsCount} new)`
+                  : `Send to Kardex (${occupiedCount})`}
+              </span>
             </button>
           )}
 

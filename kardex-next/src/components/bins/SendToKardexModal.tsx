@@ -521,6 +521,12 @@ export const SendToKardexModal: React.FC<SendToKardexModalProps> = ({
                 <span className="info-label">Occupied Slots to Send</span>
                 <span className="info-value" style={{ color: '#16a34a', fontWeight: 800 }}>
                   {occupiedCompartments.length} / {(hu.compartments || []).length} parts
+                  {occupiedCompartments.some((c) => !c.put?.text_file_id) &&
+                    occupiedCompartments.some((c) => Boolean(c.put?.text_file_id)) && (
+                      <span style={{ fontSize: '11.5px', color: '#0369a1', marginLeft: '6px', fontWeight: 600 }}>
+                        ({occupiedCompartments.filter((c) => !c.put?.text_file_id).length} new)
+                      </span>
+                    )}
                 </span>
               </div>
             </div>
@@ -539,6 +545,23 @@ export const SendToKardexModal: React.FC<SendToKardexModalProps> = ({
                       {comp.material_name && (
                         <span className="comp-model" title={comp.material_name}>
                           {comp.material_name}
+                        </span>
+                      )}
+                      {!comp.put?.text_file_id && (
+                        <span
+                          className="badge"
+                          style={{
+                            background: '#dcfce7',
+                            color: '#15803d',
+                            border: '1px solid #86efac',
+                            fontSize: '10px',
+                            padding: '2px 6px',
+                            fontWeight: 700,
+                            borderRadius: '4px',
+                            marginLeft: 'auto',
+                          }}
+                        >
+                          NEW
                         </span>
                       )}
                     </div>

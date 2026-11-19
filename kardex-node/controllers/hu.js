@@ -261,7 +261,10 @@ exports.clearCompartment = asyncHandler(async (req, res) => {
         allocated_by: null
     });
 
-    await recalcHUStatus(hu.id);
+    const newHuStatus = await recalcHUStatus(hu.id);
+    if (newHuStatus === 'EMPTY') {
+        await hu.update({ storage_status: 'DRAFT' });
+    }
 
     return res.status(200).json(compartment);
 });
@@ -816,7 +819,18 @@ exports.confirmMaterialPick = asyncHandler(async (req, res) => {
 
     // Recalculate hu_status for all affected HUs
     for (const huId of affectedHUIds) {
-        await recalcHUStatus(huId);
+        const newStatus = await recalcHUStatus(huId);
+        if (newStatus === 'EMPTY') {
+            await db.handling_unit.update(
+                { last_transaction: 'MATERIAL_PICK', storage_status: 'OUTSIDE_KARDEX' },
+                { where: { id: huId } }
+            );
+        } else {
+            await db.handling_unit.update(
+                { last_transaction: 'MATERIAL_PICK' },
+                { where: { id: huId } }
+            );
+        }
     }
 
     await pick.update({ updated_at: new Date() });
@@ -924,6 +938,17 @@ exports.pickCompartment = asyncHandler(async (req, res) => {
 
     const newHuStatus = await recalcHUStatus(hu.id);
 
+    if (newHuStatus === 'EMPTY') {
+        await hu.update({
+            last_transaction: 'MATERIAL_PICK',
+            storage_status: 'OUTSIDE_KARDEX'
+        });
+    } else {
+        await hu.update({
+            last_transaction: 'MATERIAL_PICK'
+        });
+    }
+
     return res.status(200).json({
         message: `Serial ${serialNumber} picked successfully from compartment #${num}. File ${genFileName} generated.`,
         compartment,
@@ -985,7 +1010,11 @@ exports.pickAllCompartments = asyncHandler(async (req, res) => {
         where: { id: { [Op.in]: compIds } }
     });
 
-    await hu.update({ hu_status: 'EMPTY' });
+    await hu.update({
+        hu_status: 'EMPTY',
+        last_transaction: 'MATERIAL_PICK',
+        storage_status: 'OUTSIDE_KARDEX'
+    });
 
     return res.status(200).json({
         message: `Successfully picked and unloaded all ${occupiedCompartments.length} parts from ${hu.hu_id}.`,
@@ -1166,6 +1195,17 @@ exports.pickScanGet = asyncHandler(async (req, res) => {
             where: { handling_unit_id: hu.id, status: 'OCCUPIED' }
         });
 
+        if (remainingOccupied === 0) {
+            await hu.update({
+                last_transaction: 'MATERIAL_PICK',
+                storage_status: 'OUTSIDE_KARDEX'
+            });
+        } else {
+            await hu.update({
+                last_transaction: 'MATERIAL_PICK'
+            });
+        }
+
         // Log transaction
         await db.log.create({
             entity_number: serial_number,
@@ -1293,7 +1333,17 @@ exports.sendPickToKardex = asyncHandler(async (req, res) => {
         });
     }
 
-    await recalcHUStatus(hu.id);
+    const newHuStatus = await recalcHUStatus(hu.id);
+    if (newHuStatus === 'EMPTY') {
+        await hu.update({
+            last_transaction: 'MATERIAL_PICK',
+            storage_status: 'OUTSIDE_KARDEX'
+        });
+    } else {
+        await hu.update({
+            last_transaction: 'MATERIAL_PICK'
+        });
+    }
 
     return res.status(200).json({
         message: `Successfully generated Kardex Pick Order file for ${pickedPuts.length} part(s).`,
