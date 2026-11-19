@@ -320,6 +320,34 @@ exports.getBoardHistory = async (serialNumber) => {
                 timeout: API_TIMEOUT
             }
         ).then((response) => {
+            if (response && response.data) {
+                if (!Array.isArray(response.data)) {
+                    if (Array.isArray(response.data.data)) {
+                        response.data = response.data.data;
+                    } else if (Array.isArray(response.data.History)) {
+                        response.data = response.data.History;
+                    } else if (Array.isArray(response.data.history)) {
+                        response.data = response.data.history;
+                    } else if (Array.isArray(response.data.BoardHistory)) {
+                        response.data = response.data.BoardHistory;
+                    } else if (typeof response.data === 'object' && response.data !== null && !response.data.Message && !response.data.error) {
+                        response.data = [response.data];
+                    } else {
+                        response.data = [];
+                    }
+                }
+                // Normalize CurrentProcess to Test_Process if returned from GetBoardData
+                if (Array.isArray(response.data)) {
+                    response.data.forEach(item => {
+                        if (item && !item.Test_Process && item.CurrentProcess) {
+                            item.Test_Process = item.CurrentProcess;
+                        }
+                    });
+                }
+            } else {
+                response = response || {};
+                response.data = [];
+            }
             resolve(response);
         }).catch((error) => {
             resolve({ isError: true, error });

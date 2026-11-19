@@ -366,10 +366,16 @@ exports.scanCompartment = asyncHandler(async (req, res) => {
             return res.end();
         }
 
-        const isKanbanIn = boardHistoryResponse.data.some(part =>
+        const historyData = Array.isArray(boardHistoryResponse?.data) ? boardHistoryResponse.data : [];
+        if (historyData.length === 0) {
+            sendEvent({ entity_number: serialNumber, activity: 'FETCH_DETAILS', status: 'FAILED', message: `No board history records found in MES for serial ${serialNumber}.` });
+            return res.end();
+        }
+
+        const isKanbanIn = historyData.some(part =>
             ['KANBAN-IN', 'KANBAN_IN'].some(step => part.Test_Process?.toUpperCase()?.trim()?.includes(step))
         );
-        const isKanbanOut = boardHistoryResponse.data.some(part =>
+        const isKanbanOut = historyData.some(part =>
             ['KANBAN-OUT', 'KANBAN_OUT'].some(step => part.Test_Process?.toUpperCase()?.trim()?.includes(step))
         );
 
@@ -387,7 +393,7 @@ exports.scanCompartment = asyncHandler(async (req, res) => {
 
             if (cooldownHours > 0 && !isOverride) {
                 // Find latest KANBAN-OUT in MES board history
-                const kanbanOutSteps = (boardHistoryResponse.data || []).filter(part =>
+                const kanbanOutSteps = historyData.filter(part =>
                     ['KANBAN-OUT', 'KANBAN_OUT'].some(step => part.Test_Process?.toUpperCase()?.trim()?.includes(step))
                 );
 
@@ -437,7 +443,7 @@ exports.scanCompartment = asyncHandler(async (req, res) => {
             }
         }
 
-        const birthProcess = boardHistoryResponse.data.find(
+        const birthProcess = historyData.find(
             prt => prt?.Test_Process?.toUpperCase()?.trim() === 'BIRTH / BIRTH' || prt?.Test_Process?.toUpperCase()?.trim() === 'MTL_ASSEMBLY & LINKING / MTL_ASSEMBLY & LINKING'
         );
         if (!birthProcess) {
