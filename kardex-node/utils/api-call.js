@@ -49,7 +49,7 @@ async function getSoapClient() {
 // Production Endpoint: http://inrjnm0tis03/MES-TIS/TIS.asmx
 // ==============================================================================
 
-exports.getPVStatusCheck = async (serialNumber, processName) => {
+exports.getPVStatusCheck = async (serialNumber, processName, assemblyNumber = '') => {
     if (process.env.IS_OFFLINE === 'true') {
         return 'PASS';
     }
@@ -62,7 +62,7 @@ exports.getPVStatusCheck = async (serialNumber, processName) => {
         CustomerName: process.env.TISCustomer,
         Division: process.env.TISDivision,
         SerialNumber: serialNumber,
-        AssemblyNumber: '',
+        AssemblyNumber: assemblyNumber || '',
         TesterName: process.env.TISTesterName || processName,
         ProcessStep: processName,
     };

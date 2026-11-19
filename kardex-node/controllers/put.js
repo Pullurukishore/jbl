@@ -248,7 +248,12 @@ exports.createPut = asyncHandler(async (req, res) => {
             }
         }
 
-        const pvStatusResponse = await getPVStatusCheck(serialNumber, testProcess);
+        const birthProcess = historyData.find(
+            prt => prt?.Test_Process?.toUpperCase()?.trim() === 'BIRTH / BIRTH' || prt?.Test_Process?.toUpperCase()?.trim() === 'MTL_ASSEMBLY & LINKING / MTL_ASSEMBLY & LINKING'
+        );
+        const assemblyNumber = birthProcess?.Number || '';
+
+        const pvStatusResponse = await getPVStatusCheck(serialNumber, testProcess, assemblyNumber);
         if (pvStatusResponse?.isError) {
             logs.push(await createAndSendLog({
                 entity_number: serialNumber,

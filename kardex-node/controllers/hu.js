@@ -464,7 +464,7 @@ exports.scanCompartment = asyncHandler(async (req, res) => {
         // ── 5. CHECK_STATUS – PV Status ───────────────────────────────────
         sendEvent({ entity_number: serialNumber, activity: 'CHECK_STATUS', status: 'IN_PROGRESS', message: 'Checking PV status...', completed: false });
 
-        const pvStatusResponse = await getPVStatusCheck(serialNumber, testProcess);
+        const pvStatusResponse = await getPVStatusCheck(serialNumber, testProcess, birthProcess?.Number);
         if (pvStatusResponse?.isError) {
             sendEvent({ entity_number: serialNumber, activity: 'CHECK_STATUS', status: 'FAILED', message: `PV Status Api Failed. ${pvStatusResponse?.error?.message ? `(${pvStatusResponse?.error?.message})` : ''}` });
             return res.end();
