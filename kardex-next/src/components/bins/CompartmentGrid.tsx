@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Compartment } from '@/types/hu';
-import { Check, Plus, Lock, Cpu, Zap, Radio, Grid, Columns, ArrowUp, ArrowDown } from 'lucide-react';
+import { Check, Plus, Lock, Cpu, Zap, Radio, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface CompartmentGridProps {
   compartments: Compartment[];
@@ -29,13 +29,7 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
     binName === 'CON_BIND' ||
     (binType && binType.toLowerCase().includes('vertical'));
 
-  const [layoutMode, setLayoutMode] = useState<'horizontal' | 'vertical'>(
-    isVerticalBin ? 'vertical' : 'horizontal'
-  );
-
-  useEffect(() => {
-    setLayoutMode(isVerticalBin ? 'vertical' : 'horizontal');
-  }, [binName, binType, isVerticalBin]);
+  const layoutMode: 'horizontal' | 'vertical' = isVerticalBin ? 'vertical' : 'horizontal';
 
   const sortedCompartments = [...compartments].sort(
     (a, b) => a.compartment_number - b.compartment_number
@@ -278,7 +272,7 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
               >
                 {comp.serial_number || 'SEATED PART'}
               </span>
-              {comp.material_name && (
+              {(comp.material_name || comp.put?.model_number) && (
                 <span
                   style={{
                     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
@@ -289,8 +283,9 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                   }}
+                  title={comp.material_name || comp.put?.model_number || ''}
                 >
-                  {comp.material_name}
+                  {comp.material_name || comp.put?.model_number}
                 </span>
               )}
             </>
@@ -368,7 +363,7 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
                 border: '1px solid rgba(16, 185, 129, 0.5)',
               }}
             >
-              STORED
+              PASS • STORED
             </span>
           )}
 
@@ -435,7 +430,7 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           background: linear-gradient(180deg, #111827 0%, #0b0f19 50%, #030712 100%);
           border: 3px solid #1f293d;
           border-radius: 14px;
-          padding: 10px 12px;
+          padding: 8px 10px;
           box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.7),
                       inset 0 1px 1px rgba(255, 255, 255, 0.08),
                       inset 0 -2px 4px rgba(0, 0, 0, 0.9);
@@ -447,8 +442,9 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           flex-direction: column;
           justify-content: space-between;
           user-select: none;
-          overflow-x: auto;
-          min-height: 520px;
+          overflow-x: hidden;
+          min-width: 0;
+          min-height: 480px;
         }
 
         /* Molded Outer Lip & Carry Grips */
@@ -463,6 +459,8 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           margin-bottom: 8px;
           box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.6);
           flex-shrink: 0;
+          flex-wrap: wrap;
+          gap: 6px;
         }
 
         .handle-grip-recess {
@@ -479,10 +477,10 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           align-items: center;
           gap: 6px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 10.5px;
+          font-size: 10px;
           font-weight: 700;
           color: #94a3b8;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.4px;
           text-transform: uppercase;
         }
 
@@ -503,10 +501,11 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         .tote-telemetry {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 10px;
+          font-size: 9.5px;
           font-weight: 700;
+          flex-wrap: wrap;
         }
 
         .telemetry-loaded {
@@ -534,30 +533,31 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           background: #040711;
           border: 1.5px solid #1a2234;
           border-radius: 10px;
-          padding: 10px 8px;
+          padding: 8px 5px;
           box-shadow: inset 0 6px 18px rgba(0, 0, 0, 0.85);
           display: grid;
           grid-template-columns: repeat(15, minmax(0, 1fr));
-          grid-template-rows: repeat(2, minmax(160px, 1fr));
-          column-gap: 6px;
-          row-gap: 10px;
+          grid-template-rows: repeat(2, minmax(145px, 1fr));
+          column-gap: 3.5px;
+          row-gap: 8px;
           width: 100%;
-          min-width: 860px;
+          min-width: 0;
           flex: 1;
         }
 
         /* Individual Physical Socket Pocket */
         .socket-pocket {
-          border-radius: 8px;
+          border-radius: 6px;
           height: 100%;
-          min-height: 160px;
-          padding: 8px 6px;
+          min-height: 145px;
+          padding: 5px 2px;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
           position: relative;
           transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
           overflow: hidden;
+          min-width: 0;
         }
 
         /* OCCUPIED / SEATED PCB CARD */
@@ -577,18 +577,27 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           transform: translateY(-1px);
         }
 
+        /* Top Group in Socket */
+        .pocket-top-group {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          flex-shrink: 0;
+          width: 100%;
+        }
+
         /* PCB Gold Edge Contacts at top of card */
         .pcb-edge-contacts {
           display: flex;
           justify-content: center;
-          gap: 2px;
+          gap: 1.5px;
           margin-bottom: 2px;
           opacity: 0.85;
         }
 
         .pcb-pin {
-          width: 3.5px;
-          height: 5px;
+          width: 3px;
+          height: 4px;
           background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
           border-radius: 1px 1px 0 0;
           box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -600,79 +609,124 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           align-items: center;
           justify-content: space-between;
           margin-bottom: 2px;
+          padding: 0 1px;
         }
 
         .slot-badge-occupied {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 10px;
+          font-size: 8.5px;
           font-weight: 800;
           color: #34d399;
           background: rgba(6, 78, 59, 0.7);
           border: 1px solid rgba(16, 185, 129, 0.4);
-          padding: 2px 5px;
-          border-radius: 4px;
-          letter-spacing: 0.3px;
+          padding: 1px 3px;
+          border-radius: 3px;
+          letter-spacing: 0.1px;
         }
 
         .status-led-green {
-          width: 7px;
-          height: 7px;
+          width: 6px;
+          height: 6px;
           border-radius: 50%;
           background: #34d399;
-          box-shadow: 0 0 8px #34d399, 0 0 3px #10b981;
+          box-shadow: 0 0 6px #34d399;
         }
 
         /* PCB Module Chip Center */
         .pcb-module-body {
-          background: rgba(6, 78, 59, 0.35);
-          border: 1px solid rgba(16, 185, 129, 0.3);
+          background: linear-gradient(180deg, rgba(6, 78, 59, 0.45) 0%, rgba(4, 40, 30, 0.5) 100%);
+          border: 1px solid rgba(16, 185, 129, 0.35);
           border-radius: 6px;
-          padding: 8px 4px;
-          text-align: center;
-          margin: 6px 0;
+          padding: 6px 2px;
+          margin: 3px 0;
           position: relative;
           flex: 1;
           display: flex;
           flex-direction: column;
-          justify-content: center;
+          justify-content: space-evenly;
+          align-items: center;
+          gap: 3px;
+          overflow: hidden;
+          min-width: 0;
+          box-shadow: inset 0 1px 3px rgba(110, 231, 183, 0.08);
         }
 
-        .pcb-module-body::before {
-          content: '';
-          position: absolute;
-          top: 3px;
-          left: 4px;
-          width: 3px;
-          height: 3px;
-          border-radius: 50%;
-          background: rgba(52, 211, 153, 0.4);
+        .unit-data-group {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          width: 100%;
+          min-width: 0;
+        }
+
+        .unit-field-label {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          font-size: 6.5px;
+          font-weight: 800;
+          color: #6ee7b7;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
+          line-height: 1;
+          margin-bottom: 1.5px;
+          opacity: 0.85;
+        }
+
+        .pcb-ic-notch {
+          width: 65%;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(52, 211, 153, 0.35), transparent);
+          margin: 1px 0;
+        }
+
+        .unit-pass-pill {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 2px;
+          background: rgba(16, 185, 129, 0.22);
+          border: 1px solid rgba(16, 185, 129, 0.45);
+          color: #34d399;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          font-size: 7px;
+          font-weight: 800;
+          padding: 1.5px 4px;
+          border-radius: 3px;
+          letter-spacing: 0.3px;
+          line-height: 1;
         }
 
         .serial-code-text {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 10.5px;
+          font-size: 9px;
           font-weight: 800;
           color: #ffffff;
-          letter-spacing: 0;
-          word-break: break-all;
-          overflow-wrap: anywhere;
-          line-height: 1.25;
+          letter-spacing: -0.2px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: 1.2;
           text-align: center;
           display: block;
+          width: 100%;
         }
 
         .material-code-text {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 9px;
-          font-weight: 700;
+          font-size: 8px;
+          font-weight: 800;
           color: #fbbf24;
-          margin-top: 5px;
-          letter-spacing: 0;
-          word-break: break-all;
-          overflow-wrap: anywhere;
-          line-height: 1.2;
+          letter-spacing: -0.15px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: 1.15;
           text-align: center;
-          display: block;
+          display: inline-block;
+          max-width: 100%;
+          background: rgba(245, 158, 11, 0.15);
+          border: 1px solid rgba(245, 158, 11, 0.3);
+          border-radius: 2px;
+          padding: 1.5px 3px;
         }
 
         /* PCB Lower Footer */
@@ -680,13 +734,26 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           display: flex;
           align-items: center;
           justify-content: space-between;
-          border-top: 1px solid rgba(6, 78, 59, 0.6);
-          padding-top: 3px;
+          border-top: 1px solid rgba(16, 185, 129, 0.25);
+          padding-top: 2px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 8px;
+          font-size: 7px;
+          line-height: 1;
+          gap: 1px;
+          white-space: nowrap;
+          overflow: hidden;
+        }
+
+        .footer-tag-stored {
+          color: #6ee7b7;
+          font-weight: 800;
+          letter-spacing: 0.1px;
+        }
+
+        .footer-tag-pass {
           color: #34d399;
-          font-weight: 700;
-          letter-spacing: 0.25px;
+          font-weight: 800;
+          letter-spacing: 0.1px;
         }
 
         /* PICKED SOCKET STYLES */
@@ -703,76 +770,136 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
 
         .slot-badge-picked {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 10px;
+          font-size: 8.5px;
           font-weight: 800;
           color: #fbbf24;
           background: rgba(120, 53, 15, 0.7);
           border: 1px solid rgba(245, 158, 11, 0.4);
-          padding: 2px 5px;
-          border-radius: 4px;
-          letter-spacing: 0.25px;
+          padding: 1px 3px;
+          border-radius: 3px;
+          letter-spacing: 0.1px;
         }
 
         .status-led-amber {
-          width: 7px;
-          height: 7px;
+          width: 6px;
+          height: 6px;
           border-radius: 50%;
           background: #fbbf24;
-          box-shadow: 0 0 8px #fbbf24, 0 0 3px #d97706;
+          box-shadow: 0 0 6px #fbbf24;
         }
 
         .pcb-module-body-picked {
-          background: rgba(120, 53, 15, 0.35);
-          border: 1px solid rgba(245, 158, 11, 0.3);
+          background: linear-gradient(180deg, rgba(120, 53, 15, 0.45) 0%, rgba(69, 26, 3, 0.45) 100%);
+          border: 1px solid rgba(245, 158, 11, 0.35);
           border-radius: 6px;
-          padding: 8px 4px;
-          text-align: center;
-          margin: 6px 0;
+          padding: 6px 2px;
+          margin: 3px 0;
           position: relative;
           flex: 1;
           display: flex;
           flex-direction: column;
+          justify-content: space-evenly;
+          align-items: center;
+          gap: 3px;
+          overflow: hidden;
+          min-width: 0;
+          box-shadow: inset 0 1px 3px rgba(251, 191, 36, 0.08);
+        }
+
+        .unit-field-label-picked {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          font-size: 6.5px;
+          font-weight: 800;
+          color: #fde68a;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
+          line-height: 1;
+          margin-bottom: 1.5px;
+          opacity: 0.85;
+        }
+
+        .pcb-ic-notch-picked {
+          width: 65%;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.35), transparent);
+          margin: 1px 0;
+        }
+
+        .unit-picked-pill {
+          display: inline-flex;
+          align-items: center;
           justify-content: center;
+          gap: 2px;
+          background: rgba(245, 158, 11, 0.22);
+          border: 1px solid rgba(245, 158, 11, 0.45);
+          color: #fbbf24;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          font-size: 7px;
+          font-weight: 800;
+          padding: 1.5px 4px;
+          border-radius: 3px;
+          letter-spacing: 0.3px;
+          line-height: 1;
         }
 
         .serial-code-text-picked {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 10.5px;
+          font-size: 9px;
           font-weight: 800;
           color: #ffffff;
-          letter-spacing: 0;
-          word-break: break-all;
-          overflow-wrap: anywhere;
-          line-height: 1.25;
+          letter-spacing: -0.2px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: 1.2;
           text-align: center;
           display: block;
+          width: 100%;
         }
 
         .material-code-text-picked {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 9px;
-          font-weight: 700;
+          font-size: 8px;
+          font-weight: 800;
           color: #fbbf24;
-          margin-top: 5px;
-          letter-spacing: 0;
-          word-break: break-all;
-          overflow-wrap: anywhere;
-          line-height: 1.2;
+          letter-spacing: -0.15px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: 1.15;
           text-align: center;
-          display: block;
+          display: inline-block;
+          max-width: 100%;
+          background: rgba(245, 158, 11, 0.15);
+          border: 1px solid rgba(245, 158, 11, 0.3);
+          border-radius: 2px;
+          padding: 1.5px 3px;
         }
 
         .pocket-footer-picked {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          border-top: 1px solid rgba(120, 53, 15, 0.6);
-          padding-top: 3px;
+          border-top: 1px solid rgba(245, 158, 11, 0.25);
+          padding-top: 2px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 8px;
+          font-size: 7px;
+          line-height: 1;
+          gap: 1px;
+          white-space: nowrap;
+          overflow: hidden;
+        }
+
+        .footer-tag-picked {
+          color: #fde68a;
+          font-weight: 800;
+          letter-spacing: 0.1px;
+        }
+
+        .footer-tag-out {
           color: #fbbf24;
-          font-weight: 700;
-          letter-spacing: 0.25px;
+          font-weight: 800;
+          letter-spacing: 0.1px;
         }
 
         /* NEXT EMPTY TARGET SOCKET */
@@ -798,18 +925,18 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
 
         .slot-badge-target {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 10px;
+          font-size: 8.5px;
           font-weight: 800;
           color: #93c5fd;
           background: rgba(30, 58, 138, 0.7);
           border: 1px solid rgba(59, 130, 246, 0.5);
-          padding: 2px 5px;
-          border-radius: 4px;
+          padding: 1px 3px;
+          border-radius: 3px;
         }
 
         .target-indicator-text {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 8.5px;
+          font-size: 8px;
           font-weight: 800;
           color: #60a5fa;
           display: flex;
@@ -822,14 +949,14 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          padding: 6px 0;
-          gap: 4px;
+          padding: 4px 0;
+          gap: 3px;
           flex: 1;
         }
 
         .scan-icon-circle {
-          width: 32px;
-          height: 32px;
+          width: 24px;
+          height: 24px;
           border-radius: 50%;
           background: rgba(59, 130, 246, 0.2);
           border: 1px solid rgba(59, 130, 246, 0.4);
@@ -847,7 +974,7 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         }
 
         .scan-action-title {
-          font-size: 10px;
+          font-size: 9px;
           font-weight: 700;
           color: #bfdbfe;
         }
@@ -856,12 +983,16 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           display: flex;
           align-items: center;
           justify-content: space-between;
-          border-top: 1px solid rgba(30, 58, 138, 0.6);
-          padding-top: 3px;
+          border-top: 1px solid rgba(59, 130, 246, 0.3);
+          padding-top: 2px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 8px;
-          color: #60a5fa;
+          font-size: 7px;
+          color: #93c5fd;
           font-weight: 700;
+          line-height: 1;
+          white-space: nowrap;
+          gap: 1px;
+          overflow: hidden;
         }
 
         /* STANDARD EMPTY SOCKET */
@@ -880,13 +1011,13 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
 
         .slot-badge-empty {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 10px;
+          font-size: 8.5px;
           font-weight: 700;
           color: #64748b;
           background: #0f172a;
           border: 1px solid #1e293b;
-          padding: 2px 5px;
-          border-radius: 4px;
+          padding: 1px 3px;
+          border-radius: 3px;
         }
 
         .empty-slot-guide {
@@ -894,14 +1025,14 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          padding: 6px 0;
-          gap: 4px;
+          padding: 4px 0;
+          gap: 2px;
           flex: 1;
         }
 
         .guide-crosshair {
           color: #334155;
-          font-size: 18px;
+          font-size: 16px;
           transition: all 0.2s ease;
         }
 
@@ -911,7 +1042,7 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         }
 
         .empty-slot-text {
-          font-size: 10px;
+          font-size: 9px;
           font-weight: 600;
           color: #475569;
           transition: color 0.2s ease;
@@ -925,12 +1056,16 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           display: flex;
           align-items: center;
           justify-content: space-between;
-          border-top: 1px solid #111827;
-          padding-top: 3px;
+          border-top: 1px solid #1e293b;
+          padding-top: 2px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 8px;
-          color: #475569;
+          font-size: 7px;
+          color: #64748b;
           font-weight: 600;
+          line-height: 1;
+          white-space: nowrap;
+          gap: 1px;
+          overflow: hidden;
         }
 
         /* CURRENTLY ACTIVE SCAN MODAL TARGET */
@@ -963,69 +1098,11 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           border: 1px solid #1e293b;
           border-radius: 8px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 9.5px;
+          font-size: 9px;
           color: #64748b;
           flex-shrink: 0;
-        }
-
-        /* Layout & Orientation Switcher Strip */
-        .layout-switcher-strip {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          background: #090f1e;
-          border: 1px solid #1e293b;
-          border-radius: 8px;
-          padding: 6px 10px;
-          margin-bottom: 8px;
-          gap: 12px;
           flex-wrap: wrap;
-          flex-shrink: 0;
-        }
-
-        .switcher-label {
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 10px;
-          font-weight: 800;
-          color: #64748b;
-          letter-spacing: 0.5px;
-        }
-
-        .layout-btn-group {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          background: #030712;
-          border: 1px solid #1e293b;
-          border-radius: 6px;
-          padding: 2px;
-        }
-
-        .layout-btn {
-          background: transparent;
-          border: none;
-          color: #94a3b8;
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 10px;
-          font-weight: 700;
-          padding: 4px 8px;
-          border-radius: 5px;
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          cursor: pointer;
-          transition: all 0.15s ease;
-        }
-
-        .layout-btn:hover {
-          color: #ffffff;
-          background: rgba(255, 255, 255, 0.05);
-        }
-
-        .layout-btn.active {
-          background: #2563eb;
-          color: #ffffff;
-          box-shadow: 0 1px 4px rgba(37, 99, 235, 0.4);
+          gap: 6px;
         }
 
         /* Vertical Deck Layout Container */
@@ -1313,39 +1390,6 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         </div>
       </div>
 
-      {/* Control Switcher Bar: Layout Mode (Horizontal CON_BINC vs Vertical CON_BIND) */}
-      <div className="layout-switcher-strip">
-        <div className="d-flex align-items-center gap-2">
-          <span className="switcher-label">LAYOUT:</span>
-          <div className="layout-btn-group">
-            <button
-              type="button"
-              className={`layout-btn ${layoutMode === 'horizontal' ? 'active' : ''}`}
-              onClick={() => setLayoutMode('horizontal')}
-              title="Standard Horizontal Matrix (2 Rows × 15 Columns - CON_BINC)"
-            >
-              <Grid size={13} />
-              <span>Horizontal Matrix (CON_BINC)</span>
-            </button>
-            <button
-              type="button"
-              className={`layout-btn ${layoutMode === 'vertical' ? 'active' : ''}`}
-              onClick={() => setLayoutMode('vertical')}
-              title="Side Bin Vertical (1–15 & 16–30 Vertically - CON_BIND)"
-            >
-              <Columns size={13} />
-              <span>Side Bin Vertical (CON_BIND)</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="d-flex align-items-center gap-2">
-          <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '10.5px', color: '#94a3b8' }}>
-            PROFILE: <strong style={{ color: '#93c5fd' }}>{binName || (layoutMode === 'vertical' ? 'CON_BIND' : 'CON_BINC')}</strong>
-          </span>
-        </div>
-      </div>
-
       {/* Sunken Socket Pocket Deck - Horizontal Matrix Layout (CON_BINC) */}
       {layoutMode === 'horizontal' && (
         <div className="socket-deck">
@@ -1405,10 +1449,8 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
               {/* === PICKED: PCB ADAPTER CARD VALIDATED AND PICKED === */}
               {isPicked && (
                 <>
-                  <div>
+                  <div className="pocket-top-group">
                     <div className="pcb-edge-contacts" style={{ opacity: 0.5 }}>
-                      <div className="pcb-pin" style={{ background: '#94a3b8' }} />
-                      <div className="pcb-pin" style={{ background: '#94a3b8' }} />
                       <div className="pcb-pin" style={{ background: '#94a3b8' }} />
                       <div className="pcb-pin" style={{ background: '#94a3b8' }} />
                       <div className="pcb-pin" style={{ background: '#94a3b8' }} />
@@ -1421,25 +1463,36 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
                       </span>
                       <div className="status-led-amber" title="Pick Validated - Ready for Kardex" />
                     </div>
+                  </div>
 
-                    <div
-                      className="pcb-module-body-picked"
-                      title={`Picked Serial: ${comp.serial_number || comp.put?.serial_number || 'N/A'}\nModel: ${comp.material_name || comp.put?.model_number || 'N/A'}`}
-                    >
-                      <div className="serial-code-text-picked">
-                        ✓ {comp.serial_number || comp.put?.serial_number || 'PICKED PART'}
-                      </div>
-                      {(comp.material_name || comp.put?.model_number) && (
-                        <div className="material-code-text-picked">
-                          {comp.material_name || comp.put?.model_number}
-                        </div>
-                      )}
+                  <div
+                    className="pcb-module-body-picked"
+                    title={`Picked Serial: ${comp.serial_number || comp.put?.serial_number || 'N/A'}\nModel: ${comp.material_name || comp.put?.model_number || 'N/A'}`}
+                  >
+                    <div className="unit-data-group">
+                      <span className="unit-field-label-picked">SERIAL</span>
+                      <span className="serial-code-text-picked" title={comp.serial_number || comp.put?.serial_number || ''}>
+                        ✓ {comp.serial_number || comp.put?.serial_number || 'PICKED'}
+                      </span>
+                    </div>
+
+                    <div className="pcb-ic-notch-picked" />
+
+                    <div className="unit-data-group">
+                      <span className="unit-field-label-picked">MODEL</span>
+                      <span className="material-code-text-picked" title={comp.material_name || comp.put?.model_number || ''}>
+                        {comp.material_name || comp.put?.model_number || 'N/A'}
+                      </span>
+                    </div>
+
+                    <div className="unit-picked-pill">
+                      <span>OUT ✓</span>
                     </div>
                   </div>
 
                   <div className="pocket-footer-picked">
-                    <span>PICKED</span>
-                    <span>KANBAN-OUT ✓</span>
+                    <span className="footer-tag-picked">PICKED</span>
+                    <span className="footer-tag-out">OUT</span>
                   </div>
                 </>
               )}
@@ -1447,11 +1500,9 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
               {/* === OCCUPIED: SEATED PCB ADAPTER CARD (PUT) === */}
               {isOccupied && (
                 <>
-                  <div>
+                  <div className="pocket-top-group">
                     {/* Simulated Gold PCB Pin Contacts */}
                     <div className="pcb-edge-contacts">
-                      <div className="pcb-pin" />
-                      <div className="pcb-pin" />
                       <div className="pcb-pin" />
                       <div className="pcb-pin" />
                       <div className="pcb-pin" />
@@ -1464,25 +1515,37 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
                       </span>
                       <div className="status-led-green" title="Module Seated - PASS & STORED" />
                     </div>
+                  </div>
 
-                    <div
-                      className="pcb-module-body"
-                      title={`Serial: ${comp.serial_number || 'N/A'}\nModel: ${comp.material_name || 'N/A'}`}
-                    >
-                      <div className="serial-code-text">
-                        {comp.serial_number || 'SEATED PART'}
-                      </div>
-                      {comp.material_name && (
-                        <div className="material-code-text">
-                          {comp.material_name}
-                        </div>
-                      )}
+                  <div
+                    className="pcb-module-body"
+                    title={`Serial: ${comp.serial_number || 'N/A'}\nModel: ${comp.material_name || comp.put?.model_number || 'N/A'}\nStatus: PASS & STORED`}
+                  >
+                    <div className="unit-data-group">
+                      <span className="unit-field-label">SERIAL</span>
+                      <span className="serial-code-text" title={comp.serial_number || ''}>
+                        {comp.serial_number || 'SEATED'}
+                      </span>
+                    </div>
+
+                    <div className="pcb-ic-notch" />
+
+                    <div className="unit-data-group">
+                      <span className="unit-field-label">MODEL</span>
+                      <span className="material-code-text" title={comp.material_name || comp.put?.model_number || ''}>
+                        {comp.material_name || comp.put?.model_number || 'N/A'}
+                      </span>
+                    </div>
+
+                    <div className="unit-pass-pill">
+                      <Check size={8} strokeWidth={3} />
+                      <span>PASS</span>
                     </div>
                   </div>
 
                   <div className="pocket-footer-occupied">
-                    <span>STORED</span>
-                    <span>PASS • VERIFIED</span>
+                    <span className="footer-tag-stored">STORED</span>
+                    <span className="footer-tag-pass">PASS</span>
                   </div>
                 </>
               )}
@@ -1503,8 +1566,8 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
                     <span className="scan-action-title">Scanning...</span>
                   </div>
                   <div className="pocket-footer-target">
+                    <span>SCAN</span>
                     <span>ACTIVE</span>
-                    <span>READY</span>
                   </div>
                 </>
               )}
@@ -1529,8 +1592,8 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
                   </div>
 
                   <div className="pocket-footer-target">
-                    <span>EMPTY</span>
-                    <span>READY</span>
+                    <span>NEXT</span>
+                    <span>SLOT</span>
                   </div>
                 </>
               )}
@@ -1557,7 +1620,7 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
                   </div>
 
                   <div className="pocket-footer-empty">
-                    <span>SLOT OPEN</span>
+                    <span>OPEN</span>
                     <span>EMPTY</span>
                   </div>
                 </>

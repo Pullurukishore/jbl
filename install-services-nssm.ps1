@@ -119,7 +119,7 @@ Write-Host "[3/4] Registering Frontend Service (KardexJblFrontend)..." -Foregrou
 & $nssmPath remove KardexJblFrontend confirm 2>$null
 
 # Register service using direct next runner (avoids cmd orphan process issues)
-& $nssmPath install KardexJblFrontend "$nodePath" "node_modules\next\dist\bin\next" "start" "-p" "3000"
+& $nssmPath install KardexJblFrontend "$nodePath" "node_modules\next\dist\bin\next" "start" "-p" "3000" "-H" "0.0.0.0"
 & $nssmPath set KardexJblFrontend AppDirectory "$frontendPath"
 & $nssmPath set KardexJblFrontend DisplayName "Kardex JBL Validation Frontend"
 & $nssmPath set KardexJblFrontend Description "Kardex Put and Pick Validation Next.js Web Application"
@@ -137,6 +137,22 @@ Write-Host "[3/4] Registering Frontend Service (KardexJblFrontend)..." -Foregrou
 & $nssmPath set KardexJblFrontend AppRestartDelay 5000
 
 Write-Host "[OK] Frontend Service registered (Port: 3000)" -ForegroundColor Green
+
+# ----------------------------------------------------
+# Configure Windows Firewall (Ports 3000 & 5005)
+# ----------------------------------------------------
+try {
+    if (-not (Get-NetFirewallRule -DisplayName "Kardex Frontend (Next.js 3000)" -ErrorAction SilentlyContinue)) {
+        New-NetFirewallRule -DisplayName "Kardex Frontend (Next.js 3000)" -Direction Inbound -LocalPort 3000 -Protocol TCP -Action Allow | Out-Null
+        Write-Host "[OK] Inbound Firewall Rule added for Port 3000" -ForegroundColor Green
+    }
+    if (-not (Get-NetFirewallRule -DisplayName "Kardex Backend (Node.js 5005)" -ErrorAction SilentlyContinue)) {
+        New-NetFirewallRule -DisplayName "Kardex Backend (Node.js 5005)" -Direction Inbound -LocalPort 5005 -Protocol TCP -Action Allow | Out-Null
+        Write-Host "[OK] Inbound Firewall Rule added for Port 5005" -ForegroundColor Green
+    }
+} catch {
+    Write-Host "[WARN] Could not configure firewall automatically: $($_.Exception.Message)" -ForegroundColor Yellow
+}
 
 # ----------------------------------------------------
 # Step 4: Start Services
@@ -170,8 +186,9 @@ Write-Host "======================================================" -ForegroundC
 Write-Host "  Setup Complete! Applications are running 24/7.     " -ForegroundColor Green
 Write-Host "======================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Frontend URL:  http://localhost:3000" -ForegroundColor Cyan
-Write-Host "Backend URL:   http://localhost:5005/api" -ForegroundColor Cyan
+Write-Host "Network IP:    192.168.1.19" -ForegroundColor Yellow
+Write-Host "Frontend URL:  http://192.168.1.19:3000  (or http://localhost:3000)" -ForegroundColor Cyan
+Write-Host "Backend URL:   http://192.168.1.19:5005/api  (or http://localhost:5005/api)" -ForegroundColor Cyan
 Write-Host "Logs Location: $logsPath" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Both services will automatically start on Windows boot," -ForegroundColor Gray

@@ -836,6 +836,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
               <CompartmentGrid
                 compartments={filteredCompartments}
                 onSelectEmpty={isLocked ? undefined : handleSelectEmpty}
+                onSelectOccupied={isLocked ? undefined : (comp) => setPickCompartmentTarget(comp)}
                 selectedCompartment={canPut && isScanModalOpen ? selectedCompartment : null}
                 huId={hu.hu_id}
                 binName={hu.bin_type?.bin_name || 'CON_BINC'}
