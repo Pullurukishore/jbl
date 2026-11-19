@@ -41,6 +41,7 @@ const fileRoutes = require('./routes/file');
 const authRoutes = require('./routes/auth');
 const huRoutes = require('./routes/hu');
 const materialRoutes = require('./routes/material');
+const reportRoutes = require('./routes/report');
 const { create } = require('xmlbuilder2');
 
 // Automated Daily Database Backup Scheduler (20-day retention)
@@ -138,6 +139,7 @@ app.use('/api/file', fileRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/hu', huRoutes);
 app.use('/api/material', materialRoutes);
+app.use('/api/report', reportRoutes);
 
 
 

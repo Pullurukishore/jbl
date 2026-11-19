@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   Boxes,
+  FileBarChart,
 } from 'lucide-react';
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
@@ -427,6 +428,13 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               <Layers size={14} /> Materials
             </Link>
 
+            <Link
+              href="/app/reports"
+              className={`dock-nav-link ${pathname.startsWith('/app/reports') ? 'active' : ''}`}
+            >
+              <FileBarChart size={14} /> Reports
+            </Link>
+
             {isAdmin && (
               <Link
                 href="/app/users"
@@ -513,6 +521,13 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               className={`mobile-nav-item ${pathname.startsWith('/app/materials') ? 'active' : ''}`}
             >
               <Layers size={16} /> Materials Inventory
+            </Link>
+
+            <Link
+              href="/app/reports"
+              className={`mobile-nav-item ${pathname.startsWith('/app/reports') ? 'active' : ''}`}
+            >
+              <FileBarChart size={16} /> Aging Reports
             </Link>
 
             {isAdmin && (

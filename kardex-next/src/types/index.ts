@@ -7,3 +7,4 @@ export * from './put';
 export * from './user';
 export * from './hu';
 export * from './material';
+export * from './report';
