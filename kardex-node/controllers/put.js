@@ -441,18 +441,36 @@ exports.createPut = asyncHandler(async (req, res) => {
         let latestFile = null;
         let results = [];
         const isOffline = process.env.IS_OFFLINE === 'true';
+        const isKanbanReturn = testProcess === 'KANBAN-RTN' || testProcess === 'KANBAN_RTN' || (isKanbanIn && isKanbanOut);
 
         res.write("data: " + JSON.stringify({
             entity_number: serialNumber,
             activity: 'FIND_CSV',
             status: 'IN_PROGRESS',
-            message: 'Searching PO file in network drive...',
+            message: isKanbanReturn
+                ? 'KANBAN-RTN detected: Bypassing PO file check (Internal return)...'
+                : 'Searching PO file in network drive...',
             completed: false,
             process_id
         }) + "\n\n");
         if (typeof res.flush === 'function') res.flush();
 
-        if (!isOffline) {
+        if (isKanbanReturn) {
+            // KANBAN-RTN Return: Skip PO file discovery (already owned stock returning after 24h cooldown)
+            logs.push(await createAndSendLog({
+                entity_number: serialNumber,
+                activity: 'FIND_CSV',
+                status: 'SUCCESS',
+                message: 'KANBAN-RTN: PO CSV check bypassed (Internal return after 24h cooldown).',
+                logged_by: req.user?.id,
+                log_type: 'PUT_PROCESS',
+                user_first_name: req.user?.first_name,
+                user_last_name: req.user?.last_name,
+                user_id: req.user?.user_id,
+                process_id
+            }, res));
+            activeProgressStep++;
+        } else if (!isOffline) {
             // Mount the network drive
             const result = await mountNetworkDrive();
             if (result?.isError) {
@@ -550,12 +568,14 @@ exports.createPut = asyncHandler(async (req, res) => {
             activeProgressStep++;
         }
 
-        const partFrmCsv = results?.some(prt =>
+        const partFrmCsv = isKanbanReturn || results?.some(prt =>
             prt?.['Short text']?.trim()?.toUpperCase() == birthProcess?.Number?.trim()?.toUpperCase() &&
             Number(prt['Open GR'] || prt['OPEN GR'] || 0) > 0
         );
 
-        if (process.env.IS_OFFLINE === 'true') {
+        if (isKanbanReturn) {
+            console.log('KANBAN-RTN: Bypassing PO Open GR check for internal return.');
+        } else if (process.env.IS_OFFLINE === 'true') {
             console.log('Offline Mode: Bypassing model availability check.');
         } else if (!partFrmCsv) {
             logs.push(await createAndSendLog({
@@ -604,6 +624,9 @@ exports.createPut = asyncHandler(async (req, res) => {
             entity_number: serialNumber,
             activity: 'FIND_MODEL',
             status: 'SUCCESS',
+            message: isKanbanReturn
+                ? `KANBAN-RTN: Model verified from MES (${birthProcess?.Number || 'N/A'}).`
+                : `Model found: ${birthProcess?.Number || 'N/A'}.`,
             logged_by: req.user?.id,
             log_type: 'PUT_PROCESS',
             user_first_name: req.user?.first_name,
@@ -617,6 +640,9 @@ exports.createPut = asyncHandler(async (req, res) => {
             entity_number: serialNumber,
             activity: 'MODEL_FOUND/NOTFOUND',
             status: 'SUCCESS',
+            message: isKanbanReturn
+                ? 'KANBAN-RTN: PO availability check bypassed for returned unit.'
+                : 'Model verified and available in PO File.',
             logged_by: req.user?.id,
             log_type: 'PUT_PROCESS',
             user_first_name: req.user?.first_name,
@@ -630,7 +656,9 @@ exports.createPut = asyncHandler(async (req, res) => {
             entity_number: serialNumber,
             activity: 'CHECKING_AVAILABILITY',
             status: 'IN_PROGRESS',
-            message: 'Updating Kanban board history & allocating inventory...',
+            message: isKanbanReturn
+                ? 'Updating MES Kanban history to KANBAN-RTN...'
+                : 'Updating Kanban board history & allocating inventory...',
             completed: false,
             process_id
         }) + "\n\n");
@@ -722,7 +750,7 @@ exports.createPut = asyncHandler(async (req, res) => {
                 process_status: testProcess,
                 pick_status: 'AVAILABLE',
                 po_file_id: savedCsvFile?.id,
-                text_file_id: putEntry.text_file_id,
+                text_file_id: null,
                 pick_id: null,
                 scanned_by: finalUserId,
                 text_file_downloaded: false
