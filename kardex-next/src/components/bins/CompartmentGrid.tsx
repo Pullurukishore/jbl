@@ -54,13 +54,20 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           background: linear-gradient(180deg, #111827 0%, #0b0f19 50%, #030712 100%);
           border: 3px solid #1f293d;
           border-radius: 14px;
-          padding: 8px 12px;
+          padding: 10px 12px;
           box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.7),
                       inset 0 1px 1px rgba(255, 255, 255, 0.08),
                       inset 0 -2px 4px rgba(0, 0, 0, 0.9);
           position: relative;
           width: 100%;
+          height: 100%;
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
           user-select: none;
+          overflow-x: auto;
+          min-height: 520px;
         }
 
         /* Molded Outer Lip & Carry Grips */
@@ -71,9 +78,10 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           background: #080d1a;
           border: 1px solid #1e293b;
           border-radius: 8px;
-          padding: 4px 10px;
-          margin-bottom: 6px;
+          padding: 6px 12px;
+          margin-bottom: 8px;
           box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.6);
+          flex-shrink: 0;
         }
 
         .handle-grip-recess {
@@ -140,24 +148,29 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           border-radius: 50%;
         }
 
-        /* Recessed Internal Socket Deck */
+        /* Recessed Internal Socket Deck - 2 Rows x 15 Columns */
         .socket-deck {
           background: #040711;
           border: 1.5px solid #1a2234;
           border-radius: 10px;
-          padding: 6px;
+          padding: 10px 8px;
           box-shadow: inset 0 6px 18px rgba(0, 0, 0, 0.85);
           display: grid;
-          grid-template-columns: repeat(5, 1fr);
-          gap: 6px;
+          grid-template-columns: repeat(15, minmax(0, 1fr));
+          grid-template-rows: repeat(2, minmax(160px, 1fr));
+          column-gap: 6px;
+          row-gap: 10px;
+          width: 100%;
+          min-width: 860px;
+          flex: 1;
         }
 
         /* Individual Physical Socket Pocket */
         .socket-pocket {
-          border-radius: 6px;
-          min-height: 70px;
-          max-height: 76px;
-          padding: 4px 6px;
+          border-radius: 8px;
+          height: 100%;
+          min-height: 160px;
+          padding: 8px 6px;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
@@ -189,12 +202,12 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           justify-content: center;
           gap: 2px;
           margin-bottom: 2px;
-          opacity: 0.75;
+          opacity: 0.85;
         }
 
         .pcb-pin {
-          width: 3px;
-          height: 4px;
+          width: 3.5px;
+          height: 5px;
           background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
           border-radius: 1px 1px 0 0;
           box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -210,19 +223,19 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
 
         .slot-badge-occupied {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 9.5px;
+          font-size: 10px;
           font-weight: 800;
           color: #34d399;
           background: rgba(6, 78, 59, 0.7);
           border: 1px solid rgba(16, 185, 129, 0.4);
-          padding: 1px 5px;
+          padding: 2px 5px;
           border-radius: 4px;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.3px;
         }
 
         .status-led-green {
-          width: 6px;
-          height: 6px;
+          width: 7px;
+          height: 7px;
           border-radius: 50%;
           background: #34d399;
           box-shadow: 0 0 8px #34d399, 0 0 3px #10b981;
@@ -232,18 +245,22 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         .pcb-module-body {
           background: rgba(6, 78, 59, 0.35);
           border: 1px solid rgba(16, 185, 129, 0.3);
-          border-radius: 4px;
-          padding: 2px 4px;
+          border-radius: 6px;
+          padding: 8px 4px;
           text-align: center;
-          margin: 1px 0;
+          margin: 6px 0;
           position: relative;
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
         }
 
         .pcb-module-body::before {
           content: '';
           position: absolute;
-          top: 2px;
-          left: 3px;
+          top: 3px;
+          left: 4px;
           width: 3px;
           height: 3px;
           border-radius: 50%;
@@ -255,24 +272,26 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           font-size: 10.5px;
           font-weight: 800;
           color: #ffffff;
-          letter-spacing: 0.3px;
+          letter-spacing: 0;
           word-break: break-all;
-          line-height: 1.15;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
+          overflow-wrap: anywhere;
+          line-height: 1.25;
+          text-align: center;
+          display: block;
         }
 
         .material-code-text {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 8.5px;
+          font-size: 9px;
           font-weight: 700;
           color: #fbbf24;
-          margin-top: 1.5px;
-          letter-spacing: 0.3px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
+          margin-top: 5px;
+          letter-spacing: 0;
+          word-break: break-all;
+          overflow-wrap: anywhere;
+          line-height: 1.2;
+          text-align: center;
+          display: block;
         }
 
         /* PCB Lower Footer */
@@ -281,12 +300,12 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           align-items: center;
           justify-content: space-between;
           border-top: 1px solid rgba(6, 78, 59, 0.6);
-          padding-top: 2px;
+          padding-top: 3px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
           font-size: 8px;
           color: #34d399;
           font-weight: 700;
-          letter-spacing: 0.3px;
+          letter-spacing: 0.25px;
         }
 
         /* PICKED SOCKET STYLES */
@@ -303,19 +322,19 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
 
         .slot-badge-picked {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 9.5px;
+          font-size: 10px;
           font-weight: 800;
           color: #fbbf24;
           background: rgba(120, 53, 15, 0.7);
           border: 1px solid rgba(245, 158, 11, 0.4);
-          padding: 1px 5px;
+          padding: 2px 5px;
           border-radius: 4px;
-          letter-spacing: 0.3px;
+          letter-spacing: 0.25px;
         }
 
         .status-led-amber {
-          width: 6px;
-          height: 6px;
+          width: 7px;
+          height: 7px;
           border-radius: 50%;
           background: #fbbf24;
           box-shadow: 0 0 8px #fbbf24, 0 0 3px #d97706;
@@ -324,11 +343,15 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         .pcb-module-body-picked {
           background: rgba(120, 53, 15, 0.35);
           border: 1px solid rgba(245, 158, 11, 0.3);
-          border-radius: 4px;
-          padding: 2px 4px;
+          border-radius: 6px;
+          padding: 8px 4px;
           text-align: center;
-          margin: 1px 0;
+          margin: 6px 0;
           position: relative;
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
         }
 
         .serial-code-text-picked {
@@ -336,24 +359,26 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           font-size: 10.5px;
           font-weight: 800;
           color: #ffffff;
-          letter-spacing: 0.3px;
+          letter-spacing: 0;
           word-break: break-all;
-          line-height: 1.15;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
+          overflow-wrap: anywhere;
+          line-height: 1.25;
+          text-align: center;
+          display: block;
         }
 
         .material-code-text-picked {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 8.5px;
+          font-size: 9px;
           font-weight: 700;
           color: #fbbf24;
-          margin-top: 1px;
-          letter-spacing: 0.3px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
+          margin-top: 5px;
+          letter-spacing: 0;
+          word-break: break-all;
+          overflow-wrap: anywhere;
+          line-height: 1.2;
+          text-align: center;
+          display: block;
         }
 
         .pocket-footer-picked {
@@ -361,12 +386,12 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           align-items: center;
           justify-content: space-between;
           border-top: 1px solid rgba(120, 53, 15, 0.6);
-          padding-top: 2px;
+          padding-top: 3px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
           font-size: 8px;
           color: #fbbf24;
           font-weight: 700;
-          letter-spacing: 0.3px;
+          letter-spacing: 0.25px;
         }
 
         /* NEXT EMPTY TARGET SOCKET */
@@ -392,18 +417,18 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
 
         .slot-badge-target {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 9.5px;
+          font-size: 10px;
           font-weight: 800;
           color: #93c5fd;
           background: rgba(30, 58, 138, 0.7);
           border: 1px solid rgba(59, 130, 246, 0.5);
-          padding: 1px 5px;
+          padding: 2px 5px;
           border-radius: 4px;
         }
 
         .target-indicator-text {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 8px;
+          font-size: 8.5px;
           font-weight: 800;
           color: #60a5fa;
           display: flex;
@@ -416,13 +441,14 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          padding: 2px 0;
-          gap: 2px;
+          padding: 6px 0;
+          gap: 4px;
+          flex: 1;
         }
 
         .scan-icon-circle {
-          width: 22px;
-          height: 22px;
+          width: 32px;
+          height: 32px;
           border-radius: 50%;
           background: rgba(59, 130, 246, 0.2);
           border: 1px solid rgba(59, 130, 246, 0.4);
@@ -440,7 +466,7 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         }
 
         .scan-action-title {
-          font-size: 9.5px;
+          font-size: 10px;
           font-weight: 700;
           color: #bfdbfe;
         }
@@ -450,7 +476,7 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           align-items: center;
           justify-content: space-between;
           border-top: 1px solid rgba(30, 58, 138, 0.6);
-          padding-top: 2px;
+          padding-top: 3px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
           font-size: 8px;
           color: #60a5fa;
@@ -473,12 +499,12 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
 
         .slot-badge-empty {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 9.5px;
+          font-size: 10px;
           font-weight: 700;
           color: #64748b;
           background: #0f172a;
           border: 1px solid #1e293b;
-          padding: 1px 5px;
+          padding: 2px 5px;
           border-radius: 4px;
         }
 
@@ -487,13 +513,14 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          padding: 2px 0;
-          gap: 1px;
+          padding: 6px 0;
+          gap: 4px;
+          flex: 1;
         }
 
         .guide-crosshair {
           color: #334155;
-          font-size: 12px;
+          font-size: 18px;
           transition: all 0.2s ease;
         }
 
@@ -503,7 +530,7 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         }
 
         .empty-slot-text {
-          font-size: 9.5px;
+          font-size: 10px;
           font-weight: 600;
           color: #475569;
           transition: color 0.2s ease;
@@ -518,7 +545,7 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           align-items: center;
           justify-content: space-between;
           border-top: 1px solid #111827;
-          padding-top: 2px;
+          padding-top: 3px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
           font-size: 8px;
           color: #475569;
@@ -549,14 +576,15 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin-top: 6px;
-          padding: 4px 10px;
+          margin-top: 8px;
+          padding: 6px 12px;
           background: #080d1a;
           border: 1px solid #1e293b;
           border-radius: 8px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
           font-size: 9.5px;
           color: #64748b;
+          flex-shrink: 0;
         }
       `}</style>
 
@@ -640,12 +668,12 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
                 isPicked
                   ? `Pocket #${comp.compartment_number} | PICKED & VERIFIED | Serial: ${comp.serial_number || 'N/A'} | Model: ${comp.material_name || 'N/A'} (Ready to send to Kardex)`
                   : isOccupied
-                  ? `Pocket #${comp.compartment_number} | LOADED & STORED (PASS) | Serial: ${comp.serial_number || 'N/A'} | Model: ${comp.material_name || 'N/A'}${isOccupiedClickable ? ' (Click to Pick / Unload Part)' : ''}`
-                  : disabled
-                  ? `Pocket #${comp.compartment_number} (Locked in Kardex)`
-                  : isNextTarget
-                  ? `Pocket #${comp.compartment_number} [NEXT SCAN TARGET] - Click to scan`
-                  : `Pocket #${comp.compartment_number} - Click to scan`
+                    ? `Pocket #${comp.compartment_number} | LOADED & STORED (PASS) | Serial: ${comp.serial_number || 'N/A'} | Model: ${comp.material_name || 'N/A'}${isOccupiedClickable ? ' (Click to Pick / Unload Part)' : ''}`
+                    : disabled
+                      ? `Pocket #${comp.compartment_number} (Locked in Kardex)`
+                      : isNextTarget
+                        ? `Pocket #${comp.compartment_number} [NEXT SCAN TARGET] - Click to scan`
+                        : `Pocket #${comp.compartment_number} - Click to scan`
               }
             >
               {/* === PICKED: PCB ADAPTER CARD VALIDATED AND PICKED === */}
@@ -663,12 +691,15 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
 
                     <div className="pocket-header">
                       <span className="slot-badge-picked">
-                        #{comp.compartment_number < 10 ? `0${comp.compartment_number}` : comp.compartment_number} PICKED
+                        #{comp.compartment_number < 10 ? `0${comp.compartment_number}` : comp.compartment_number}
                       </span>
                       <div className="status-led-amber" title="Pick Validated - Ready for Kardex" />
                     </div>
 
-                    <div className="pcb-module-body-picked">
+                    <div
+                      className="pcb-module-body-picked"
+                      title={`Picked Serial: ${comp.serial_number || comp.put?.serial_number || 'N/A'}\nModel: ${comp.material_name || comp.put?.model_number || 'N/A'}`}
+                    >
                       <div className="serial-code-text-picked">
                         ✓ {comp.serial_number || comp.put?.serial_number || 'PICKED PART'}
                       </div>
@@ -703,12 +734,15 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
 
                     <div className="pocket-header">
                       <span className="slot-badge-occupied">
-                        #{comp.compartment_number < 10 ? `0${comp.compartment_number}` : comp.compartment_number} LOADED
+                        #{comp.compartment_number < 10 ? `0${comp.compartment_number}` : comp.compartment_number}
                       </span>
                       <div className="status-led-green" title="Module Seated - PASS & STORED" />
                     </div>
 
-                    <div className="pcb-module-body">
+                    <div
+                      className="pcb-module-body"
+                      title={`Serial: ${comp.serial_number || 'N/A'}\nModel: ${comp.material_name || 'N/A'}`}
+                    >
                       <div className="serial-code-text">
                         {comp.serial_number || 'SEATED PART'}
                       </div>
@@ -810,7 +844,7 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
       {/* Bottom Lip Molded Specification */}
       <div className="tote-bottom-lip">
         <span>SPEC: HIGH-IMPACT CONDUCTIVE POLYPROPYLENE (ESD SURFACE RESISTIVITY: 10^4 - 10^9 Ω)</span>
-        <span>LAYOUT: {sortedCompartments.length} POCKET MATRIX</span>
+        <span>LAYOUT: 2 ROWS × 15 SLOTS ({sortedCompartments.length} POCKET MATRIX)</span>
       </div>
     </div>
   );

@@ -261,7 +261,19 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       </header>
 
       {/* Main Page Area */}
-      <main className="container-fluid px-4 py-4">{children}</main>
+      <main
+        className="w-100 px-3 px-xl-4 py-3"
+        style={{
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+          minHeight: 'calc(100vh - 65px)',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {children}
+      </main>
     </div>
   );
 }

@@ -148,12 +148,12 @@ export const ScanModal: React.FC<ScanModalProps> = ({
   };
 
   const titleContent = (
-    <div className="d-flex align-items-center gap-2">
+    <div className="d-flex align-items-center gap-2" style={{ minWidth: 0, overflow: 'hidden' }}>
       <div
         style={{
-          width: '32px',
-          height: '32px',
-          borderRadius: '8px',
+          width: embedded ? '28px' : '32px',
+          height: embedded ? '28px' : '32px',
+          borderRadius: embedded ? '7px' : '8px',
           background: isFull ? 'rgba(239, 68, 68, 0.12)' : 'rgba(56, 189, 248, 0.14)',
           color: isFull ? '#dc2626' : '#0284c7',
           border: isFull ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(56, 189, 248, 0.3)',
@@ -163,36 +163,37 @@ export const ScanModal: React.FC<ScanModalProps> = ({
           flexShrink: 0,
         }}
       >
-        <PackagePlus size={18} />
+        <PackagePlus size={embedded ? 15 : 18} />
       </div>
-      <div>
-        <div className="d-flex align-items-center gap-2">
-          <span className="fw-bold" style={{ fontSize: '15.5px', color: '#0f172a' }}>
-            PUT Process — {isFull ? 'Bin is Full' : 'Scan Part Number'}
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div className="d-flex align-items-center justify-content-between gap-1">
+          <span className="fw-bold text-truncate" style={{ fontSize: embedded ? '13px' : '15.5px', color: '#0f172a' }}>
+            {isFull ? 'Bin Full' : 'PUT Process'}
           </span>
           <span
             style={{
-              fontSize: '10px',
+              fontSize: embedded ? '9px' : '10px',
               fontWeight: 700,
-              padding: '2px 8px',
+              padding: embedded ? '1px 6px' : '2px 8px',
               borderRadius: '9999px',
               background: isFull ? 'rgba(239, 68, 68, 0.15)' : 'rgba(56, 189, 248, 0.15)',
               color: isFull ? '#b91c1c' : '#0369a1',
               border: isFull ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid rgba(56, 189, 248, 0.35)',
-              letterSpacing: '0.5px',
+              letterSpacing: '0.4px',
+              whiteSpace: 'nowrap',
             }}
           >
-            {isFull ? 'BIN FULL • LOCKED' : 'INBOUND'}
+            {isFull ? 'LOCKED' : 'INBOUND'}
           </span>
         </div>
-        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
+        <div className="text-truncate" style={{ fontSize: embedded ? '11px' : '12px', color: '#64748b', marginTop: '1px' }}>
           {isFull
-            ? `Bin ${huId || ''} is 100% full (all compartments occupied). Scanning is locked.`
+            ? 'All 30 compartments filled.'
             : huId && compartmentNumber
-            ? `Target: Slot #${compartmentNumber < 10 ? '0' + compartmentNumber : compartmentNumber} • Bin ${huId}`
-            : huId
-            ? `Target: Next available empty slot in Bin ${huId}`
-            : 'Verify Kanban board status, PV test results, and generate text order'}
+              ? `Target: Slot #${compartmentNumber < 10 ? '0' + compartmentNumber : compartmentNumber} • Bin ${huId}`
+              : huId
+                ? `Target: Next available empty slot`
+                : 'Verify Kanban & generate order'}
         </div>
       </div>
     </div>
@@ -200,7 +201,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
 
   const bodyContent = (
     <div className="put-modal-content">
-        <style jsx>{`
+      <style jsx>{`
           .put-modal-content {
             display: flex;
             flex-direction: column;
@@ -210,11 +211,11 @@ export const ScanModal: React.FC<ScanModalProps> = ({
           .scanner-box {
             background: #ffffff;
             border: 1.5px solid #e2e8f0;
-            border-radius: 10px;
-            padding: 4px;
+            border-radius: 9px;
+            padding: 3px 5px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             transition: all 0.2s ease;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
           }
@@ -225,21 +226,23 @@ export const ScanModal: React.FC<ScanModalProps> = ({
           }
 
           .scanner-icon-wrap {
-            padding-left: 10px;
+            padding-left: 6px;
             color: #64748b;
             display: flex;
             align-items: center;
+            flex-shrink: 0;
           }
 
           .scanner-input {
             flex: 1;
             border: none;
             outline: none;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 500;
             color: #0f172a;
-            padding: 8px 4px;
+            padding: 6px 2px;
             background: transparent;
+            min-width: 0;
           }
 
           .scanner-input::placeholder {
@@ -251,12 +254,13 @@ export const ScanModal: React.FC<ScanModalProps> = ({
             background: transparent;
             border: none;
             color: #94a3b8;
-            padding: 4px;
+            padding: 3px;
             cursor: pointer;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
+            flex-shrink: 0;
           }
 
           .btn-input-clear:hover {
@@ -268,17 +272,18 @@ export const ScanModal: React.FC<ScanModalProps> = ({
             background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
             color: #ffffff;
             border: none;
-            padding: 8px 18px;
-            border-radius: 8px;
-            font-size: 13.5px;
+            padding: 6px 12px;
+            border-radius: 7px;
+            font-size: 12.5px;
             font-weight: 600;
             cursor: pointer;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
             transition: all 0.2s ease;
             box-shadow: 0 2px 5px rgba(2, 132, 199, 0.25);
             white-space: nowrap;
+            flex-shrink: 0;
           }
 
           .btn-scan-action:hover:not(:disabled) {
@@ -297,7 +302,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
             justify-content: space-between;
             align-items: center;
             padding: 0 4px;
-            font-size: 11.5px;
+            font-size: 11px;
             color: #64748b;
           }
 
@@ -370,162 +375,162 @@ export const ScanModal: React.FC<ScanModalProps> = ({
           }
         `}</style>
 
-        {/* Scanner Input Form or Bin Full Locked State */}
-        {isFull ? (
+      {/* Scanner Input Form or Bin Full Locked State */}
+      {isFull ? (
+        <div
+          className="p-3 rounded-3 text-center d-flex flex-column align-items-center gap-2"
+          style={{
+            background: '#f8fafc',
+            border: '1.5px solid #cbd5e1',
+          }}
+        >
           <div
-            className="p-3 rounded-3 text-center d-flex flex-column align-items-center gap-2"
             style={{
-              background: '#f8fafc',
-              border: '1.5px solid #cbd5e1',
+              width: '42px',
+              height: '42px',
+              borderRadius: '50%',
+              background: '#dcfce7',
+              color: '#16a34a',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            <div
-              style={{
-                width: '42px',
-                height: '42px',
-                borderRadius: '50%',
-                background: '#dcfce7',
-                color: '#16a34a',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
+            <CheckCircle2 size={24} />
+          </div>
+          <div>
+            <div className="fw-bold text-dark" style={{ fontSize: '14px' }}>
+              All Compartments Filled (100%)
+            </div>
+            <div className="text-muted mt-1" style={{ fontSize: '12px', maxWidth: '340px' }}>
+              All 30 compartments in this handling unit are occupied and verified. Part scanning is now locked.
+            </div>
+          </div>
+          {onSendToKardex && (
+            <button
+              type="button"
+              className="btn btn-sm btn-success fw-bold d-inline-flex align-items-center gap-2 mt-1 px-3 py-2"
+              style={{ fontSize: '12.5px', borderRadius: '7px' }}
+              onClick={onSendToKardex}
             >
-              <CheckCircle2 size={24} />
+              <Send size={14} /> Send Bin to Kardex
+            </button>
+          )}
+        </div>
+      ) : (
+        <form onSubmit={handleScan} className="d-flex flex-column gap-1">
+          <div className="scanner-box">
+            <div className="scanner-icon-wrap">
+              <Scan size={embedded ? 16 : 18} />
             </div>
-            <div>
-              <div className="fw-bold text-dark" style={{ fontSize: '14px' }}>
-                All Compartments Filled (100%)
-              </div>
-              <div className="text-muted mt-1" style={{ fontSize: '12px', maxWidth: '340px' }}>
-                All 30 compartments in this handling unit are occupied and verified. Part scanning is now locked.
-              </div>
-            </div>
-            {onSendToKardex && (
+
+            <input
+              ref={inputRef}
+              type="text"
+              className="scanner-input"
+              placeholder={embedded ? "Scan Serial Number..." : "Scan or enter Serial Number (e.g. 2618991200001)..."}
+              value={serialNumber}
+              onChange={(e) => setSerialNumber(e.target.value)}
+              disabled={isProcessing}
+              autoFocus
+            />
+
+            {serialNumber && !isProcessing && (
               <button
                 type="button"
-                className="btn btn-sm btn-success fw-bold d-inline-flex align-items-center gap-2 mt-1 px-3 py-2"
-                style={{ fontSize: '12.5px', borderRadius: '7px' }}
-                onClick={onSendToKardex}
+                className="btn-input-clear"
+                onClick={() => setSerialNumber('')}
+                title="Clear"
               >
-                <Send size={14} /> Send Bin to Kardex
+                <X size={15} />
+              </button>
+            )}
+
+            <button
+              type="submit"
+              className="btn-scan-action"
+              disabled={isProcessing || !serialNumber.trim()}
+            >
+              <PackagePlus size={15} />
+              <span>{embedded ? (isProcessing ? '...' : 'Scan') : (isProcessing ? 'Processing...' : 'Scan Part')}</span>
+            </button>
+          </div>
+
+          <div className="scanner-hint">
+            <span>Scan barcode or type and press <kbd>Enter ↵</kbd></span>
+            {logs.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-link btn-sm p-0 text-decoration-none text-muted"
+                onClick={handleReset}
+                style={{ fontSize: '11.5px' }}
+              >
+                <RotateCcw size={11} className="me-1" /> Reset / Clear
               </button>
             )}
           </div>
-        ) : (
-          <form onSubmit={handleScan} className="d-flex flex-column gap-1">
-            <div className="scanner-box">
-              <div className="scanner-icon-wrap">
-                <Scan size={18} />
+        </form>
+      )}
+
+      {/* Success Banner */}
+      {isCompleted && (
+        <div className="success-banner">
+          <div className="success-meta">
+            <CheckCircle2 size={24} className="text-success flex-shrink-0" />
+            <div>
+              <div className="fw-bold text-dark" style={{ fontSize: '13.5px' }}>
+                PUT Process Completed Successfully!
               </div>
-
-              <input
-                ref={inputRef}
-                type="text"
-                className="scanner-input"
-                placeholder="Scan or enter Serial Number (e.g. 2618991200001)..."
-                value={serialNumber}
-                onChange={(e) => setSerialNumber(e.target.value)}
-                disabled={isProcessing}
-                autoFocus
-              />
-
-              {serialNumber && !isProcessing && (
-                <button
-                  type="button"
-                  className="btn-input-clear"
-                  onClick={() => setSerialNumber('')}
-                  title="Clear"
-                >
-                  <X size={16} />
-                </button>
-              )}
-
-              <button
-                type="submit"
-                className="btn-scan-action"
-                disabled={isProcessing || !serialNumber.trim()}
-              >
-                <PackagePlus size={16} />
-                <span>{isProcessing ? 'Processing...' : 'Scan Part'}</span>
-              </button>
-            </div>
-
-            <div className="scanner-hint">
-              <span>Scan barcode or type and press <kbd>Enter ↵</kbd></span>
-              {logs.length > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-link btn-sm p-0 text-decoration-none text-muted"
-                  onClick={handleReset}
-                  style={{ fontSize: '11.5px' }}
-                >
-                  <RotateCcw size={11} className="me-1" /> Reset / Clear
-                </button>
-              )}
-            </div>
-          </form>
-        )}
-
-        {/* Success Banner */}
-        {isCompleted && (
-          <div className="success-banner">
-            <div className="success-meta">
-              <CheckCircle2 size={24} className="text-success flex-shrink-0" />
-              <div>
-                <div className="fw-bold text-dark" style={{ fontSize: '13.5px' }}>
-                  PUT Process Completed Successfully!
-                </div>
-                <div style={{ fontSize: '12px', color: '#15803d' }}>
-                  Serial <span className="fw-bold">{serialNumber}</span> verified and processed successfully.
-                </div>
+              <div style={{ fontSize: '12px', color: '#15803d' }}>
+                Serial <span className="fw-bold">{serialNumber}</span> verified and processed successfully.
               </div>
             </div>
-
-            {!isFull ? (
-              <button type="button" className="success-btn" onClick={handleReset}>
-                <span>Scan Next</span>
-                <ArrowRight size={14} />
-              </button>
-            ) : onSendToKardex ? (
-              <button type="button" className="success-btn" onClick={onSendToKardex}>
-                <span>Send to Kardex</span>
-                <Send size={14} />
-              </button>
-            ) : null}
           </div>
-        )}
 
-        {/* Error Banner */}
-        {errorMsg && (
-          <div className="error-banner">
-            <AlertCircle size={20} className="flex-shrink-0" />
-            <div className="flex-1">
-              <strong>Error: </strong> {errorMsg}
-            </div>
-            <button
-              type="button"
-              className="btn btn-sm btn-outline-danger ms-auto"
-              style={{ fontSize: '12px', padding: '3px 8px' }}
-              onClick={handleReset}
-            >
-              Retry
+          {!isFull ? (
+            <button type="button" className="success-btn" onClick={handleReset}>
+              <span>Scan Next</span>
+              <ArrowRight size={14} />
             </button>
-          </div>
-        )}
+          ) : onSendToKardex ? (
+            <button type="button" className="success-btn" onClick={onSendToKardex}>
+              <span>Send to Kardex</span>
+              <Send size={14} />
+            </button>
+          ) : null}
+        </div>
+      )}
 
-        {/* Timeline Log Section */}
-        {(isProcessing || logs.length > 0) && (
-          <div className="logs-wrapper">
-            <TimelineProgress
-              logs={logs}
-              steps={PUT_STEPS}
-              isProcessing={isProcessing}
-            />
-            <div ref={logsEndRef} />
+      {/* Error Banner */}
+      {errorMsg && (
+        <div className="error-banner">
+          <AlertCircle size={20} className="flex-shrink-0" />
+          <div className="flex-1">
+            <strong>Error: </strong> {errorMsg}
           </div>
-        )}
-      </div>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-danger ms-auto"
+            style={{ fontSize: '12px', padding: '3px 8px' }}
+            onClick={handleReset}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Timeline Log Section */}
+      {(isProcessing || logs.length > 0) && (
+        <div className="logs-wrapper">
+          <TimelineProgress
+            logs={logs}
+            steps={PUT_STEPS}
+            isProcessing={isProcessing}
+          />
+          <div ref={logsEndRef} />
+        </div>
+      )}
+    </div>
   );
 
   if (embedded) {
@@ -539,14 +544,14 @@ export const ScanModal: React.FC<ScanModalProps> = ({
           border: '1.5px solid #cbd5e1',
           display: 'flex',
           flexDirection: 'column',
-          maxHeight: '100%',
+          height: '100%',
           overflow: 'hidden',
           background: '#ffffff',
           boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.08), 0 2px 6px -1px rgba(0, 0, 0, 0.04)',
         }}
       >
         <div
-          className="d-flex align-items-center justify-content-between p-2 px-3 border-bottom"
+          className="d-flex align-items-center justify-content-between p-2 px-2.5 border-bottom"
           style={{ background: '#f8fafc' }}
         >
           {titleContent}
@@ -555,13 +560,13 @@ export const ScanModal: React.FC<ScanModalProps> = ({
             className="btn btn-sm btn-link text-muted p-1 rounded-circle"
             onClick={onClose}
             title="Close Panel"
-            style={{ width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
           >
-            <X size={16} />
+            <X size={15} />
           </button>
         </div>
 
-        <div className="p-3" style={{ overflowY: 'auto' }}>
+        <div className="p-2.5 p-sm-3 flex-grow-1 d-flex flex-column" style={{ overflowY: 'auto' }}>
           {bodyContent}
         </div>
       </div>

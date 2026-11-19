@@ -298,15 +298,19 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
     <div className="hu-detail-fullscreen">
       <style jsx>{`
         .hu-detail-fullscreen {
-          width: 100%;
+          width: 100% !important;
+          max-width: 100% !important;
           display: flex;
           flex-direction: column;
           gap: 0.6rem;
-          min-height: calc(100vh - 85px);
+          flex: 1;
+          min-height: calc(100vh - 100px);
         }
 
         /* Unified Sleek Top Command Bar */
         .top-command-bar {
+          width: 100% !important;
+          max-width: 100% !important;
           background: #ffffff;
           border: 1px solid #e2e8f0;
           border-radius: 12px;
@@ -440,9 +444,12 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         /* Main Workspace Split Row */
         .workspace-split-row {
           display: flex;
-          align-items: flex-start;
+          align-items: stretch;
           gap: 14px;
-          width: 100%;
+          width: 100% !important;
+          max-width: 100% !important;
+          flex: 1;
+          min-height: 0;
         }
 
         @media (max-width: 1024px) {
@@ -451,6 +458,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
           }
           .scan-panel-col {
             width: 100% !important;
+            max-width: 100% !important;
             min-width: 100% !important;
           }
         }
@@ -463,6 +471,8 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
           display: flex;
           flex-direction: column;
+          height: 100%;
+          min-height: 0;
         }
 
         .layout-toolbar {
@@ -667,17 +677,16 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
 
           {canSendToKardex && (
             <button
-              className={`btn btn-sm fw-bold d-flex align-items-center gap-1 ${
-                isAlreadySent ? 'btn-warning' : 'btn-success'
-              }`}
+              className={`btn btn-sm fw-bold d-flex align-items-center gap-1 ${isAlreadySent ? 'btn-warning' : 'btn-success'
+                }`}
               onClick={handleInitiateSend}
               disabled={occupiedCount === 0}
               title={
                 isAlreadySent
                   ? 'All occupied parts were previously sent to Kardex. Click to initiate re-dispatch confirmation.'
                   : hasNewUnits && alreadySentUnitsCount > 0
-                  ? `Transmit PUT order file to Kardex (${unsentUnitsCount} new part(s), ${alreadySentUnitsCount} previously sent)`
-                  : 'Transmit PUT order file and store bin in Kardex'
+                    ? `Transmit PUT order file to Kardex (${unsentUnitsCount} new part(s), ${alreadySentUnitsCount} previously sent)`
+                    : 'Transmit PUT order file and store bin in Kardex'
               }
               style={{
                 fontSize: '11.5px',
@@ -699,8 +708,8 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
                 {isAlreadySent
                   ? `Resend to Kardex (${occupiedCount})`
                   : hasNewUnits && alreadySentUnitsCount > 0
-                  ? `Send to Kardex (${occupiedCount} • ${unsentUnitsCount} new)`
-                  : `Send to Kardex (${occupiedCount})`}
+                    ? `Send to Kardex (${occupiedCount} • ${unsentUnitsCount} new)`
+                    : `Send to Kardex (${occupiedCount})`}
               </span>
             </button>
           )}
@@ -756,8 +765,10 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         <div
           className="layout-card"
           style={{
-            flex: canPut && isScanModalOpen ? '1 1 64%' : '1 1 100%',
+            flex: canPut && isScanModalOpen ? '1 1 auto' : '1 1 100%',
+            width: canPut && isScanModalOpen ? 'calc(100% - 334px)' : '100%',
             minWidth: 0,
+            overflow: 'hidden',
           }}
         >
           <div className="layout-toolbar">
@@ -821,14 +832,16 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
               No compartments match your current filter criteria.
             </div>
           ) : (
-            <CompartmentGrid
-              compartments={filteredCompartments}
-              onSelectEmpty={isLocked ? undefined : handleSelectEmpty}
-              selectedCompartment={canPut && isScanModalOpen ? selectedCompartment : null}
-              huId={hu.hu_id}
-              binName={hu.bin_type?.bin_name || 'CON_BINA'}
-              binType={hu.bin_type?.name}
-            />
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <CompartmentGrid
+                compartments={filteredCompartments}
+                onSelectEmpty={isLocked ? undefined : handleSelectEmpty}
+                selectedCompartment={canPut && isScanModalOpen ? selectedCompartment : null}
+                huId={hu.hu_id}
+                binName={hu.bin_type?.bin_name || 'CON_BINA'}
+                binType={hu.bin_type?.name}
+              />
+            </div>
           )}
         </div>
 
@@ -837,10 +850,14 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
           <div
             className="scan-panel-col"
             style={{
-              flex: '1 1 36%',
-              width: '100%',
-              minWidth: '340px',
+              flex: '0 0 320px',
+              width: '320px',
+              maxWidth: '320px',
+              minWidth: '320px',
               marginTop: 0,
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
             }}
           >
             <ScanModal
