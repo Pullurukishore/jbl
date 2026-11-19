@@ -381,6 +381,60 @@ exports.scanCompartment = asyncHandler(async (req, res) => {
         let testProcess = process.env.KanbanInProcessStep || 'KANBAN-IN';
         if (isKanbanIn && isKanbanOut) {
             testProcess = process.env.KanbanRtnProcessStep || 'KANBAN-RTN';
+
+            const cooldownHours = parseFloat(process.env.KANBAN_RETURN_COOLDOWN_HOURS || '24');
+            const isOverride = (req.body?.override_cooldown === true || req.query?.override_cooldown === 'true') && req.user?.role === 'ADMIN';
+
+            if (cooldownHours > 0 && !isOverride) {
+                // Find latest KANBAN-OUT in MES board history
+                const kanbanOutSteps = (boardHistoryResponse.data || []).filter(part =>
+                    ['KANBAN-OUT', 'KANBAN_OUT'].some(step => part.Test_Process?.toUpperCase()?.trim()?.includes(step))
+                );
+
+                let lastOutTime = null;
+                if (kanbanOutSteps.length > 0) {
+                    kanbanOutSteps.sort((a, b) => {
+                        const dateB = moment(b.EndDateTime || b.StartDateTime).valueOf() || 0;
+                        const dateA = moment(a.EndDateTime || a.StartDateTime).valueOf() || 0;
+                        return dateB - dateA;
+                    });
+                    const rawTime = kanbanOutSteps[0].EndDateTime || kanbanOutSteps[0].StartDateTime;
+                    if (rawTime && moment(rawTime).isValid()) {
+                        lastOutTime = moment(rawTime);
+                    }
+                }
+
+                // Fallback to local DB if no timestamp found in MES data
+                if (!lastOutTime || !lastOutTime.isValid()) {
+                    const lastPickedPut = await db.put.findOne({
+                        where: { serial_number: serialNumber, pick_status: 'PICKED' },
+                        order: [['updatedAt', 'DESC']]
+                    });
+                    if (lastPickedPut && lastPickedPut.updatedAt && moment(lastPickedPut.updatedAt).isValid()) {
+                        lastOutTime = moment(lastPickedPut.updatedAt);
+                    }
+                }
+
+                if (lastOutTime && lastOutTime.isValid()) {
+                    const now = moment();
+                    const diffHours = now.diff(lastOutTime, 'hours', true);
+
+                    if (diffHours < cooldownHours) {
+                        const remainingMs = (cooldownHours * 3600 * 1000) - now.diff(lastOutTime);
+                        const remHours = Math.floor(remainingMs / (3600 * 1000));
+                        const remMins = Math.ceil((remainingMs % (3600 * 1000)) / (60 * 1000));
+                        const eligibleTime = lastOutTime.clone().add(cooldownHours, 'hours');
+
+                        sendEvent({
+                            entity_number: serialNumber,
+                            activity: 'FETCH_DETAILS',
+                            status: 'FAILED',
+                            message: `Return not allowed yet: Kanban-Out occurred at ${lastOutTime.format('YYYY-MM-DD hh:mm A')}. Requires ${cooldownHours}h cooldown (${remHours}h ${remMins}m remaining, allowed after ${eligibleTime.format('YYYY-MM-DD hh:mm A')}).`
+                        });
+                        return res.end();
+                    }
+                }
+            }
         }
 
         const birthProcess = boardHistoryResponse.data.find(
