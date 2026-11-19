@@ -55,6 +55,24 @@ export const Modal: React.FC<ModalProps> = ({
           animation: fadeIn 0.2s ease;
         }
 
+        @media (max-width: 576px) {
+          .modal-backdrop {
+            padding: 0.5rem;
+          }
+          .modal-header {
+            padding: 0.85rem 1rem !important;
+          }
+          .modal-body {
+            padding: 0.9rem 1rem !important;
+          }
+          .modal-footer {
+            padding: 0.75rem 1rem !important;
+          }
+          .modal-card {
+            max-height: 94vh !important;
+          }
+        }
+
         .modal-card {
           background: #ffffff;
           border-radius: 12px;

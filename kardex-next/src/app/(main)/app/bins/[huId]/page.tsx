@@ -456,10 +456,48 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
           .workspace-split-row {
             flex-direction: column;
           }
+          .layout-card {
+            width: 100% !important;
+            max-width: 100% !important;
+            flex: 1 1 100% !important;
+          }
           .scan-panel-col {
             width: 100% !important;
             max-width: 100% !important;
             min-width: 100% !important;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .top-command-bar {
+            flex-direction: column;
+            align-items: stretch !important;
+            gap: 10px !important;
+            padding: 10px !important;
+          }
+          .cmd-left {
+            flex-wrap: wrap !important;
+            width: 100%;
+            justify-content: flex-start;
+          }
+          .cmd-center {
+            max-width: 100% !important;
+            min-width: 100% !important;
+            width: 100% !important;
+          }
+          .cmd-right {
+            width: 100%;
+            justify-content: flex-end;
+            flex-wrap: wrap !important;
+          }
+          .layout-toolbar {
+            flex-direction: column;
+            align-items: flex-start !important;
+            gap: 8px !important;
+          }
+          .toolbar-left, .toolbar-right {
+            width: 100%;
+            justify-content: space-between;
           }
         }
 

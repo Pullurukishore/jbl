@@ -845,6 +845,21 @@ export default function PickWorkstationPage() {
           .workstation-split {
             grid-template-columns: 1fr;
           }
+          .panel-card.monitor-panel {
+            position: static !important;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .workstation-header {
+            padding: 10px 14px;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+          }
+          .panel-card {
+            padding: 1rem 0.85rem !important;
+          }
         }
 
         .panel-card {
@@ -1122,6 +1137,8 @@ export default function PickWorkstationPage() {
         .bin-table-wrapper {
           max-height: 420px;
           overflow-y: auto;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
           border: 1px solid #e2e8f0;
           border-radius: 9px;
           background: #ffffff;
@@ -1138,6 +1155,7 @@ export default function PickWorkstationPage() {
 
         .bin-dense-table {
           width: 100%;
+          min-width: 560px;
           border-collapse: collapse;
           font-size: 12px;
         }

@@ -190,6 +190,21 @@ export const MaterialDetailDrawer: React.FC<MaterialDetailDrawerProps> = ({
           overflow: hidden;
         }
 
+        @media (max-width: 640px) {
+          .drawer-panel {
+            max-width: 100vw !important;
+          }
+          .drawer-header {
+            padding: 14px 16px !important;
+          }
+          .drawer-tabs {
+            padding: 0 12px !important;
+          }
+          .drawer-body {
+            padding: 14px !important;
+          }
+        }
+
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }

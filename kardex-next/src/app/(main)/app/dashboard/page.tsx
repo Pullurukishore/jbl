@@ -478,9 +478,27 @@ export default function DashboardPage() {
             grid-template-columns: repeat(4, minmax(0, 1fr));
           }
         }
-        @media (max-width: 575px) {
+        @media (max-width: 640px) {
           .all-metrics-one-line {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            margin-bottom: 14px;
+          }
+          .table-card {
+            padding: 12px !important;
+          }
+          .scan-action-btn {
+            flex: 1 1 auto;
+            min-width: 140px;
+            padding: 7px 10px;
+          }
+          .scan-btn-title {
+            font-size: 12px !important;
+          }
+        }
+        @media (max-width: 380px) {
+          .all-metrics-one-line {
+            grid-template-columns: 1fr;
           }
         }
         .hu-stat-card {
@@ -846,8 +864,8 @@ export default function DashboardPage() {
         <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
           <h5 className="fw-bold mb-0">Serial Numbers</h5>
 
-          <div className="d-flex align-items-center gap-2">
-            <div className="position-relative" style={{ width: '250px' }}>
+          <div className="d-flex align-items-center gap-2 flex-wrap" style={{ width: 'auto' }}>
+            <div className="position-relative" style={{ minWidth: '180px', flex: '1 1 auto' }}>
               <input
                 type="text"
                 className="form-control form-control-sm"
@@ -858,7 +876,7 @@ export default function DashboardPage() {
             </div>
 
             <button
-              className="btn btn-success btn-sm d-flex align-items-center gap-1"
+              className="btn btn-success btn-sm d-flex align-items-center gap-1 text-nowrap"
               onClick={handleExportExcel}
             >
               <Download size={14} /> Export Excel
@@ -873,7 +891,7 @@ export default function DashboardPage() {
           ) : puts.length === 0 ? (
             <EmptyState title="No records found" description="No scan records available." />
           ) : (
-            <table className="table table-hover table-bordered align-middle">
+            <table className="table table-hover table-bordered align-middle" style={{ minWidth: '860px' }}>
               <thead>
                 <tr>
                   <th>Serial Number</th>

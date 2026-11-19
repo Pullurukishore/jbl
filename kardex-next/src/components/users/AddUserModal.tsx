@@ -131,6 +131,16 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
             gap: 1rem;
           }
 
+          @media (max-width: 500px) {
+            .grid-2 {
+              grid-template-columns: 1fr;
+              gap: 0.75rem;
+            }
+            .access-grid {
+              grid-template-columns: 1fr !important;
+            }
+          }
+
           .error-box {
             background-color: #fef2f2;
             border: 1px solid #fecaca;

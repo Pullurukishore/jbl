@@ -128,6 +128,35 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           flex-shrink: 0;
         }
 
+        @media (max-width: 640px) {
+          .filter-bar-wrapper {
+            width: 100%;
+            justify-content: space-between;
+          }
+          .toolbar-divider {
+            display: none;
+          }
+          .preset-group {
+            width: 100%;
+            justify-content: space-between;
+          }
+          .preset-btn {
+            flex: 1 1 auto;
+            text-align: center;
+            padding: 5px 6px;
+            font-size: 11px;
+          }
+          .date-range-box {
+            width: 100%;
+            justify-content: space-between;
+          }
+          :global(.custom-range-input) {
+            width: 82px !important;
+            font-size: 11px !important;
+            padding: 4px 6px !important;
+          }
+        }
+
         .date-range-box {
           display: inline-flex;
           align-items: center;

@@ -261,6 +261,26 @@ export default function UsersPage() {
           gap: 1rem;
         }
 
+        @media (max-width: 768px) {
+          .page-header-card {
+            padding: 1rem 1.15rem;
+          }
+          .page-title {
+            font-size: 19px !important;
+          }
+          .header-icon-box {
+            width: 44px !important;
+            height: 44px !important;
+          }
+          .header-actions {
+            width: 100%;
+            justify-content: flex-start;
+          }
+          .table-toolbar {
+            padding: 0.85rem !important;
+          }
+        }
+
         .header-title-wrap {
           display: flex;
           align-items: center;
@@ -539,7 +559,8 @@ export default function UsersPage() {
 
         .search-wrap {
           position: relative;
-          min-width: 270px;
+          min-width: 180px;
+          flex: 1 1 auto;
         }
 
         .search-icon {
@@ -606,10 +627,11 @@ export default function UsersPage() {
           white-space: nowrap;
         }
 
-        /* High-End Enterprise Elevated Table (Zero Side Scroll) */
+        /* High-End Enterprise Elevated Table (Scrollable on Mobile & Tablet) */
         .table-responsive {
           width: 100%;
-          overflow-x: hidden;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
           border-radius: 11px;
           border: 1px solid #e2e8f0;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
@@ -617,11 +639,12 @@ export default function UsersPage() {
 
         .users-table {
           width: 100%;
+          min-width: 820px;
           border-collapse: separate;
           border-spacing: 0;
           font-size: 13.5px;
           background: #ffffff;
-          table-layout: fixed;
+          table-layout: auto;
         }
 
         .users-table thead th {

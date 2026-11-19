@@ -74,6 +74,14 @@ export default function LoginPage() {
           padding: 0 30px;
           background: #ffffff;
         }
+        @media (max-width: 576px) {
+          .card {
+            padding: 0 12px;
+          }
+          .card .login-container {
+            padding: 24px 6px;
+          }
+        }
         .card .login-container {
           padding: 30px 10px;
           text-align: center;

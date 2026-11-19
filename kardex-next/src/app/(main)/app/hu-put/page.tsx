@@ -277,6 +277,23 @@ export default function HUPutPage() {
           gap: 1rem;
         }
 
+        @media (max-width: 768px) {
+          .page-header-card {
+            padding: 1rem 1.15rem;
+          }
+          .page-title {
+            font-size: 19px !important;
+          }
+          .header-icon-box {
+            width: 44px !important;
+            height: 44px !important;
+          }
+          .header-actions {
+            width: 100%;
+            justify-content: flex-start;
+          }
+        }
+
         .header-title-wrap {
           display: flex;
           align-items: center;
@@ -407,6 +424,12 @@ export default function HUPutPage() {
           }
         }
 
+        @media (max-width: 520px) {
+          .stats-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
         .stat-card {
           background: #ffffff;
           border: 1px solid #e2e8f0;
@@ -471,6 +494,12 @@ export default function HUPutPage() {
           width: 100%;
         }
 
+        @media (max-width: 768px) {
+          .table-card {
+            padding: 0.9rem 0.85rem;
+          }
+        }
+
         /* Improved High-Visibility Search Toolbar */
         .search-toolbar {
           display: flex;
@@ -488,8 +517,9 @@ export default function HUPutPage() {
           align-items: center;
           gap: 10px;
           flex: 1;
-          min-width: 280px;
+          min-width: 0;
           max-width: 680px;
+          width: 100%;
         }
 
         .search-box-input-group {
@@ -589,10 +619,11 @@ export default function HUPutPage() {
           white-space: nowrap;
         }
 
-        /* High-End Enterprise Elevated Table (Zero Side Scroll) */
+        /* High-End Enterprise Elevated Table (Scrollable on Mobile/Tablet) */
         .table-responsive {
           width: 100%;
-          overflow-x: hidden;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
           border-radius: 11px;
           border: 1px solid #e2e8f0;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
@@ -600,6 +631,7 @@ export default function HUPutPage() {
 
         .hu-singleline-table {
           width: 100%;
+          min-width: 820px;
           border-collapse: separate;
           border-spacing: 0;
           font-size: 13.5px;

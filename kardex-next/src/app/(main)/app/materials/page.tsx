@@ -153,11 +153,10 @@ export default function MaterialsPage() {
 
   return (
     <div
-      className="materials-page-container py-4 px-3 px-xl-5"
+      className="materials-page-container py-2 px-1 px-md-3"
       style={{
         width: '100%',
         maxWidth: '100%',
-        minHeight: '100vh',
         backgroundColor: '#f8fafc',
       }}
     >
@@ -483,9 +482,9 @@ export default function MaterialsPage() {
           </div>
 
           {/* Right Search & Controls */}
-          <div className="d-flex align-items-center gap-2 flex-wrap" style={{ flexGrow: 1, justifyContent: 'flex-end' }}>
+          <div className="d-flex align-items-center gap-2 flex-wrap" style={{ flexGrow: 1, justifyContent: 'flex-end', width: 'auto' }}>
             {/* Search Input */}
-            <div style={{ position: 'relative', minWidth: '280px' }}>
+            <div style={{ position: 'relative', minWidth: '180px', flex: '1 1 auto' }}>
               <Search
                 size={14}
                 className="text-muted"
@@ -524,7 +523,7 @@ export default function MaterialsPage() {
             {/* Sorter */}
             <select
               className="form-select form-select-sm"
-              style={{ borderRadius: '8px', width: '200px' }}
+              style={{ borderRadius: '8px', minWidth: '140px', flex: '1 1 auto', width: 'auto' }}
               value={`${sortField}_${sortDirection}`}
               onChange={(e) => {
                 const val = e.target.value;
@@ -557,7 +556,7 @@ export default function MaterialsPage() {
             {/* Page Size */}
             <select
               className="form-select form-select-sm"
-              style={{ borderRadius: '8px', width: '120px' }}
+              style={{ borderRadius: '8px', minWidth: '95px', flex: '0 1 auto', width: 'auto' }}
               value={pageSize}
               onChange={(e) => {
                 setPageSize(Number(e.target.value));
@@ -589,7 +588,7 @@ export default function MaterialsPage() {
           </div>
         ) : materials.length > 0 ? (
           <div className="table-responsive">
-            <table className="table materials-table align-middle mb-0">
+            <table className="table materials-table align-middle mb-0" style={{ minWidth: '880px' }}>
               <thead>
                 <tr>
                   <th style={{ width: '260px' }}>Model / Part Number</th>

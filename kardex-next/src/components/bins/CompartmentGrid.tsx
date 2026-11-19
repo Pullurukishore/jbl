@@ -1355,6 +1355,68 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           background: rgba(15, 23, 42, 0.6);
           border: 1px solid #334155;
         }
+
+        .socket-deck-scroll-wrapper {
+          width: 100%;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: thin;
+          padding-bottom: 4px;
+        }
+
+        .scroll-hint-pill {
+          display: none;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          background: rgba(37, 99, 235, 0.15);
+          color: #93c5fa;
+          border: 1px solid rgba(59, 130, 246, 0.3);
+          border-radius: 6px;
+          padding: 4px 8px;
+          font-size: 11px;
+          font-weight: 600;
+          margin-bottom: 6px;
+          text-align: center;
+        }
+
+        @media (max-width: 1100px) {
+          .socket-deck {
+            min-width: 960px !important;
+          }
+          .scroll-hint-pill {
+            display: flex;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .esd-tote-container {
+            padding: 6px !important;
+            min-height: auto !important;
+          }
+          .tote-top-lip {
+            padding: 6px 8px !important;
+          }
+          .handle-grip-recess {
+            display: none;
+          }
+        }
+
+        .vertical-banks-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px;
+          width: 100%;
+          flex: 1;
+          min-height: 0;
+        }
+
+        @media (max-width: 640px) {
+          .vertical-banks-grid {
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+          }
+        }
       `}</style>
 
       {/* Top Molded Lip with Handle Grips & Spec Information */}
@@ -1392,7 +1454,11 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
 
       {/* Sunken Socket Pocket Deck - Horizontal Matrix Layout (CON_BINC) */}
       {layoutMode === 'horizontal' && (
-        <div className="socket-deck">
+        <div className="socket-deck-scroll-wrapper">
+          <div className="scroll-hint-pill">
+            <span>⇄ Swipe or scroll horizontally to view all 15 slots</span>
+          </div>
+          <div className="socket-deck">
         {sortedCompartments.map((comp) => {
           const isPicked = isSlotPicked(comp);
           const isOccupied = isSlotOccupied(comp);
@@ -1628,21 +1694,13 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
             </div>
           );
         })}
-      </div>
+          </div>
+        </div>
       )}
 
       {/* Vertical Deck Layout - Side Bin Vertical (CON_BIND) */}
       {layoutMode === 'vertical' && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-            gap: '12px',
-            width: '100%',
-            flex: 1,
-            minHeight: 0,
-          }}
-        >
+        <div className="vertical-banks-grid">
           {/* Side Bank 1: Slots 1 to 15 */}
           <div
             style={{

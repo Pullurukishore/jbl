@@ -1315,7 +1315,7 @@ export default function LogDetailPage({ params }: LogDetailPageProps) {
                   No execution event telemetry recorded for this part.
                 </div>
               ) : (
-                <table className="table table-hover log-table mb-0 align-middle">
+                <table className="table table-hover log-table mb-0 align-middle" style={{ minWidth: '820px' }}>
                   <thead>
                     <tr>
                       <th style={{ width: '60px' }}>#</th>

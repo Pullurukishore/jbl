@@ -869,7 +869,7 @@ export default function MaterialDetailPage({ params }: MaterialDetailPageProps) 
                     <div>No serialized parts found matching the specified criteria.</div>
                   </div>
                 ) : (
-                  <table className="table table-hover align-middle mb-0">
+                  <table className="table table-hover align-middle mb-0" style={{ minWidth: '860px' }}>
                     <thead style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                       <tr>
                         <th style={{ width: '50px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>#</th>

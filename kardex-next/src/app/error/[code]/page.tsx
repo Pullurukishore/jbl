@@ -52,6 +52,15 @@ export default function ErrorPage() {
           text-align: center;
         }
 
+        @media (max-width: 576px) {
+          .error-shell {
+            padding: 1rem;
+          }
+          .error-card {
+            padding: 2rem 1.25rem !important;
+          }
+        }
+
         .logo-box {
           margin-bottom: 2rem;
         }

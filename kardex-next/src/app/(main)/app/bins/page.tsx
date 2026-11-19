@@ -207,6 +207,26 @@ export default function BinsMasterPage() {
           gap: 1rem;
         }
 
+        @media (max-width: 768px) {
+          .page-header-card {
+            padding: 1rem 1.15rem;
+          }
+          .page-title {
+            font-size: 19px !important;
+          }
+          .header-icon-box {
+            width: 44px !important;
+            height: 44px !important;
+          }
+          .header-actions {
+            width: 100%;
+            justify-content: flex-start;
+          }
+          .table-card {
+            padding: 1rem 0.85rem !important;
+          }
+        }
+
         .header-title-wrap {
           display: flex;
           align-items: center;
@@ -545,6 +565,7 @@ export default function BinsMasterPage() {
 
         .bins-table {
           width: 100%;
+          min-width: 820px;
           border-collapse: separate;
           border-spacing: 0;
           font-size: 13px;

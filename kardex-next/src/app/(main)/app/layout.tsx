@@ -11,6 +11,9 @@ import {
   PackagePlus,
   PackageMinus,
   Layers,
+  Menu,
+  X,
+  Boxes,
 } from 'lucide-react';
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
@@ -18,10 +21,15 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const { user, isAuthenticated, isAdmin, canPut, canPick, isLoading, logout } = useAuth();
   const [mounted, setMounted] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -58,15 +66,74 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           z-index: 1000;
         }
 
+        @media (max-width: 768px) {
+          .app-header-navbar {
+            padding: 8px 12px;
+          }
+        }
+
         .header-inner-row {
           display: flex;
           align-items: center;
           justify-content: space-between;
           width: 100%;
-          gap: 1rem;
+          gap: 0.75rem;
         }
 
-        /* Navigation Dock */
+        /* Mobile Header Left */
+        .mobile-header-brand {
+          display: none;
+          align-items: center;
+          gap: 8px;
+        }
+
+        @media (max-width: 768px) {
+          .mobile-header-brand {
+            display: flex;
+          }
+        }
+
+        .btn-hamburger {
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          color: #334155;
+          width: 36px;
+          height: 36px;
+          border-radius: 9px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+
+        .btn-hamburger:hover {
+          background: #e2e8f0;
+          color: #0f172a;
+        }
+
+        .brand-title-badge {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          text-decoration: none;
+          color: #0f172a;
+          font-weight: 800;
+          font-size: 14.5px;
+          letter-spacing: -0.3px;
+        }
+
+        .brand-logo-pill {
+          background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+          color: #ffffff;
+          padding: 3px 6px;
+          border-radius: 6px;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.5px;
+        }
+
+        /* Navigation Dock (Desktop & Tablet) */
         .nav-dock-wrapper {
           display: inline-flex;
           align-items: center;
@@ -75,6 +142,19 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           border-radius: 11px;
           padding: 3px;
           gap: 3px;
+          overflow-x: auto;
+          scrollbar-width: none;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .nav-dock-wrapper::-webkit-scrollbar {
+          display: none;
+        }
+
+        @media (max-width: 768px) {
+          .nav-dock-wrapper {
+            display: none;
+          }
         }
 
         :global(a.dock-nav-link) {
@@ -90,6 +170,16 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
           border: 1px solid transparent !important;
           user-select: none !important;
+          white-space: nowrap !important;
+          flex-shrink: 0 !important;
+        }
+
+        @media (max-width: 992px) {
+          :global(a.dock-nav-link) {
+            padding: 5px 10px !important;
+            font-size: 12px !important;
+            gap: 5px !important;
+          }
         }
 
         :global(a.dock-nav-link:hover) {
@@ -114,15 +204,18 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
           border: 1px solid #e2e8f0;
           border-radius: 11px;
-          padding: 4px 6px 4px 6px;
+          padding: 4px 6px;
           gap: 10px;
           box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.03);
           transition: all 0.2s ease;
+          flex-shrink: 0;
         }
 
-        .operator-card-pill:hover {
-          border-color: #cbd5e1;
-          box-shadow: 0 4px 10px rgba(15, 23, 42, 0.07);
+        @media (max-width: 576px) {
+          .operator-card-pill {
+            gap: 6px;
+            padding: 3px 5px;
+          }
         }
 
         .operator-avatar {
@@ -178,6 +271,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           cursor: pointer;
           transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
           margin-left: 2px;
+          flex-shrink: 0;
         }
 
         .btn-power-logout:hover {
@@ -187,12 +281,119 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           transform: translateY(-1px);
           box-shadow: 0 3px 8px rgba(239, 68, 68, 0.3);
         }
+
+        /* Mobile Drawer / Slide Down Menu */
+        .mobile-nav-drawer {
+          position: fixed;
+          top: 53px;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(15, 23, 42, 0.45);
+          backdrop-filter: blur(4px);
+          z-index: 999;
+          display: flex;
+          flex-direction: column;
+          animation: fadeIn 0.18s ease;
+        }
+
+        .mobile-nav-panel {
+          background: #ffffff;
+          border-bottom: 2px solid #e2e8f0;
+          padding: 1rem 1rem 1.25rem;
+          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        :global(a.mobile-nav-item) {
+          display: flex !important;
+          align-items: center !important;
+          gap: 12px !important;
+          padding: 11px 16px !important;
+          border-radius: 10px !important;
+          font-size: 14px !important;
+          font-weight: 600 !important;
+          color: #475569 !important;
+          text-decoration: none !important;
+          background: #f8fafc !important;
+          border: 1px solid #e2e8f0 !important;
+          transition: all 0.15s ease !important;
+        }
+
+        :global(a.mobile-nav-item:hover) {
+          background: #f1f5f9 !important;
+          color: #0f172a !important;
+        }
+
+        :global(a.mobile-nav-item.active) {
+          background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+          color: #ffffff !important;
+          border-color: #2563eb !important;
+          font-weight: 700 !important;
+          box-shadow: 0 3px 10px rgba(37, 99, 235, 0.28) !important;
+        }
+
+        .mobile-user-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 14px;
+          background: #f1f5f9;
+          border-radius: 10px;
+          margin-bottom: 6px;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes slideDown {
+          from { transform: translateY(-10px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+
+        .main-content-layout {
+          width: 100%;
+          max-width: 100%;
+          box-sizing: border-box;
+          min-height: calc(100vh - 65px);
+          display: flex;
+          flex-direction: column;
+          padding: 1rem 1.25rem;
+        }
+
+        @media (max-width: 768px) {
+          .main-content-layout {
+            padding: 0.65rem 0.6rem;
+            min-height: calc(100vh - 55px);
+          }
+        }
       `}</style>
 
       {/* Modern Clean Header Navigation Bar */}
       <header className="app-header-navbar">
         <div className="header-inner-row">
-          {/* Left: Segmented Navigation Dock */}
+          {/* Mobile Left: Menu Toggle + Brand */}
+          <div className="mobile-header-brand">
+            <button
+              className="btn-hamburger"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label={mobileMenuOpen ? 'Close Menu' : 'Open Menu'}
+              title="Toggle Navigation Menu"
+            >
+              {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
+            <Link href="/app/dashboard" className="brand-title-badge">
+              <span className="brand-logo-pill">KARDEX</span>
+              <span>Inventory</span>
+            </Link>
+          </div>
+
+          {/* Desktop & Tablet: Segmented Navigation Dock */}
           <nav className="nav-dock-wrapper" aria-label="Main Navigation">
             <Link
               href="/app/dashboard"
@@ -218,7 +419,6 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 <PackageMinus size={14} /> Pick
               </Link>
             )}
-
 
             <Link
               href="/app/materials"
@@ -260,18 +460,75 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         </div>
       </header>
 
+      {/* Mobile Slide-down Navigation Panel */}
+      {mobileMenuOpen && (
+        <div className="mobile-nav-drawer" onClick={() => setMobileMenuOpen(false)}>
+          <div className="mobile-nav-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="mobile-user-row">
+              <div className="d-flex align-items-center gap-2">
+                <div className="operator-avatar" style={{ width: '28px', height: '28px', fontSize: '11px' }}>
+                  {userInitial}
+                </div>
+                <div className="operator-details">
+                  <span className="operator-name" style={{ maxWidth: '180px' }}>{fullName}</span>
+                  <span className="operator-role">{roleTitle}</span>
+                </div>
+              </div>
+              <button
+                className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1 py-1 px-2"
+                style={{ fontSize: '12px', borderRadius: '7px' }}
+                onClick={logout}
+              >
+                <Power size={12} /> Logout
+              </button>
+            </div>
+
+            <Link
+              href="/app/dashboard"
+              className={`mobile-nav-item ${pathname === '/app/dashboard' ? 'active' : ''}`}
+            >
+              <PieChart size={16} /> Dashboard
+            </Link>
+
+            {canPut && (
+              <Link
+                href="/app/hu-put"
+                className={`mobile-nav-item ${pathname.startsWith('/app/hu-put') ? 'active' : ''}`}
+              >
+                <PackagePlus size={16} /> Handling Unit PUT
+              </Link>
+            )}
+
+            {canPick && (
+              <Link
+                href="/app/pick"
+                className={`mobile-nav-item ${pathname.startsWith('/app/pick') ? 'active' : ''}`}
+              >
+                <PackageMinus size={16} /> Pick Workstation
+              </Link>
+            )}
+
+            <Link
+              href="/app/materials"
+              className={`mobile-nav-item ${pathname.startsWith('/app/materials') ? 'active' : ''}`}
+            >
+              <Layers size={16} /> Materials Inventory
+            </Link>
+
+            {isAdmin && (
+              <Link
+                href="/app/users"
+                className={`mobile-nav-item ${pathname === '/app/users' ? 'active' : ''}`}
+              >
+                <Users size={16} /> User Management
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Main Page Area */}
-      <main
-        className="w-100 px-3 px-xl-4 py-3"
-        style={{
-          width: '100%',
-          maxWidth: '100%',
-          boxSizing: 'border-box',
-          minHeight: 'calc(100vh - 65px)',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
+      <main className="main-content-layout">
         {children}
       </main>
     </div>
