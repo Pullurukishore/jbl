@@ -385,9 +385,6 @@ exports.createPut = asyncHandler(async (req, res) => {
         //     return res.end();
         // }
 
-        const birthProcess = (Array.isArray(boardHistoryResponse?.data) ? boardHistoryResponse.data : []).find(
-            prt => prt?.Test_Process?.toUpperCase()?.trim() === 'BIRTH / BIRTH' || prt?.Test_Process?.toUpperCase()?.trim() === 'MTL_ASSEMBLY & LINKING / MTL_ASSEMBLY & LINKING'
-        );
         if (!birthProcess) {
             logs.push(await createAndSendLog({
                 entity_number: serialNumber,
