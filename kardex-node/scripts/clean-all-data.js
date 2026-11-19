@@ -182,7 +182,8 @@ async function cleanDatabase() {
         await db.bin_type.bulkCreate([
             { name: 'Type-A (15 Compartments)', compartment_count: 15, bin_name: 'CON_BINA', description: '15-compartment bin' },
             { name: 'Type-B (20 Compartments)', compartment_count: 20, bin_name: 'CON_BINB', description: '20-compartment bin' },
-            { name: 'Type-C (30 Compartments)', compartment_count: 30, bin_name: 'CON_BINC', description: '30-compartment bin' }
+            { name: 'Type-C (30 Compartments)', compartment_count: 30, bin_name: 'CON_BINC', description: '30-compartment bin' },
+            { name: 'Type-D (30 Compartments - Vertical)', compartment_count: 30, bin_name: 'CON_BIND', description: 'Side bin vertical (30 Compartments)' }
         ]);
         console.log('  Standard bin types ready.');
 
@@ -251,7 +252,8 @@ async function cleanDatabase() {
             await db.bin_type.bulkCreate([
                 { name: 'Type-A (15 Compartments)', compartment_count: 15, bin_name: 'CON_BINA', description: '15-compartment bin' },
                 { name: 'Type-B (20 Compartments)', compartment_count: 20, bin_name: 'CON_BINB', description: '20-compartment bin' },
-                { name: 'Type-C (30 Compartments)', compartment_count: 30, bin_name: 'CON_BINC', description: '30-compartment bin' }
+                { name: 'Type-C (30 Compartments)', compartment_count: 30, bin_name: 'CON_BINC', description: '30-compartment bin' },
+                { name: 'Type-D (30 Compartments - Vertical)', compartment_count: 30, bin_name: 'CON_BIND', description: 'Side bin vertical (30 Compartments)' }
             ]);
             console.log('  Standard bin types ready.');
         } else {

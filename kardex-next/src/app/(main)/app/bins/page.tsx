@@ -1027,7 +1027,7 @@ export default function BinsMasterPage() {
                             {hu.bin_type?.name || `Type #${hu.bin_type_id}`}
                           </span>
                           <span className="bin-name-badge">
-                            PPS: {hu.bin_type?.bin_name || 'CON_BINA'}
+                            PPS: {hu.bin_type?.bin_name || 'CON_BINC'}
                           </span>
                         </div>
                       </td>

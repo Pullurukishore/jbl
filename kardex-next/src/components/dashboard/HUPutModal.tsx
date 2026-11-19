@@ -625,7 +625,7 @@ export const HUPutModal: React.FC<HUPutModalProps> = ({
                   <CheckCircle2 size={18} className="text-success" />
                   <span className="val-hu-badge">{validatedHu.hu_id}</span>
                   <span className="val-type-text">{validatedHu.bin_type?.name || 'Bin'}</span>
-                  <span className="val-pps-badge">PPS: {validatedHu.bin_type?.bin_name || 'CON_BINA'}</span>
+                  <span className="val-pps-badge">PPS: {validatedHu.bin_type?.bin_name || 'CON_BINC'}</span>
                 </div>
                 <div className="d-flex align-items-center gap-2">
                   <StorageStatusBadge status={validatedHu.storage_status} />

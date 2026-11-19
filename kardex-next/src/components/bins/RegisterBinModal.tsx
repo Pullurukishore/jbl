@@ -8,6 +8,7 @@ import {
   Loader2,
   Barcode,
   Layers,
+  Columns,
   Check,
   AlertCircle,
   Info,
@@ -28,6 +29,7 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
   initialHuId,
 }) => {
   const [huId, setHuId] = useState('');
+  const [selectedBinType, setSelectedBinType] = useState<'CON_BINC' | 'CON_BIND'>('CON_BINC');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -35,10 +37,12 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
   useEffect(() => {
     if (!isOpen) {
       setHuId('');
+      setSelectedBinType('CON_BINC');
       setError('');
       setSubmitting(false);
     } else {
       setHuId(initialHuId || '');
+      setSelectedBinType('CON_BINC');
       setTimeout(() => inputRef.current?.focus(), 150);
     }
   }, [isOpen, initialHuId]);
@@ -54,7 +58,10 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
     try {
       setSubmitting(true);
       setError('');
-      await apiPost('/hu/register', { hu_id: cleanId });
+      await apiPost('/hu/register', {
+        hu_id: cleanId,
+        bin_name: selectedBinType,
+      });
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -91,7 +98,7 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
               Register New Physical Bin
             </div>
             <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
-              Assign a unique Handling Unit ID with standard 30-slot tray specification
+              Assign a unique Handling Unit ID with 30-slot tray specification (CON_BINC or CON_BIND)
             </div>
           </div>
         </div>
@@ -205,40 +212,80 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
             gap: 4px;
           }
 
-          /* Fixed Tray Specification Card */
-          .fixed-spec-card {
-            background: #f8fafc;
+          /* Selectable Tray Specification Cards */
+          .spec-options-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+          }
+
+          .selectable-spec-card {
+            background: #ffffff;
             border: 1.5px solid #e2e8f0;
             border-radius: 10px;
-            padding: 12px 14px;
+            padding: 11px 13px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 12px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+          }
+
+          .selectable-spec-card:hover:not(.disabled) {
+            border-color: #93c5fd;
+            background: #f8fafc;
+            transform: translateY(-1px);
+          }
+
+          .selectable-spec-card.selected {
+            background: #eff6ff;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.16);
+          }
+
+          .selectable-spec-card.disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
           }
 
           .spec-icon-box {
             width: 36px;
             height: 36px;
             border-radius: 9px;
-            background: #eff6ff;
-            color: #2563eb;
+            background: #f1f5f9;
+            color: #64748b;
             display: flex;
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
-            border: 1px solid #bfdbfe;
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s ease;
+          }
+
+          .selectable-spec-card.selected .spec-icon-box {
+            background: #dbeafe;
+            color: #2563eb;
+            border-color: #bfdbfe;
           }
 
           .spec-title {
-            font-size: 13.5px;
+            font-size: 13px;
             font-weight: 700;
             color: #0f172a;
-            line-height: 1.2;
+            line-height: 1.25;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          }
+
+          .selectable-spec-card.selected .spec-title {
+            color: #1d4ed8;
           }
 
           .spec-sub-meta {
-            font-size: 11.5px;
+            font-size: 11px;
             color: #64748b;
             margin-top: 3px;
             display: flex;
@@ -255,9 +302,23 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
             border: 1px solid #a7f3d0;
             padding: 3px 8px;
             border-radius: 6px;
-            font-size: 11px;
+            font-size: 10.5px;
             font-weight: 700;
             flex-shrink: 0;
+          }
+
+          .spec-inactive-radio {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 1.5px solid #cbd5e1;
+            background: #ffffff;
+            flex-shrink: 0;
+            transition: all 0.2s ease;
+          }
+
+          .selectable-spec-card:hover .spec-inactive-radio {
+            border-color: #94a3b8;
           }
 
           /* Kardex Integration Info Banner */
@@ -379,33 +440,96 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
               </span>
             </div>
 
-            {/* Fixed Tray Specification Info */}
+            {/* Selectable Tray Specification Options */}
             <div className="form-group-wrap">
               <label className="field-label">
-                <span>Tray Specification</span>
-                <span className="field-label-desc font-monospace">Kardex PPS Shuttle Profile</span>
+                <span>Tray Physical Profile & Layout</span>
+                <span className="field-label-desc font-monospace">Select Profile</span>
               </label>
 
-              <div className="fixed-spec-card">
-                <div className="d-flex align-items-center gap-3">
-                  <div className="spec-icon-box">
-                    <Layers size={18} />
-                  </div>
-                  <div>
-                    <div className="spec-title">Type-C (30 Compartments)</div>
-                    <div className="spec-sub-meta">
-                      <span><strong>30</strong> Compartments (Slots 1–30)</span>
-                      <span>•</span>
-                      <span className="badge bg-white text-dark border font-monospace" style={{ fontSize: '10.5px' }}>
-                        PPS: CON_BINC
-                      </span>
+              <div className="spec-options-grid">
+                {/* Option 1: CON_BINC (Regular Horizontal 30 Slots) */}
+                <div
+                  className={`selectable-spec-card ${selectedBinType === 'CON_BINC' ? 'selected' : ''} ${submitting ? 'disabled' : ''}`}
+                  onClick={() => !submitting && setSelectedBinType('CON_BINC')}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === ' ' || e.key === 'Enter') {
+                      e.preventDefault();
+                      setSelectedBinType('CON_BINC');
+                    }
+                  }}
+                >
+                  <div className="d-flex align-items-center gap-3">
+                    <div className="spec-icon-box">
+                      <Layers size={18} />
+                    </div>
+                    <div>
+                      <div className="spec-title">
+                        <span>Type-C (30 Compartments)</span>
+                        <span className="badge bg-secondary-subtle text-secondary-emphasis" style={{ fontSize: '10px' }}>Regular Bin</span>
+                      </div>
+                      <div className="spec-sub-meta">
+                        <span>Horizontal 2×15 (1–15 & 16–30)</span>
+                        <span>•</span>
+                        <span className="badge bg-white text-dark border font-monospace" style={{ fontSize: '10.5px' }}>
+                          PPS: CON_BINC
+                        </span>
+                      </div>
                     </div>
                   </div>
+
+                  {selectedBinType === 'CON_BINC' ? (
+                    <div className="spec-active-badge">
+                      <Check size={12} strokeWidth={3} />
+                      <span>Regular</span>
+                    </div>
+                  ) : (
+                    <div className="spec-inactive-radio" />
+                  )}
                 </div>
 
-                <div className="spec-active-badge">
-                  <Check size={12} strokeWidth={3} />
-                  <span>Standard</span>
+                {/* Option 2: CON_BIND (Side Bin Vertical 30 Slots) */}
+                <div
+                  className={`selectable-spec-card ${selectedBinType === 'CON_BIND' ? 'selected' : ''} ${submitting ? 'disabled' : ''}`}
+                  onClick={() => !submitting && setSelectedBinType('CON_BIND')}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === ' ' || e.key === 'Enter') {
+                      e.preventDefault();
+                      setSelectedBinType('CON_BIND');
+                    }
+                  }}
+                >
+                  <div className="d-flex align-items-center gap-3">
+                    <div className="spec-icon-box">
+                      <Columns size={18} />
+                    </div>
+                    <div>
+                      <div className="spec-title">
+                        <span>Type-D (30 Compartments)</span>
+                        <span className="badge bg-primary-subtle text-primary-emphasis" style={{ fontSize: '10px' }}>Side Bin Vertical</span>
+                      </div>
+                      <div className="spec-sub-meta">
+                        <span>Vertical 2×15 (1–15 Up & 16–30 Up)</span>
+                        <span>•</span>
+                        <span className="badge bg-white text-dark border font-monospace" style={{ fontSize: '10.5px' }}>
+                          PPS: CON_BIND
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedBinType === 'CON_BIND' ? (
+                    <div className="spec-active-badge">
+                      <Check size={12} strokeWidth={3} />
+                      <span>Vertical</span>
+                    </div>
+                  ) : (
+                    <div className="spec-inactive-radio" />
+                  )}
                 </div>
               </div>
             </div>

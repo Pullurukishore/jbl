@@ -632,7 +632,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
 
           <span className="meta-chip">
             <Barcode size={12} className="text-secondary" />
-            <strong>{hu.bin_type?.bin_name || 'CON_BINA'}</strong>
+            <strong>{hu.bin_type?.bin_name || 'CON_BINC'}</strong>
           </span>
 
           <span className="meta-chip">
@@ -838,7 +838,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
                 onSelectEmpty={isLocked ? undefined : handleSelectEmpty}
                 selectedCompartment={canPut && isScanModalOpen ? selectedCompartment : null}
                 huId={hu.hu_id}
-                binName={hu.bin_type?.bin_name || 'CON_BINA'}
+                binName={hu.bin_type?.bin_name || 'CON_BINC'}
                 binType={hu.bin_type?.name}
               />
             </div>

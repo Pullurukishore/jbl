@@ -39,15 +39,29 @@ function huIncludes() {
 // POST /register
 // ─────────────────────────────────────────────────────────────────────────────
 exports.registerHU = asyncHandler(async (req, res) => {
-    const { hu_id, bin_type_id } = req.body;
+    const { hu_id, bin_type_id, bin_name } = req.body;
     if (!hu_id) {
         return res.status(400).json({ error: 'hu_id is required.' });
     }
 
-    // Resolve bin specification (defaulting to fixed 30-compartment Kardex Type-C profile)
+    // Resolve bin specification (supporting both CON_BINC regular 30-slot and CON_BIND side vertical 30-slot)
     let binType = null;
     if (bin_type_id) {
         binType = await db.bin_type.findByPk(bin_type_id);
+    }
+    if (!binType && bin_name) {
+        binType = await db.bin_type.findOne({ where: { bin_name } });
+    }
+    if (!binType && bin_name === 'CON_BIND') {
+        binType = await db.bin_type.create({
+            name: 'Type-D (30 Compartments - Vertical)',
+            compartment_count: 30,
+            bin_name: 'CON_BIND',
+            description: 'Side bin vertical (30 Compartments)'
+        });
+    }
+    if (!binType && (!bin_name || bin_name === 'CON_BINC')) {
+        binType = await db.bin_type.findOne({ where: { bin_name: 'CON_BINC' } });
     }
     if (!binType) {
         binType = await db.bin_type.findOne({ where: { compartment_count: 30 } });
