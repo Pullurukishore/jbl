@@ -63,7 +63,7 @@ exports.getPVStatusCheck = async (serialNumber, processName) => {
         Division: process.env.TISDivision,
         SerialNumber: serialNumber,
         AssemblyNumber: '',
-        TesterName: processName,
+        TesterName: process.env.TISTesterName || processName,
         ProcessStep: processName,
     };
 
@@ -104,7 +104,7 @@ exports.updateBoardHistory = async (data) => {
     let testString = `S${data.serialNumber}\n` +
         `C${process.env.TISCustomer}\n` +
         `I${process.env.TISDivision}\n` +
-        `N${data.processName}\n` +
+        `N${process.env.TISTesterName || data.processName}\n` +
         `P${data.processName}\n` +
         `O${data.userId}\n` +
         `[${data.startTime}\n` +
