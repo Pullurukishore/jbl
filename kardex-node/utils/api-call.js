@@ -46,7 +46,7 @@ async function getSoapClient() {
 
 // ==============================================================================
 // 1 & 2: SOAP TIS Service Calls (TIS.asmx / http://jabil.com/GMS/MES_TIS)
-// Works for both STG (http://azapserjncmp83) and PROD (http://inrjnm0tis03)
+// Production Endpoint: http://inrjnm0tis03/MES-TIS/TIS.asmx
 // ==============================================================================
 
 exports.getPVStatusCheck = async (serialNumber, processName) => {
@@ -141,8 +141,8 @@ exports.updateBoardHistory = async (data) => {
 };
 
 // ==============================================================================
-// 5: GetBoardData (PRESENT / STAGING API)
-// Endpoint: https://azapserjniis81.corp.jabil.org:8080/MESWebAPI/Wip/GetBoardData
+// 5: GetBoardData (PRODUCTION API)
+// Endpoint: https://inrjnm0iis13.corp.jabil.org:8082/MESWEBAPI/Wip/GetBoardData
 // ==============================================================================
 exports.getBoardData = async (serialNumber) => {
     if (process.env.IS_OFFLINE === 'true') {
@@ -181,8 +181,8 @@ exports.getBoardData = async (serialNumber) => {
 };
 
 // ==============================================================================
-// 4: GetUserByWindowsId (PRESENT / STAGING API)
-// Endpoint: https://azapserjniis81.corp.jabil.org:8080/MESWebAPI/Security/GetUserByWindowsId
+// 4: GetUserByWindowsId (PRODUCTION API)
+// Endpoint: https://inrjnm0iis13.corp.jabil.org:8082/MESWEBAPI/Security/GetUserByWindowsId
 // ==============================================================================
 exports.getUserByWindowsId = async (windowsId) => {
     if (process.env.IS_OFFLINE === 'true') {
@@ -215,8 +215,8 @@ exports.getUserByWindowsId = async (windowsId) => {
 };
 
 // ==============================================================================
-// 3: GetPanelSerializeResult (PRESENT / STAGING API)
-// Endpoint: https://azapserjniis81.corp.jabil.org:8080/MESWebAPI/Test/GetPanelSerializeResult
+// 3: GetPanelSerializeResult (PRODUCTION API)
+// Endpoint: https://inrjnm0iis13.corp.jabil.org:8082/MESWEBAPI/Test/GetPanelSerializeResult
 // ==============================================================================
 exports.getPanelSerializeResult = async (panelBarcode) => {
     if (process.env.IS_OFFLINE === 'true') {
@@ -253,7 +253,7 @@ exports.getPanelSerializeResult = async (panelBarcode) => {
 // ==============================================================================
 
 // [OLD / REAL PROD] BoardHistoryReport wrapper (calls https://inrjnm0iis13.corp.jabil.org:8082/... in prod)
-// In STG, this routes to GetBoardData URL configured in config.env
+// Routes to GetBoardData URL configured in config.env
 exports.getBoardHistory = async (serialNumber) => {
     if (process.env.IS_OFFLINE === 'true') {
         // DYNAMIC MOCK FOR REAL-TIME TEST FEEL
@@ -328,7 +328,7 @@ exports.getBoardHistory = async (serialNumber) => {
 };
 
 // [OLD / REAL PROD] GetWipBySerial wrapper (calls https://inrjnm0iis13.corp.jabil.org:8082/... in prod)
-// In STG, this routes to GetBoardData URL configured in config.env
+// Routes to GetBoardData URL configured in config.env
 exports.getWipBySerialNumber = async (serialNumber) => {
     if (process.env.IS_OFFLINE === 'true') {
         return {
