@@ -116,10 +116,10 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '6px 12px',
-          borderRadius: '7px',
-          minHeight: '40px',
-          gap: '10px',
+          padding: '2px 8px',
+          borderRadius: '5px',
+          minHeight: '23px',
+          gap: '6px',
           cursor: isClickable || isOccupiedClickable || isPickedClickable ? 'pointer' : 'default',
           border: isSelected
             ? '1.5px solid #60a5fa'
@@ -140,15 +140,15 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
                   ? 'linear-gradient(90deg, #0f1c38 0%, #091326 100%)'
                   : '#080d19',
           boxShadow: isSelected
-            ? '0 0 12px rgba(96, 165, 250, 0.4)'
+            ? '0 0 10px rgba(96, 165, 250, 0.35)'
             : isOccupied
-              ? '0 0 8px rgba(16, 185, 129, 0.12)'
+              ? '0 0 6px rgba(16, 185, 129, 0.1)'
               : isPicked
-                ? '0 0 8px rgba(217, 119, 6, 0.2)'
+                ? '0 0 6px rgba(217, 119, 6, 0.18)'
                 : isNextTarget
-                  ? '0 0 8px rgba(59, 130, 246, 0.2)'
+                  ? '0 0 6px rgba(59, 130, 246, 0.18)'
                   : 'none',
-          transition: 'all 0.16s ease',
+          transition: 'all 0.14s ease',
         }}
         title={
           isPicked
@@ -163,22 +163,22 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         }
       >
         {/* Left Cluster: Gold Pins, Slot Number Badge, LED Status Dot */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
           {/* Gold PCB contact pins */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', opacity: isPicked ? 0.4 : 0.85 }}>
-            <div style={{ width: '4px', height: '3px', background: isPicked ? '#64748b' : '#f59e0b', borderRadius: '1px' }} />
-            <div style={{ width: '4px', height: '3px', background: isPicked ? '#64748b' : '#f59e0b', borderRadius: '1px' }} />
-            <div style={{ width: '4px', height: '3px', background: isPicked ? '#64748b' : '#f59e0b', borderRadius: '1px' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', opacity: isPicked ? 0.4 : 0.85 }}>
+            <div style={{ width: '3px', height: '2px', background: isPicked ? '#64748b' : '#f59e0b', borderRadius: '0.5px' }} />
+            <div style={{ width: '3px', height: '2px', background: isPicked ? '#64748b' : '#f59e0b', borderRadius: '0.5px' }} />
+            <div style={{ width: '3px', height: '2px', background: isPicked ? '#64748b' : '#f59e0b', borderRadius: '0.5px' }} />
           </div>
 
           <span
             style={{
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-              fontSize: '11px',
+              fontSize: '9.5px',
               fontWeight: 800,
-              padding: '2px 6px',
-              borderRadius: '4px',
-              letterSpacing: '0.3px',
+              padding: '1px 4px',
+              borderRadius: '3px',
+              letterSpacing: '0.2px',
               color: isPicked
                 ? '#fbbf24'
                 : isOccupied
@@ -208,11 +208,11 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           {isOccupied && (
             <div
               style={{
-                width: '7px',
-                height: '7px',
+                width: '6px',
+                height: '6px',
                 borderRadius: '50%',
                 background: '#34d399',
-                boxShadow: '0 0 8px #34d399, 0 0 3px #10b981',
+                boxShadow: '0 0 6px #34d399, 0 0 2px #10b981',
               }}
               title="Module Seated - PASS & STORED"
             />
@@ -220,29 +220,29 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           {isPicked && (
             <div
               style={{
-                width: '7px',
-                height: '7px',
+                width: '6px',
+                height: '6px',
                 borderRadius: '50%',
                 background: '#fbbf24',
-                boxShadow: '0 0 8px #fbbf24, 0 0 3px #d97706',
+                boxShadow: '0 0 6px #fbbf24, 0 0 2px #d97706',
               }}
               title="Pick Validated - Ready for Kardex"
             />
           )}
-          {isSelected && <Radio size={12} className="text-light" />}
+          {isSelected && <Radio size={10} className="text-light" />}
           {!isOccupied && !isPicked && !isSelected && isNextTarget && (
-            <Zap size={11} className="text-primary" />
+            <Zap size={9} className="text-primary" />
           )}
         </div>
 
         {/* Center Content: Serial Number and Material / Model Name */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1, minWidth: 0, margin: '0 6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0, margin: '0 4px' }}>
           {isPicked && (
-            <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
               <span
                 style={{
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                  fontSize: '11px',
+                  fontSize: '9.5px',
                   fontWeight: 800,
                   color: '#fbbf24',
                   whiteSpace: 'nowrap',
@@ -255,9 +255,13 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
               <span
                 style={{
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                  fontSize: '9.5px',
+                  fontSize: '8px',
                   fontWeight: 700,
                   color: '#f59e0b',
+                  background: 'rgba(245, 158, 11, 0.15)',
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                  borderRadius: '2px',
+                  padding: '0.5px 3px',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -265,15 +269,15 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
               >
                 {comp.material_name || comp.put?.model_number || 'READY FOR KARDEX'}
               </span>
-            </>
+            </div>
           )}
 
           {isOccupied && (
-            <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
               <span
                 style={{
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                  fontSize: '11px',
+                  fontSize: '9.5px',
                   fontWeight: 800,
                   color: '#ffffff',
                   whiteSpace: 'nowrap',
@@ -287,9 +291,13 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
                 <span
                   style={{
                     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                    fontSize: '9.5px',
+                    fontSize: '8px',
                     fontWeight: 700,
                     color: '#fbbf24',
+                    background: 'rgba(245, 158, 11, 0.15)',
+                    border: '1px solid rgba(245, 158, 11, 0.3)',
+                    borderRadius: '2px',
+                    padding: '0.5px 3px',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -299,16 +307,19 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
                   {comp.material_name || comp.put?.model_number}
                 </span>
               )}
-            </>
+            </div>
           )}
 
           {isSelected && (
             <span
               style={{
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                fontSize: '11px',
+                fontSize: '9.5px',
                 fontWeight: 800,
                 color: '#93c5fd',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
               }}
             >
               Scanning Active Target...
@@ -319,9 +330,12 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
             <span
               style={{
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                fontSize: '11px',
+                fontSize: '9.5px',
                 fontWeight: 700,
                 color: '#60a5fa',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
               }}
             >
               + Next Empty Slot (Click to scan)
@@ -332,9 +346,12 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
             <span
               style={{
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                fontSize: '10.5px',
+                fontSize: '9.5px',
                 fontWeight: 600,
                 color: '#475569',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
               }}
             >
               {disabled ? 'Locked in Kardex' : 'Open Slot (Click to scan)'}
@@ -343,15 +360,15 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         </div>
 
         {/* Right Cluster: Status Badge */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
           {isPicked && (
             <span
               style={{
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                fontSize: '9.5px',
+                fontSize: '8.5px',
                 fontWeight: 800,
-                padding: '2px 6px',
-                borderRadius: '4px',
+                padding: '1px 5px',
+                borderRadius: '3px',
                 color: '#fbbf24',
                 background: 'rgba(120, 53, 15, 0.7)',
                 border: '1px solid rgba(245, 158, 11, 0.5)',
@@ -365,10 +382,10 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
             <span
               style={{
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                fontSize: '9.5px',
+                fontSize: '8.5px',
                 fontWeight: 800,
-                padding: '2px 6px',
-                borderRadius: '4px',
+                padding: '1px 5px',
+                borderRadius: '3px',
                 color: '#34d399',
                 background: 'rgba(6, 78, 59, 0.7)',
                 border: '1px solid rgba(16, 185, 129, 0.5)',
@@ -382,10 +399,10 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
             <span
               style={{
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                fontSize: '9.5px',
+                fontSize: '8.5px',
                 fontWeight: 800,
-                padding: '2px 6px',
-                borderRadius: '4px',
+                padding: '1px 5px',
+                borderRadius: '3px',
                 color: '#93c5fd',
                 background: 'rgba(30, 58, 138, 0.7)',
                 border: '1px solid rgba(59, 130, 246, 0.6)',
@@ -399,10 +416,10 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
             <span
               style={{
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                fontSize: '9.5px',
+                fontSize: '8.5px',
                 fontWeight: 800,
-                padding: '2px 6px',
-                borderRadius: '4px',
+                padding: '1px 5px',
+                borderRadius: '3px',
                 color: '#60a5fa',
                 background: 'rgba(30, 58, 138, 0.5)',
                 border: '1px dashed #3b82f6',
@@ -416,10 +433,10 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
             <span
               style={{
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                fontSize: '9.5px',
+                fontSize: '8.5px',
                 fontWeight: 800,
-                padding: '2px 6px',
-                borderRadius: '4px',
+                padding: '1px 5px',
+                borderRadius: '3px',
                 color: '#475569',
                 background: '#0d1322',
                 border: '1px solid #1e293b',
@@ -439,15 +456,14 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         /* Molded ESD Industrial Tote Outer Casing */
         .esd-tote-container {
           background: linear-gradient(180deg, #111827 0%, #0b0f19 50%, #030712 100%);
-          border: 3px solid #1f293d;
-          border-radius: 14px;
-          padding: 8px 10px;
-          box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.7),
+          border: 2px solid #1f293d;
+          border-radius: 10px;
+          padding: 6px 8px;
+          box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.7),
                       inset 0 1px 1px rgba(255, 255, 255, 0.08),
                       inset 0 -2px 4px rgba(0, 0, 0, 0.9);
           position: relative;
           width: 100%;
-          height: 100%;
           flex: 1;
           display: flex;
           flex-direction: column;
@@ -455,7 +471,6 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           user-select: none;
           overflow-x: hidden;
           min-width: 0;
-          min-height: 480px;
         }
 
         /* Molded Outer Lip & Carry Grips */
@@ -465,9 +480,9 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           justify-content: space-between;
           background: #080d1a;
           border: 1px solid #1e293b;
-          border-radius: 8px;
-          padding: 6px 12px;
-          margin-bottom: 8px;
+          border-radius: 6px;
+          padding: 3px 8px;
+          margin-bottom: 5px;
           box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.6);
           flex-shrink: 0;
           flex-wrap: wrap;
@@ -475,8 +490,8 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         }
 
         .handle-grip-recess {
-          width: 36px;
-          height: 10px;
+          width: 28px;
+          height: 6px;
           background: #030712;
           border: 1px solid #334155;
           border-radius: 9999px;
@@ -486,27 +501,27 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         .tote-spec-label {
           display: flex;
           align-items: center;
-          gap: 6px;
+          gap: 5px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 10px;
+          font-size: 9px;
           font-weight: 700;
           color: #94a3b8;
-          letter-spacing: 0.4px;
+          letter-spacing: 0.3px;
           text-transform: uppercase;
         }
 
         .esd-badge {
           display: inline-flex;
           align-items: center;
-          gap: 3px;
+          gap: 2px;
           background: rgba(234, 179, 8, 0.15);
           color: #facc15;
           border: 1px solid rgba(234, 179, 8, 0.35);
-          padding: 1px 5px;
+          padding: 1px 4px;
           border-radius: 3px;
-          font-size: 9px;
+          font-size: 8px;
           font-weight: 800;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.4px;
         }
 
         .tote-telemetry {
@@ -514,7 +529,7 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           align-items: center;
           gap: 8px;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-          font-size: 9.5px;
+          font-size: 8.5px;
           font-weight: 700;
           flex-wrap: wrap;
         }
@@ -1193,21 +1208,21 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         .vertical-slots-list {
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 2px;
           flex: 1;
         }
 
         /* Individual Vertical Pocket Row */
         .vertical-pocket-row {
-          border-radius: 7px;
-          min-height: 44px;
-          padding: 6px 10px;
+          border-radius: 5px;
+          min-height: 23px;
+          padding: 2px 8px;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 10px;
+          gap: 6px;
           position: relative;
-          transition: all 0.16s cubic-bezier(0.4, 0, 0.2, 1);
+          transition: all 0.14s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .vertical-pocket-row.occupied {
@@ -1416,7 +1431,7 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
         .vertical-banks-grid {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 12px;
+          gap: 8px;
           width: 100%;
           flex: 1;
           min-height: 0;
@@ -1725,12 +1740,12 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
             style={{
               background: '#040711',
               border: '1.5px solid #1a2234',
-              borderRadius: '10px',
-              padding: '8px',
+              borderRadius: '8px',
+              padding: '4px 5px',
               boxShadow: 'inset 0 4px 14px rgba(0, 0, 0, 0.85)',
               display: 'flex',
               flexDirection: 'column',
-              gap: '6px',
+              gap: '3px',
             }}
           >
             <div
@@ -1738,25 +1753,25 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '6px 10px',
+                padding: '3px 8px',
                 background: '#090f1f',
                 border: '1px solid #1e293b',
-                borderRadius: '7px',
+                borderRadius: '5px',
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                marginBottom: '2px',
+                marginBottom: '1px',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#3b82f6', boxShadow: '0 0 6px #3b82f6' }} />
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#e2e8f0', letterSpacing: '0.4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#3b82f6', boxShadow: '0 0 5px #3b82f6' }} />
+                <span style={{ fontSize: '10px', fontWeight: 800, color: '#e2e8f0', letterSpacing: '0.3px' }}>
                   VERTICAL BANK 1 • SLOTS 01 – 15
                 </span>
               </div>
-              <span style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8' }}>
+              <span style={{ fontSize: '9px', fontWeight: 700, color: '#94a3b8' }}>
                 {bank1Occupied}/15 LOADED
               </span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 }}>
               {bank1Comps.map(renderVerticalPocket)}
             </div>
           </div>
@@ -1766,12 +1781,12 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
             style={{
               background: '#040711',
               border: '1.5px solid #1a2234',
-              borderRadius: '10px',
-              padding: '8px',
+              borderRadius: '8px',
+              padding: '4px 5px',
               boxShadow: 'inset 0 4px 14px rgba(0, 0, 0, 0.85)',
               display: 'flex',
               flexDirection: 'column',
-              gap: '6px',
+              gap: '3px',
             }}
           >
             <div
@@ -1779,25 +1794,25 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '6px 10px',
+                padding: '3px 8px',
                 background: '#090f1f',
                 border: '1px solid #1e293b',
-                borderRadius: '7px',
+                borderRadius: '5px',
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                marginBottom: '2px',
+                marginBottom: '1px',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#8b5cf6', boxShadow: '0 0 6px #8b5cf6' }} />
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#e2e8f0', letterSpacing: '0.4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#8b5cf6', boxShadow: '0 0 5px #8b5cf6' }} />
+                <span style={{ fontSize: '10px', fontWeight: 800, color: '#e2e8f0', letterSpacing: '0.3px' }}>
                   VERTICAL BANK 2 • SLOTS 16 – 30
                 </span>
               </div>
-              <span style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8' }}>
+              <span style={{ fontSize: '9px', fontWeight: 700, color: '#94a3b8' }}>
                 {bank2Occupied}/15 LOADED
               </span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 }}>
               {bank2Comps.map(renderVerticalPocket)}
             </div>
           </div>

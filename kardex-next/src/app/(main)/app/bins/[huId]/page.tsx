@@ -303,9 +303,9 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
           max-width: 100% !important;
           display: flex;
           flex-direction: column;
-          gap: 0.6rem;
+          gap: 0.35rem;
           flex: 1;
-          min-height: calc(100vh - 100px);
+          min-height: auto;
         }
 
         /* Unified Sleek Top Command Bar */
@@ -314,12 +314,12 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
           max-width: 100% !important;
           background: #ffffff;
           border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          padding: 8px 16px;
+          border-radius: 10px;
+          padding: 6px 12px;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
+          gap: 8px;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
           flex-shrink: 0;
           flex-wrap: wrap;
@@ -446,7 +446,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         .workspace-split-row {
           display: flex;
           align-items: stretch;
-          gap: 14px;
+          gap: 10px;
           width: 100% !important;
           max-width: 100% !important;
           flex: 1;
@@ -473,8 +473,8 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
           .top-command-bar {
             flex-direction: column;
             align-items: stretch !important;
-            gap: 10px !important;
-            padding: 10px !important;
+            gap: 8px !important;
+            padding: 8px !important;
           }
           .cmd-left {
             flex-wrap: wrap !important;
@@ -494,7 +494,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
           .layout-toolbar {
             flex-direction: column;
             align-items: flex-start !important;
-            gap: 8px !important;
+            gap: 6px !important;
           }
           .toolbar-left, .toolbar-right {
             width: 100%;
@@ -505,12 +505,12 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         .layout-card {
           background: #ffffff;
           border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          padding: 10px 12px;
+          border-radius: 10px;
+          padding: 6px 10px;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
           display: flex;
           flex-direction: column;
-          height: 100%;
+          height: auto;
           min-height: 0;
         }
 
@@ -519,21 +519,21 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
           align-items: center;
           justify-content: space-between;
           flex-wrap: wrap;
-          gap: 8px;
-          margin-bottom: 8px;
-          padding-bottom: 6px;
+          gap: 6px;
+          margin-bottom: 5px;
+          padding-bottom: 4px;
           border-bottom: 1px solid #f1f5f9;
         }
 
         .toolbar-left {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
           flex-wrap: wrap;
         }
 
         .toolbar-title {
-          font-size: 14px;
+          font-size: 13px;
           font-weight: 800;
           color: #0f172a;
           margin: 0;
@@ -542,7 +542,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         .legend-group {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
           font-size: 11px;
           color: #64748b;
           font-weight: 500;
