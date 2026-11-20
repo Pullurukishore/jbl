@@ -33,7 +33,8 @@ const isAll = args.includes('--all') || args.includes('--hard');
 const isForce = args.includes('--yes') || args.includes('-y') || args.includes('--force');
 const isDbOnly = args.includes('--db-only');
 const isFilesOnly = args.includes('--files-only');
-const clearBins = args.includes('--bins') || args.includes('--clear-bins') || isAll;
+const keepBins = args.includes('--keep-bins');
+const clearBins = !keepBins;
 const includeUsers = args.includes('--include-users') || (isAll && !args.includes('--keep-users'));
 const seedAdmin = args.includes('--seed-admin') || (isAll && includeUsers);
 
@@ -48,15 +49,15 @@ Usage:
   clean-data.bat [options]
 
 Modes:
-  (default)            Reset inventory & transactions (Puts, Picks, Logs, Files)
-                       and reset Bins/Compartments to EMPTY. Keeps Bins and Users.
-  --bins               Wipe all Bins, Compartments, and Bin Types in addition to
-                       inventory, while preserving Users.
-  --all, --hard        Full database wipe (Truncates ALL tables including Bins & Users).
+  (default)            Full reset: Deletes all Bins, Compartments, Inventory (Puts,
+                       Picks), Logs, and generated files. Preserves Users.
+  --keep-bins          Keep Bin definitions & compartments (reset them to EMPTY)
+                       instead of deleting them.
+  --all, --hard        Full database wipe (Truncates ALL tables including Users).
                        Re-seeds default administrator (admin / admin123).
 
 Options:
-  --bins               Delete all bin definitions, compartments, and bin types.
+  --keep-bins          Keep bins and compartments (only empty them).
   --include-users      Delete user accounts as well.
   --keep-users         Keep users when using --all.
   --seed-admin         Re-create default admin account (admin / admin123).
@@ -204,7 +205,7 @@ async function cleanDatabase() {
             console.log('  Admin created: User ID: "admin" | Password: "admin123"');
         }
     } else {
-        console.log(' Mode: RESET INVENTORY & TRANSACTIONS (Preserving Bins & Users)');
+        console.log(` Mode: RESET INVENTORY & TRANSACTIONS (${clearBins ? 'Deleting Bins & Compartments, ' : 'Preserving Bins, '}Preserving Users)`);
 
         if (dialect === 'postgres') {
             try {
@@ -304,15 +305,23 @@ async function main() {
     console.log('====================================================');
     console.log('      KARDEX REMSTAR - DATA PURGE & RESET TOOL      ');
     console.log('====================================================');
-    console.log(`Action: ${isAll ? 'FULL PURGE (All tables + files)' : 'RESET INVENTORY (Puts/Picks/Logs + Reset Bins + files)'}`);
+    const actionDesc = isAll
+        ? 'FULL PURGE (All tables + files)'
+        : clearBins
+            ? 'RESET INVENTORY & DELETE ALL BINS (+ files)'
+            : 'RESET INVENTORY (Puts/Picks/Logs + Reset Bins + files)';
+    console.log(`Action: ${actionDesc}`);
     console.log(`Target database: ${process.env.DB_DATABASE || 'kardex'}`);
     console.log(`Target files: text-file/put, text-file/pick, uploads`);
     console.log('====================================================');
 
     if (!isForce) {
+        let warningText = clearBins
+            ? '\n⚠️  This will clear all inventory, puts, picks, logs, bins, compartments, and generated files.\nUsers will be preserved.\nType "yes" to proceed: '
+            : '\n⚠️  This will clear all inventory, puts, picks, logs, and generated files.\nBins and users will be preserved.\nType "yes" to proceed: ';
         const prompt = isAll
             ? '\n⚠️  WARNING: This will permanently wipe ALL database tables and files.\nAre you absolutely sure? Type "yes" to proceed: '
-            : '\n⚠️  This will clear all inventory, puts, picks, logs, and generated files.\nBins and users will be preserved.\nType "yes" to proceed: ';
+            : warningText;
 
         const answer = await askConfirmation(prompt);
         if (answer !== 'yes' && answer !== 'y') {
