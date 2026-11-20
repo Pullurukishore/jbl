@@ -12,6 +12,7 @@ import { Pagination } from '@/components/shared/Pagination';
 import { Loader } from '@/components/shared/Loader';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { apiPost, apiDownloadFile, downloadBlob } from '@/lib/api';
+import { copyToClipboard } from '@/lib/clipboard';
 import { useAuth } from '@/context/AuthContext';
 import { DashboardCounts, Put, PaginatedResponse } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
@@ -132,6 +133,7 @@ export default function DashboardPage() {
 
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   // Modals
   const [isHUPutModalOpen, setIsHUPutModalOpen] = useState(false);
@@ -218,6 +220,7 @@ export default function DashboardPage() {
 
   const handleExportExcel = async () => {
     try {
+      setExporting(true);
       const res = await apiPost<PaginatedResponse<Put>>('/put/search-all', {
         search,
         isExport: true,
@@ -225,13 +228,22 @@ export default function DashboardPage() {
         endDate: endDate ? endDate.toISOString() : undefined,
       });
 
-      const exportData = (res.data || []).map((p) => ({
+      const records = res?.data || [];
+      if (records.length === 0) {
+        alert('No scan records found to export.');
+        return;
+      }
+
+      const exportData = records.map((p: any) => ({
         'Serial Number': p.serial_number,
+        'Model Number': p.model_number,
+        'Bin Name': p.handling_unit?.hu_id || '-',
+        'Compartment': p.compartment?.compartment_number ? `#${p.compartment.compartment_number}` : '-',
         'PV Status': p.pv_status || '-',
         'Process Status': p.process_status || '-',
         'PO File': p.put_po_file?.name || '-',
-        'Model Number': p.model_number,
-        'Scanned By': p.user_first_name ? `${p.user_first_name} ${p.user_last_name || ''}` : p.scanned_by,
+        'Scanned By': p.user_first_name ? `${p.user_first_name} ${p.user_last_name || ''}`.trim() : p.scanned_by,
+        'Scanned At': p.scanned_at ? new Date(p.scanned_at).toLocaleString() : '-',
         'PUT File': p.put_text_file?.name || '-',
         'Pick Status': p.pick_status,
         'Pick File': p.pick?.pick_text_file?.name || '-',
@@ -241,8 +253,11 @@ export default function DashboardPage() {
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Kardex Inventory');
       XLSX.writeFile(workbook, `Kardex_Inventory_${Date.now()}.xlsx`);
-    } catch {
-      alert('Error exporting Excel file');
+    } catch (err: any) {
+      console.error('Error exporting Excel file:', err);
+      alert(err?.message || 'Error exporting Excel file');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -878,8 +893,9 @@ export default function DashboardPage() {
             <button
               className="btn btn-success btn-sm d-flex align-items-center gap-1 text-nowrap"
               onClick={handleExportExcel}
+              disabled={exporting}
             >
-              <Download size={14} /> Export Excel
+              <Download size={14} /> {exporting ? 'Exporting...' : 'Export Excel'}
             </button>
           </div>
         </div>
@@ -923,7 +939,7 @@ export default function DashboardPage() {
                           onClick={(e) => {
                             e.stopPropagation();
                             if (row.serial_number) {
-                              navigator.clipboard.writeText(row.serial_number);
+                              copyToClipboard(row.serial_number);
                               setCopiedSerial(row.serial_number);
                               setTimeout(() => setCopiedSerial(null), 1500);
                             }
@@ -982,7 +998,7 @@ export default function DashboardPage() {
                             onClick={(e) => {
                               e.stopPropagation();
                               if (row.put_po_file?.name) {
-                                navigator.clipboard.writeText(row.put_po_file.name);
+                                copyToClipboard(row.put_po_file.name);
                                 setCopiedPo(row.put_po_file.name);
                                 setTimeout(() => setCopiedPo(null), 1500);
                               }

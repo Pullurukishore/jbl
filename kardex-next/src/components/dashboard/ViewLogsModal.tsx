@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Modal } from '@/components/shared/Modal';
 import { Loader } from '@/components/shared/Loader';
 import { apiPost, apiDownloadFile, downloadBlob } from '@/lib/api';
+import { copyToClipboard } from '@/lib/clipboard';
 import { Log, PaginatedResponse } from '@/types';
 import { Put } from '@/types/put';
 import {
@@ -279,7 +280,7 @@ export const ViewLogsModal: React.FC<ViewLogsModalProps> = ({
 
   const copySerial = () => {
     if (!serialNumber) return;
-    navigator.clipboard.writeText(serialNumber);
+    copyToClipboard(serialNumber);
     setCopiedSerial(true);
     setTimeout(() => setCopiedSerial(false), 1500);
   };

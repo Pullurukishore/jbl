@@ -1033,9 +1033,15 @@ exports.searchAll = asyncHandler(async (req, res) => {
 
         // Dynamic search conditions for all columns
         const searchConditions = {
-            // Apply date range filter if both dates are provided
+            // Apply date range filter
             ...(parsedStartDate && parsedEndDate && {
                 scanned_at: { [Op.between]: [parsedStartDate, parsedEndDate] },
+            }),
+            ...(parsedStartDate && !parsedEndDate && {
+                scanned_at: { [Op.gte]: parsedStartDate },
+            }),
+            ...(!parsedStartDate && parsedEndDate && {
+                scanned_at: { [Op.lte]: parsedEndDate },
             }),
             ...(search && {
                 [Op.or]: [
@@ -1128,8 +1134,8 @@ exports.searchAll = asyncHandler(async (req, res) => {
         // Query the database with search, pagination, and sorting
         const results = await db.put.findAndCountAll(query);
 
-        if (isExport) {
-            // Generate Excel File for Export
+        if (isExport && (req.headers['accept']?.includes('spreadsheetml') || req.body?.format === 'excel')) {
+            // Generate Excel File for direct binary download if specifically requested
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Data Sheet');
 
@@ -1167,10 +1173,10 @@ exports.searchAll = asyncHandler(async (req, res) => {
             return res.send(buffer);
         }
 
-        // Prepare response with pagination metadata
+        // Prepare response with pagination metadata (returns full records array when isExport is true)
         res.json({
             totalItems: results.count,
-            totalPages: Math.ceil(results.count / pageSize),
+            totalPages: Math.ceil(results.count / (pageSize || 10)),
             page: parseInt(page, 10),
             data: results.rows,
         });

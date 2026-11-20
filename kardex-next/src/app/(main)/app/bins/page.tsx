@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { apiPost, apiGet } from '@/lib/api';
+import { copyToClipboard } from '@/lib/clipboard';
 import { useAuth } from '@/context/AuthContext';
 import { HandlingUnit, StorageStatus, HUStatus, HUListResponse, HUStats, BinType } from '@/types/hu';
 import { HUStatusBadge } from '@/components/bins/HUStatusBadge';
@@ -128,7 +129,7 @@ export default function BinsMasterPage() {
 
   const handleCopyId = (huId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(huId);
+    copyToClipboard(huId);
     setCopiedHuId(huId);
     setTimeout(() => setCopiedHuId(null), 2000);
   };

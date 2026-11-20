@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { apiGet, apiDownloadFile, downloadBlob } from '@/lib/api';
+import { copyToClipboard } from '@/lib/clipboard';
 import { Log } from '@/types';
 import { Put } from '@/types/put';
 import { Loader } from '@/components/shared/Loader';
@@ -418,14 +419,14 @@ export default function LogDetailPage({ params }: LogDetailPageProps) {
 
   const copySerial = () => {
     if (!serialNumber) return;
-    navigator.clipboard.writeText(serialNumber);
+    copyToClipboard(serialNumber);
     setCopiedSerial(true);
     setTimeout(() => setCopiedSerial(false), 1500);
   };
 
   const copyModel = () => {
     if (!put?.model_number) return;
-    navigator.clipboard.writeText(put.model_number);
+    copyToClipboard(put.model_number);
     setCopiedModel(true);
     setTimeout(() => setCopiedModel(false), 1500);
   };

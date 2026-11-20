@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { apiGet, apiPost } from '@/lib/api';
+import { copyToClipboard } from '@/lib/clipboard';
 import { useAuth } from '@/context/AuthContext';
 import { HandlingUnit, Compartment } from '@/types/hu';
 import { HUStatusBadge } from '@/components/bins/HUStatusBadge';
@@ -144,7 +145,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
 
   const handleCopyId = () => {
     if (!hu) return;
-    navigator.clipboard.writeText(hu.hu_id);
+    copyToClipboard(hu.hu_id);
     setCopiedId(true);
     setTimeout(() => setCopiedId(false), 2000);
   };

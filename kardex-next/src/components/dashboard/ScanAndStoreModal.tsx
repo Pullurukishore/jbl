@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from '@/components/shared/Modal';
 import { TimelineProgress } from '@/components/shared/TimelineProgress';
 import { connectSSE, apiPost, apiDownloadFile, downloadBlob } from '@/lib/api';
+import { copyToClipboard as copyUtil } from '@/lib/clipboard';
 import { Log, Put } from '@/types';
 import {
   PackageMinus,
@@ -219,7 +220,7 @@ export const ScanAndStoreModal: React.FC<ScanAndStoreModalProps> = ({
   };
 
   const copyToClipboard = (serial: string) => {
-    navigator.clipboard.writeText(serial);
+    copyUtil(serial);
     setCopiedSerial(serial);
     setTimeout(() => setCopiedSerial(null), 1500);
   };

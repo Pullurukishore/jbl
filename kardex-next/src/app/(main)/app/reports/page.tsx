@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { apiGet, apiPost } from '@/lib/api';
+import { copyToClipboard as copyUtil } from '@/lib/clipboard';
 import {
   AgingStats,
   SerialAgingItem,
@@ -142,7 +143,7 @@ export default function ReportsPage() {
 
   // Clipboard copy
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+    copyUtil(text);
     setCopiedSerial(text);
     setTimeout(() => setCopiedSerial(null), 1800);
   };

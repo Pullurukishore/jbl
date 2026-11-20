@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { apiGet, apiPost } from '@/lib/api';
+import { copyToClipboard as copyUtil } from '@/lib/clipboard';
 import {
   MaterialStats,
   MaterialSummaryItem,
@@ -119,7 +120,7 @@ export default function MaterialsPage() {
 
   // Copy to clipboard helper
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+    copyUtil(text);
     setCopiedModel(text);
     setTimeout(() => setCopiedModel(null), 1800);
   };

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { apiGet, apiPost } from '@/lib/api';
+import { copyToClipboard as copyUtil } from '@/lib/clipboard';
 import {
   MaterialDetailResponse,
   MaterialSerialItem,
@@ -145,7 +146,7 @@ export default function MaterialDetailPage({ params }: MaterialDetailPageProps) 
 
   // Copy helper
   const copyToClipboard = (text: string, isSerial = false) => {
-    navigator.clipboard.writeText(text);
+    copyUtil(text);
     if (isSerial) {
       setCopiedSerial(text);
       setTimeout(() => setCopiedSerial(null), 1800);
