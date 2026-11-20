@@ -35,6 +35,17 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
     (a, b) => a.compartment_number - b.compartment_number
   );
 
+  // Physical Kardex Power Pick System (PPS) 2x15 layout:
+  // Top Row (Row 1): Even numbers in ascending order (2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30)
+  // Bottom Row (Row 2): Odd numbers in ascending order (1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29)
+  const horizontalCompartments = [...sortedCompartments].sort((a, b) => {
+    const aIsEven = a.compartment_number % 2 === 0;
+    const bIsEven = b.compartment_number % 2 === 0;
+    if (aIsEven && !bIsEven) return -1;
+    if (!aIsEven && bIsEven) return 1;
+    return a.compartment_number - b.compartment_number;
+  });
+
   const isSlotPicked = (c: Compartment) =>
     !!c.serial_number &&
     !c.put?.text_file_downloaded &&
@@ -52,12 +63,12 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
     ? sortedCompartments.find((c) => !isSlotOccupied(c) && !isSlotPicked(c))?.compartment_number
     : null;
 
-  // Partition compartments for Vertical Layout (Bank 1: Slots 1-15, Bank 2: Slots 16-30 in natural 1-15 ascending order)
+  // Partition compartments for Vertical Layout (Bottom-to-Top: Slots 1–15 & 16–30, with 1 & 16 at bottom)
   const bank1All = compartments.filter((c) => c.compartment_number >= 1 && c.compartment_number <= 15);
   const bank2All = compartments.filter((c) => c.compartment_number >= 16 && c.compartment_number <= 30);
 
-  const bank1Comps = [...bank1All].sort((a, b) => a.compartment_number - b.compartment_number);
-  const bank2Comps = [...bank2All].sort((a, b) => a.compartment_number - b.compartment_number);
+  const bank1Comps = [...bank1All].sort((a, b) => b.compartment_number - a.compartment_number);
+  const bank2Comps = [...bank2All].sort((a, b) => b.compartment_number - a.compartment_number);
 
   const bank1Occupied = bank1All.filter(isSlotOccupied).length;
   const bank2Occupied = bank2All.filter(isSlotOccupied).length;
@@ -1459,12 +1470,16 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
             <span>⇄ Swipe or scroll horizontally to view all 15 slots</span>
           </div>
           <div className="socket-deck">
-        {sortedCompartments.map((comp) => {
+        {horizontalCompartments.map((comp) => {
           const isPicked = isSlotPicked(comp);
           const isOccupied = isSlotOccupied(comp);
           const isSelected = selectedCompartment === comp.compartment_number;
           const isNextTarget = !isOccupied && !isPicked && comp.compartment_number === nextTargetComp;
           const isClickable = !isOccupied && !isPicked && !disabled && !!onSelectEmpty;
+
+          const isEven = comp.compartment_number % 2 === 0;
+          const gridRow = isEven ? 1 : 2;
+          const gridCol = Math.ceil(comp.compartment_number / 2);
 
           let pocketClass = 'socket-pocket';
           if (isSelected) {
@@ -1499,7 +1514,11 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
                   onSelectOccupied(comp);
                 }
               }}
-              style={{ cursor: isClickable || isOccupiedClickable || isPickedClickable ? 'pointer' : 'default' }}
+              style={{
+                gridRow: `${gridRow} / span 1`,
+                gridColumn: `${gridCol} / span 1`,
+                cursor: isClickable || isOccupiedClickable || isPickedClickable ? 'pointer' : 'default',
+              }}
               title={
                 isPicked
                   ? `Pocket #${comp.compartment_number} | PICKED & VERIFIED | Serial: ${comp.serial_number || 'N/A'} | Model: ${comp.material_name || 'N/A'} (Ready to send to Kardex)`
