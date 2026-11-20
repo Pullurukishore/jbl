@@ -107,7 +107,8 @@ exports.createPick = asyncHandler(async (req, res) => {
                 where: {
                     serial_number: { [Op.in]: manualSerialList },
                     pick_id: null
-                }
+                },
+                include: [{ model: db.handling_unit }]
             }) || [];
 
             if (candidates.length < manualSerialList.length) {
@@ -135,6 +136,7 @@ exports.createPick = asyncHandler(async (req, res) => {
                     model_number: resolvedModelNumber,
                     pick_id: null
                 },
+                include: [{ model: db.handling_unit }],
                 order: [['birth_date', 'ASC']]
             }) || [];
 
@@ -392,10 +394,11 @@ exports.createPick = asyncHandler(async (req, res) => {
         }
         const uploadFilePath = path.join(uploadDir, genFileName);
 
-        // Build Kardex Pick Order content: <MODEL>-PICK-<01>|serial|model|1
+        // Build Kardex Pick Order content: <MODEL>-PICK-<01>|serial|model|1|binName
         const pickOrderNumber = `${resolvedModelNumber}-PICK-${pickSeq}`;
         const content = updatedEntries.map((pt) => {
-            return `${pickOrderNumber}|${pt?.serial_number}|${pt?.model_number || resolvedModelNumber}|1`;
+            const binName = pt?.handling_unit?.hu_id || '';
+            return `${pickOrderNumber}|${pt?.serial_number}|${pt?.model_number || resolvedModelNumber}|1|${binName}`;
         }).join('\r\n');
 
         fs.writeFileSync(filePath, content, 'ascii');
@@ -842,7 +845,8 @@ exports.createBinPick = asyncHandler(async (req, res) => {
 
         const pickOrderNumber = `${resolvedModelNumber}-PICK-${pickSeq}`;
         const content = updatedEntries.map((pt) => {
-            return `${pickOrderNumber}|${pt?.serial_number}|${pt?.model_number || resolvedModelNumber}|1`;
+            const binName = targetHuId || pt?.handling_unit?.hu_id || '';
+            return `${pickOrderNumber}|${pt?.serial_number}|${pt?.model_number || resolvedModelNumber}|1|${binName}`;
         }).join('\r\n');
 
         fs.writeFileSync(filePath, content, 'ascii');
@@ -1071,6 +1075,9 @@ exports.getUndownloadedPicks = asyncHandler(async (req, res) => {
             include: [
                 {
                     model: db.pick
+                },
+                {
+                    model: db.handling_unit
                 }
             ],
             order: [['scanned_at', 'DESC']],
@@ -1090,7 +1097,8 @@ exports.getUndownloadedPicks = asyncHandler(async (req, res) => {
         const content = puts.map((pt) => {
             const m = pt?.model_number || 'MODEL';
             const s = String(pt.pick_id || puts[0]?.pick_id || 1).padStart(2, '0');
-            return `${m}-PICK-${s}|${pt?.serial_number}|${m}|1`;
+            const binName = pt?.handling_unit?.hu_id || '';
+            return `${m}-PICK-${s}|${pt?.serial_number}|${m}|1|${binName}`;
         }).join('\r\n');
 
         res.setHeader('Content-Disposition', 'attachment; filename="orders.txt"');

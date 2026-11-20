@@ -610,7 +610,7 @@ exports.sendToKardex = asyncHandler(async (req, res) => {
 
     // Build file content: all rows in this PUT batch share the same order number (<BIN>-PUT-1)
     const lines = occupiedCompartments.map((c) => {
-        return `${orderNumber}|${hu.hu_id}@${c.compartment_number}|${c.material_name || ''}|1|${hu.bin_type ? hu.bin_type.bin_name : ''}|${c.serial_number || ''}`;
+        return `${orderNumber}|${hu.hu_id}@${c.compartment_number}|${c.material_name || ''}|1|${hu.bin_type ? hu.bin_type.bin_name : ''}|${c.serial_number || ''}|${hu.hu_id}`;
     });
     const fileContent = lines.join('\r\n');
     const timestamp = Date.now();
@@ -903,7 +903,7 @@ exports.pickCompartment = asyncHandler(async (req, res) => {
         fs.mkdirSync(uploadDir, { recursive: true });
     }
     const uploadFilePath = path.join(uploadDir, genFileName);
-    const content = `${pickOrderNumber}|${serialNumber}|${modelNumber}|1`;
+    const content = `${pickOrderNumber}|${serialNumber}|${modelNumber}|1|${hu.hu_id}`;
 
     fs.writeFileSync(filePath, content, 'ascii');
     fs.writeFileSync(uploadFilePath, content, 'ascii');
@@ -1167,7 +1167,7 @@ exports.pickScanGet = asyncHandler(async (req, res) => {
         const dirPath = process.env.Pick_Text_File_Path || path.join('uploads', 'files', 'pick');
         fs.mkdirSync(dirPath, { recursive: true });
         const filePath = path.join(dirPath, genFileName);
-        const fileContent = `${pickOrderNumber}|${serial_number}|${modelNumber}|1`;
+        const fileContent = `${pickOrderNumber}|${serial_number}|${modelNumber}|1|${hu.hu_id}`;
         fs.writeFileSync(filePath, fileContent, 'ascii');
 
         const uploadDir = path.join('uploads', 'files', 'pick');
@@ -1294,7 +1294,7 @@ exports.sendPickToKardex = asyncHandler(async (req, res) => {
             modelOrderMap.set(mNum, `${mNum}-PICK-${pickSeq}`);
         }
         const pickOrderNumber = modelOrderMap.get(mNum);
-        lines.push(`${pickOrderNumber}|${pt.serial_number}|${mNum}|1`);
+        lines.push(`${pickOrderNumber}|${pt.serial_number}|${mNum}|1|${hu.hu_id}`);
     }
     const fileContent = lines.join('\r\n');
     const timestamp = Date.now();

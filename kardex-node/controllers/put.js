@@ -1226,6 +1226,7 @@ exports.getUndownloadedPuts = asyncHandler(async (req, res) => {
         // Fetch the first 'quantity' records where 'text_file_downloaded' is false, sorted by 'scanned_at' DESC
         const puts = await db.put.findAll({
             where: { text_file_downloaded: false, text_file_id: { [Op.ne]: null } },
+            include: [{ model: db.handling_unit }],
             order: [['scanned_at', 'DESC']],
             limit: Number(quantity),
         });
@@ -1238,7 +1239,7 @@ exports.getUndownloadedPuts = asyncHandler(async (req, res) => {
             return res.status(404).json({ message: 'No files found to download.' });
         }
 
-        const content = `${puts.map((pt) => (`Put_Order${pt.id}|${pt?.serial_number}|${pt?.model_number}|1`))?.join('\n')}`;
+        const content = `${puts.map((pt) => (`Put_Order${pt.id}|${pt?.serial_number}|${pt?.model_number}|1|${pt?.handling_unit?.hu_id || ''}`))?.join('\n')}`;
 
         res.setHeader('Content-Disposition', 'attachment; filename="orders.txt"');
         res.setHeader('Content-Type', 'text/plain');
