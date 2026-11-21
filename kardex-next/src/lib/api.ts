@@ -25,6 +25,7 @@ export async function apiFetch<T>(
   }
 
   const res = await fetch(`${API_BASE}${endpoint}`, {
+    credentials: 'include',
     ...rest,
     headers,
   });
@@ -141,6 +142,7 @@ export async function apiDownloadFile(
 
   const res = await fetch(`${API_BASE}${endpoint}`, {
     method: 'POST',
+    credentials: 'include',
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });

@@ -48,6 +48,11 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.BOOLEAN,
             allowNull: false,
             defaultValue: true,
+        },
+        token_version: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+            defaultValue: 1,
         }
     },
         {

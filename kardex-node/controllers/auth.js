@@ -20,8 +20,8 @@ exports.authenticate = asyncHandler(async (req, res) => {
         return res.status(404).json('User not found!');
     }
 
-    // Check if the provided password matches the stored hashed password
-    const isPasswordValid = bcrypt.compareSync(password, user.password);
+    // Non-blocking asynchronous password comparison (prevents event-loop stall during shift changes)
+    const isPasswordValid = await bcrypt.compare(password, user.password);
 
     // If password doesn't match
     if (!isPasswordValid) {
@@ -33,12 +33,48 @@ exports.authenticate = asyncHandler(async (req, res) => {
         return res.status(403).json('Account is deactivated. Please contact an administrator.');
     }
 
-    // Sign a JWT token
+    // Sign a JWT token with token_version for instant server-side revocation
     const userData = user.get();
     delete userData.password;
+    userData.token_version = user.token_version || 1;
+
     const id_token = jwt.sign(userData, process.env.JWT_SECRET, {
-        expiresIn: process.env.JWT_EXPIRE, // You can change the expiration time as needed
+        expiresIn: process.env.JWT_EXPIRE || '30d',
+    });
+
+    // Set secure HttpOnly cookie (protects against XSS token theft)
+    const cookieExpireDays = parseInt(process.env.JWT_COOKIE_EXPIRE, 10) || 30;
+    res.cookie('id_token', id_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: cookieExpireDays * 24 * 60 * 60 * 1000,
+        path: '/'
     });
 
     res.json({ success: true, data: { ...userData, id_token } });
+});
+
+// POST /api/auth/logout - Server-side session invalidation
+exports.logout = asyncHandler(async (req, res) => {
+    if (req.user?.id) {
+        // Increment token_version so any copies of this token are rejected immediately
+        await db.user.increment('token_version', { by: 1, where: { id: req.user.id } }).catch(() => {});
+    }
+    res.clearCookie('id_token', { path: '/' });
+    res.json({ success: true, message: 'Logged out successfully.' });
+});
+
+// GET /api/auth/me - Verify current session
+exports.getMe = asyncHandler(async (req, res) => {
+    if (!req.user?.id) {
+        return res.status(401).json({ success: false, error: 'Not authenticated.' });
+    }
+    const user = await db.user.findByPk(req.user.id, {
+        attributes: { exclude: ['password'] }
+    });
+    if (!user) {
+        return res.status(404).json({ success: false, error: 'User not found.' });
+    }
+    res.json({ success: true, data: user });
 });

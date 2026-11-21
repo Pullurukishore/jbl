@@ -18,9 +18,9 @@ exports.authMiddleware = asyncHandler(async (req, res, next) => {
 
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
         token = req.headers.authorization.split(' ')[1];
-    }
-
-    if (!token && req.query?.id_token) {
+    } else if (req.cookies && req.cookies.id_token) {
+        token = req.cookies.id_token;
+    } else if (req.query?.id_token) {
         token = req.query.id_token;
     }
 
@@ -32,21 +32,23 @@ exports.authMiddleware = asyncHandler(async (req, res, next) => {
             if (err) {
                 return next(new ErrorResponse(`Session Is Expired`, 401));
             } else {
-                // const login_data = await db.agg_user_log_generation.findAll({
-                //     where: {
-                //         login_id: decoded.email,
-                //         active: '0'
-                //     }
-                // });
                 if (!decoded?.id) {
                     return next(new ErrorResponse(`Session Is Terminated`, 401));
                 }
                 const dbUser = await db.user.findByPk(decoded.id, {
-                    attributes: ['id', 'role', 'access_type', 'user_id', 'first_name', 'last_name']
+                    attributes: ['id', 'role', 'access_type', 'user_id', 'first_name', 'last_name', 'is_active', 'token_version']
                 });
-                if (!dbUser) {
+                if (!dbUser || dbUser.is_active === false) {
                     return next(new ErrorResponse(`Session Is Terminated`, 401));
                 }
+
+                // Instant server-side revocation: verify token_version matches DB
+                if (decoded.token_version !== undefined && dbUser.token_version !== undefined) {
+                    if (decoded.token_version !== dbUser.token_version) {
+                        return next(new ErrorResponse(`Session Terminated: Password changed or user logged out`, 401));
+                    }
+                }
+
                 req.user = {
                     ...decoded,
                     role: dbUser.role,

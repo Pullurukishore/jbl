@@ -49,7 +49,23 @@ export function isAdmin(): boolean {
   return user?.role === 'ADMIN';
 }
 
-export function logout(): void {
+export async function logout(): Promise<void> {
+  const token = getToken();
+  try {
+    const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5005/api';
+    await fetch(`${API_BASE}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    });
+  } catch (_) {
+    // Non-blocking catch: proceed to clear client storage even if server is unreachable
+  }
   clearAuth();
-  window.location.href = '/auth';
+  if (typeof window !== 'undefined') {
+    window.location.href = '/auth';
+  }
 }

@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { authenticate } = require("../controllers/auth");
+const { authenticate, logout, getMe } = require("../controllers/auth");
 const { rateLimiter } = require("../middleware/rateLimiter");
 
 // Limit login attempts: max 15 attempts per 15-minute window per IP to prevent brute-force attacks
@@ -11,5 +11,7 @@ const loginLimiter = rateLimiter({
 });
 
 router.post('/authenticate', loginLimiter, authenticate);
+router.post('/logout', logout);
+router.get('/me', getMe);
 
 module.exports = router;

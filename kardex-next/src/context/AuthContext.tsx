@@ -12,7 +12,7 @@ interface AuthContextType {
   canPut: boolean;
   canPick: boolean;
   isLoading: boolean;
-  logout: () => void;
+  logout: () => void | Promise<void>;
   refreshAuth: () => void;
 }
 

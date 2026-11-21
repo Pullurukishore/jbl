@@ -12,10 +12,31 @@ function normalizeAccessType(role, accessType) {
     return VALID_ACCESS_TYPES.includes(accessType) ? accessType : 'BOTH';
 }
 
+function validatePasswordStrength(pwd) {
+    if (!pwd || typeof pwd !== 'string') {
+        return 'Password is required.';
+    }
+    if (pwd.length < 8) {
+        return 'Password must be at least 8 characters long.';
+    }
+    if (!/[A-Za-z]/.test(pwd) || !/[0-9]/.test(pwd)) {
+        return 'Password must contain at least one letter and one number.';
+    }
+    return null;
+}
+
 exports.createUser = asyncHandler(async (req, res) => {
     try {
         const role = req.body.role || 'USER';
         const access_type = normalizeAccessType(role, req.body.access_type);
+
+        if (req.body.password) {
+            const pwdError = validatePasswordStrength(req.body.password);
+            if (pwdError) {
+                return res.status(400).json({ error: pwdError });
+            }
+        }
+
         const hashedPassword = req.body.password
             ? await bcrypt.hash(req.body.password, 10)
             : req.body.password;
@@ -24,6 +45,7 @@ exports.createUser = asyncHandler(async (req, res) => {
             password: hashedPassword,
             role,
             access_type,
+            token_version: 1,
             created_by: req.user?.id,
             updated_by: req.user?.id
         });
@@ -41,9 +63,27 @@ exports.changePassword = asyncHandler(async (req, res) => {
         if (!id || !password) {
             return res.status(400).json({ success: false, error: 'id and password are required.' });
         }
+        const pwdError = validatePasswordStrength(password);
+        if (pwdError) {
+            return res.status(400).json({ success: false, error: pwdError });
+        }
+
+        const user = await db.user.findByPk(id);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User not found.' });
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
-        await db.user.update({ password: hashedPassword, updated_by: req.user?.id }, { where: { id } });
-        res.status(201).json({ success: true });
+        const nextVersion = (user.token_version || 1) + 1;
+
+        // Invalidate all existing sessions by incrementing token_version
+        await user.update({
+            password: hashedPassword,
+            token_version: nextVersion,
+            updated_by: req.user?.id
+        });
+
+        res.status(200).json({ success: true, message: 'Password updated and previous sessions revoked.' });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }

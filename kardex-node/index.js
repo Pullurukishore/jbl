@@ -158,6 +158,14 @@ db.sequelize.sync()
     try {
       const qi = db.sequelize.getQueryInterface();
       const putCols = await qi.describeTable('put').catch(() => null);
+      const userCols = await qi.describeTable('user').catch(() => null);
+      if (userCols && !userCols.token_version) {
+        if (db.sequelize.getDialect() === 'postgres') {
+          await db.sequelize.query('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "token_version" INTEGER DEFAULT 1;').catch(() => {});
+        } else {
+          await qi.addColumn('user', 'token_version', { type: db.Sequelize.INTEGER, defaultValue: 1, allowNull: false }).catch(() => {});
+        }
+      }
       if (putCols) {
         if (!putCols.compartment_id) {
           if (db.sequelize.getDialect() === 'postgres') {
