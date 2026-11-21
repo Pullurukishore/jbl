@@ -35,6 +35,8 @@ router.post('/:huId/send-to-kardex', requireAccess('PUT'), ctrl.sendToKardex);
 router.post('/:huId/send-pick-to-kardex', requireAccess('PICK'), ctrl.sendPickToKardex);
 router.post('/:huId/confirm-put', requireAccess('PUT'), ctrl.confirmPut);
 router.post('/:huId/hu-pick', requireAccess('PICK'), ctrl.generateHUPick);
+router.post('/:huId/hu-pick-download', requireAccess('PICK'), ctrl.downloadHUPickFile);
+router.get('/:huId/hu-pick-download', requireAccess('PICK'), ctrl.downloadHUPickFile);
 router.post('/:huId/confirm-retrieval', requireAccess('PICK'), ctrl.confirmRetrieval);
 
 module.exports = router;

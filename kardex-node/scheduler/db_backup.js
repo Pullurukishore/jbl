@@ -1,7 +1,7 @@
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 
 // Ensure environment variables are loaded
 require('dotenv').config({ path: path.join(__dirname, '..', 'config', 'config.env') });
@@ -15,7 +15,7 @@ const backupDir = path.join(__dirname, '..', 'backups');
  */
 function getPgDumpBinary() {
     if (process.env.PG_DUMP_PATH && fs.existsSync(process.env.PG_DUMP_PATH)) {
-        return `"${process.env.PG_DUMP_PATH}"`;
+        return process.env.PG_DUMP_PATH;
     }
     const candidates = [
         'C:\\Program Files\\PostgreSQL\\17\\bin\\pg_dump.exe',
@@ -25,7 +25,7 @@ function getPgDumpBinary() {
     ];
     for (const p of candidates) {
         if (fs.existsSync(p)) {
-            return `"${p}"`;
+            return p;
         }
     }
     return 'pg_dump';
@@ -82,13 +82,22 @@ function executeBackup() {
             const backupFile = path.join(backupDir, `${dbName}_${timestamp}.dump`);
 
             const pgDump = getPgDumpBinary();
-            const cmd = `${pgDump} -h ${dbHost} -p ${dbPort} -U ${dbUser} -F c -b -v -f "${backupFile}" ${dbName}`;
+            const args = [
+                '-h', dbHost,
+                '-p', String(dbPort),
+                '-U', dbUser,
+                '-F', 'c',
+                '-b',
+                '-v',
+                '-f', backupFile,
+                dbName
+            ];
 
             console.log(`[DB BACKUP] Starting automated backup of database "${dbName}"...`);
 
             const childEnv = { ...process.env, PGPASSWORD: dbPassword };
 
-            exec(cmd, { env: childEnv, maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+            execFile(pgDump, args, { env: childEnv, maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
                 if (error) {
                     console.error('[DB BACKUP] Backup failed:', error.message);
                     return reject(error);
@@ -115,10 +124,14 @@ function executeBackup() {
 
 // Register the daily background cron schedule
 if (process.env.ENABLE_DB_BACKUP !== 'false') {
-    cron.schedule(CRON_SCHEDULE, () => {
-        executeBackup().catch(() => {});
-    });
-    console.log(`[DB BACKUP] Scheduled daily backup job active (Schedule: "${CRON_SCHEDULE}", Retention: ${RETENTION_DAYS} days)`);
+    if (cron.validate(CRON_SCHEDULE)) {
+        cron.schedule(CRON_SCHEDULE, () => {
+            executeBackup().catch(() => {});
+        });
+        console.log(`[DB BACKUP] Scheduled daily backup job active (Schedule: "${CRON_SCHEDULE}", Retention: ${RETENTION_DAYS} days)`);
+    } else {
+        console.error(`[DB BACKUP] Invalid CRON_SCHEDULE expression: "${CRON_SCHEDULE}". Daily backup was NOT scheduled.`);
+    }
 }
 
 module.exports = {

@@ -6,6 +6,16 @@ const path = require('path');
 const { Op } = require('sequelize');
 const { getPVStatusCheck, getWipBySerialNumber, updateBoardHistory } = require('../utils/api-call');
 const moment = require('moment');
+const { safeOrder } = require('../utils/sqlSecurity');
+
+function safeWriteSSE(res, data) {
+    if (res && !res.writableEnded && !res.destroyed) {
+        try {
+            res.write("data: " + JSON.stringify(data) + "\n\n");
+            if (typeof res.flush === 'function') res.flush();
+        } catch (_) {}
+    }
+}
 
 
 exports.createPick = asyncHandler(async (req, res) => {
@@ -39,15 +49,14 @@ exports.createPick = asyncHandler(async (req, res) => {
         }
 
         // Immediate initial progress event to establish live SSE connection without lag
-        res.write("data: " + JSON.stringify({
+        safeWriteSSE(res, {
             entity_number: resolvedModelNumber,
             activity: 'FETCH_DETAILS',
             status: 'IN_PROGRESS',
             message: `Fetching available stock for model ${resolvedModelNumber} (Target: ${quantity} units)...`,
             completed: false,
             process_id
-        }) + "\n\n");
-        if (typeof res.flush === 'function') res.flush();
+        });
 
         if (!quantity || isNaN(quantity) || quantity <= 0) {
             logs.push(await createAndSendLog({
@@ -171,15 +180,14 @@ exports.createPick = asyncHandler(async (req, res) => {
 
         for (let i = 0; i < candidates.length; i++) {
             const putEntry = candidates[i];
-            res.write("data: " + JSON.stringify({
+            safeWriteSSE(res, {
                 entity_number: resolvedModelNumber,
                 activity: 'FETCH_DETAILS',
                 status: 'IN_PROGRESS',
                 message: `Verifying MES status for serial ${putEntry.serial_number} (${validSerialNumbers.length}/${quantity} confirmed)...`,
                 completed: false,
                 process_id
-            }) + "\n\n");
-            if (typeof res.flush === 'function') res.flush();
+            });
 
             // 1. Concurrent MES PV Status & WIP Hold Checks
             const [pvStatusResponse, getWipSerialResponse] = await Promise.all([
@@ -322,15 +330,14 @@ exports.createPick = asyncHandler(async (req, res) => {
         let updatedEntries = [];
         for (let i = 0; i < validSerialNumbers.length; i++) {
             const putEntry = validSerialNumbers[i];
-            res.write("data: " + JSON.stringify({
+            safeWriteSSE(res, {
                 entity_number: resolvedModelNumber,
                 activity: 'CHECK_STATUS',
                 status: 'IN_PROGRESS',
                 message: `Updating board history in MES for serial ${putEntry.serial_number} (${i + 1}/${validSerialNumbers.length})...`,
                 completed: false,
                 process_id
-            }) + "\n\n");
-            if (typeof res.flush === 'function') res.flush();
+            });
 
             const updateResponse = await updateBoardHistory({
                 serialNumber: putEntry.serial_number,
@@ -364,15 +371,14 @@ exports.createPick = asyncHandler(async (req, res) => {
         activeProgressStep++;
 
         // Signal FILE_GENERATED in-progress to frontend immediately
-        res.write("data: " + JSON.stringify({
+        safeWriteSSE(res, {
             entity_number: resolvedModelNumber,
             activity: 'FILE_GENERATED',
             status: 'IN_PROGRESS',
             message: `Generating pick order text file for ${updatedEntries.length} line items...`,
             completed: false,
             process_id
-        }) + "\n\n");
-        if (typeof res.flush === 'function') res.flush();
+        });
 
         // Calculate 2-digit sequential order run for this model (e.g. SA005157-PICK-01)
         const existingPickCount = await db.files.count({
@@ -525,8 +531,7 @@ async function createAndSendLog(log, res) {
         message: log.message,
         completed: true
     };
-    res.write("data: " + JSON.stringify(payload) + "\n\n");
-    if (typeof res.flush === 'function') res.flush();
+    safeWriteSSE(res, payload);
     return saved || { id: null, ...log };
 }
 
@@ -673,15 +678,14 @@ exports.createBinPick = asyncHandler(async (req, res) => {
         res.flushHeaders();
 
         // 1. Initial SSE event
-        res.write("data: " + JSON.stringify({
+        safeWriteSSE(res, {
             entity_number: `${targetHuId} (${resolvedModelNumber})`,
             activity: 'FETCH_DETAILS',
             status: 'IN_PROGRESS',
             message: `Starting pick validation for Bin ${targetHuId} (${resolvedModelNumber}, ${quantity} units)...`,
             completed: false,
             process_id
-        }) + "\n\n");
-        if (typeof res.flush === 'function') res.flush();
+        });
 
         // 2. Resolve candidates for this specific bin
         let candidates = [];
@@ -731,15 +735,14 @@ exports.createBinPick = asyncHandler(async (req, res) => {
         let validSerialNumbers = [];
         for (let i = 0; i < candidates.length; i++) {
             const putEntry = candidates[i];
-            res.write("data: " + JSON.stringify({
+            safeWriteSSE(res, {
                 entity_number: putEntry.serial_number,
                 activity: 'FETCH_DETAILS',
                 status: 'IN_PROGRESS',
                 message: `[Bin ${targetHuId}] Verifying MES status for serial ${putEntry.serial_number} (${validSerialNumbers.length}/${candidates.length})...`,
                 completed: false,
                 process_id
-            }) + "\n\n");
-            if (typeof res.flush === 'function') res.flush();
+            });
 
             const [pvStatusResponse, getWipSerialResponse] = await Promise.all([
                 getPVStatusCheck(putEntry.serial_number, pickProcessStep),
@@ -787,15 +790,14 @@ exports.createBinPick = asyncHandler(async (req, res) => {
         let updatedEntries = [];
         for (let i = 0; i < validSerialNumbers.length; i++) {
             const putEntry = validSerialNumbers[i];
-            res.write("data: " + JSON.stringify({
+            safeWriteSSE(res, {
                 entity_number: putEntry.serial_number,
                 activity: 'CHECK_STATUS',
                 status: 'IN_PROGRESS',
                 message: `[Bin ${targetHuId}] Updating Kanban-Out in MES for serial ${putEntry.serial_number} (${i + 1}/${validSerialNumbers.length})...`,
                 completed: false,
                 process_id
-            }) + "\n\n");
-            if (typeof res.flush === 'function') res.flush();
+            });
 
             await updateBoardHistory({
                 serialNumber: putEntry.serial_number,
@@ -994,7 +996,7 @@ exports.getAll = asyncHandler(async (req, res) => {
         // Perform the query
         const { rows, count } = await db.pick.findAndCountAll({
             where: whereConditions,
-            order: [[db.sequelize.literal(sort[0]), sort[1]]],
+            order: safeOrder(sort, ['id', 'model_number', 'quantity', 'createdAt', 'updatedAt'], 'id', 'DESC'),
             limit,
             offset,
             include: [

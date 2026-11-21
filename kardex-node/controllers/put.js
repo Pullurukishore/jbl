@@ -8,12 +8,22 @@ const ExcelJS = require("exceljs");
 const { parseTextFile, mountNetworkDrive, getLatestTxtFromNetworkDrive } = require('../utils/file.utils');
 const moment = require('moment');
 const { getPVStatusCheck, updateBoardHistory, getBoardHistory, getWipBySerialNumber } = require('../utils/api-call');
+const { safeOrder } = require('../utils/sqlSecurity');
 
 
 // In-memory cache for parsed PO files to eliminate redundant parsing
 let cachedPoFileName = null;
 let cachedPoMtime = null;
 let cachedPoResults = null;
+
+function safeWriteSSE(res, data) {
+    if (res && !res.writableEnded && !res.destroyed) {
+        try {
+            res.write("data: " + JSON.stringify(data) + "\n\n");
+            if (typeof res.flush === 'function') res.flush();
+        } catch (_) {}
+    }
+}
 
 exports.createPut = asyncHandler(async (req, res) => {
     const startTime = moment().format('MM/DD/YYYY hh:mm:ss A');
@@ -29,15 +39,14 @@ exports.createPut = asyncHandler(async (req, res) => {
         res.flushHeaders();
 
         // Immediate initial progress event to establish live SSE connection without lag
-        res.write("data: " + JSON.stringify({
+        safeWriteSSE(res, {
             entity_number: serialNumber,
             activity: 'FETCH_DETAILS',
             status: 'IN_PROGRESS',
             message: 'Fetching board details & checking status...',
             completed: false,
             process_id
-        }) + "\n\n");
-        if (typeof res.flush === 'function') res.flush();
+        });
 
         const logs = [];
 
@@ -443,7 +452,7 @@ exports.createPut = asyncHandler(async (req, res) => {
         const isOffline = process.env.IS_OFFLINE === 'true';
         const isKanbanReturn = testProcess === 'KANBAN-RTN' || testProcess === 'KANBAN_RTN' || (isKanbanIn && isKanbanOut);
 
-        res.write("data: " + JSON.stringify({
+        safeWriteSSE(res, {
             entity_number: serialNumber,
             activity: 'FIND_CSV',
             status: 'IN_PROGRESS',
@@ -452,8 +461,7 @@ exports.createPut = asyncHandler(async (req, res) => {
                 : 'Searching PO file in network drive...',
             completed: false,
             process_id
-        }) + "\n\n");
-        if (typeof res.flush === 'function') res.flush();
+        });
 
         if (isKanbanReturn) {
             // KANBAN-RTN Return: Skip PO file discovery (already owned stock returning after 24h cooldown)
@@ -652,7 +660,7 @@ exports.createPut = asyncHandler(async (req, res) => {
         }, res));
         activeProgressStep++;
 
-        res.write("data: " + JSON.stringify({
+        safeWriteSSE(res, {
             entity_number: serialNumber,
             activity: 'CHECKING_AVAILABILITY',
             status: 'IN_PROGRESS',
@@ -661,8 +669,7 @@ exports.createPut = asyncHandler(async (req, res) => {
                 : 'Updating Kanban board history & allocating inventory...',
             completed: false,
             process_id
-        }) + "\n\n");
-        if (typeof res.flush === 'function') res.flush();
+        });
 
         const updateResponse = await updateBoardHistory({
             serialNumber,
@@ -688,7 +695,7 @@ exports.createPut = asyncHandler(async (req, res) => {
             return res.end();
         }
 
-        if (updateResponse !== 'Pass') {
+        if (typeof updateResponse === 'string' && updateResponse.toLowerCase() !== 'pass') {
             logs.push(await createAndSendLog({
                 entity_number: birthProcess?.SerialNumber,
                 activity: 'CHECKING_AVAILABILITY',
@@ -858,8 +865,7 @@ async function createAndSendLog(log, res) {
         message: log.message,
         completed: true
     };
-    res.write("data: " + JSON.stringify(payload) + "\n\n");
-    if (typeof res.flush === 'function') res.flush();
+    safeWriteSSE(res, payload);
     return saved || { id: null, ...log };
 }
 
@@ -903,7 +909,7 @@ exports.getAll = asyncHandler(async (req, res) => {
         // Perform the query
         const { rows, count } = await db.put.findAndCountAll({
             where: whereConditions,
-            order: [[db.sequelize.literal(sort[0]), sort[1]]],
+            order: safeOrder(sort, ['id', 'serial_number', 'model_number', 'scanned_at', 'scanned_by', 'pv_status', 'process_status', 'pick_status', 'createdAt', 'updatedAt'], 'id', 'DESC'),
             limit,
             offset,
             include: [
@@ -1055,7 +1061,7 @@ exports.searchAll = asyncHandler(async (req, res) => {
                     db.sequelize.literal(`CAST(${pTable}.pick_status AS TEXT) ${iLikeText} '%${cleanSearch}%'`),
                     db.sequelize.literal(
                         `(SELECT COUNT(*) FROM ${uTable} u
-                          WHERE u.id${castText} = ${pTable}.scanned_by 
+                          WHERE (u.id${castText} = ${pTable}.scanned_by OR u.user_id = ${pTable}.scanned_by)
                           AND (u.first_name ${iLikeText} '%${cleanSearch}%' 
                             OR u.last_name ${iLikeText} '%${cleanSearch}%'
                             OR u.user_id ${iLikeText} '%${cleanSearch}%')) > 0`
@@ -1109,7 +1115,7 @@ exports.searchAll = asyncHandler(async (req, res) => {
 
         const query = {
             where: searchConditions,
-            order: [[db.sequelize.literal(sort[0]), sort[1]]], // Apply sorting
+            order: safeOrder(sort, ['id', 'serial_number', 'model_number', 'scanned_at', 'scanned_by', 'pv_status', 'process_status', 'pick_status', 'createdAt', 'updatedAt'], 'id', 'DESC'),
             include: [
                 {
                     model: db.pick,
@@ -1129,19 +1135,19 @@ exports.searchAll = asyncHandler(async (req, res) => {
                 include: [
                     [
                         db.sequelize.literal(
-                            `(SELECT first_name FROM ${uTable} u WHERE u.id${castText} = ${pTable}.scanned_by)`
+                            `(SELECT first_name FROM ${uTable} u WHERE u.id${castText} = ${pTable}.scanned_by OR u.user_id = ${pTable}.scanned_by)`
                         ),
                         'user_first_name',
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT last_name FROM ${uTable} u WHERE u.id${castText} = ${pTable}.scanned_by)`
+                            `(SELECT last_name FROM ${uTable} u WHERE u.id${castText} = ${pTable}.scanned_by OR u.user_id = ${pTable}.scanned_by)`
                         ),
                         'user_last_name',
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT user_id FROM ${uTable} u WHERE u.id${castText} = ${pTable}.scanned_by)`
+                            `(SELECT user_id FROM ${uTable} u WHERE u.id${castText} = ${pTable}.scanned_by OR u.user_id = ${pTable}.scanned_by)`
                         ),
                         'user_id',
                     ],

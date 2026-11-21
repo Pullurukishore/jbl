@@ -59,21 +59,24 @@ const allowedOrigins = process.env.CORS_ORIGIN
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+      // Allow non-browser requests (e.g. mobile apps, internal tools, curl)
+      if (!origin) {
         return callback(null, true);
       }
-      return callback(null, true);
+      if (allowedOrigins.includes('*') || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+        return callback(null, true);
+      }
+      return callback(new Error('Blocked by CORS policy'));
     },
     exposedHeaders: ['File-Name'],
     credentials: true,
   })
 );
-//Body parser
-app.use(express.json({ limit: '1000mb' }));
-app.use(express.urlencoded({ limit: '1000mb', extended: true }));
+//Body parser - 25mb safe limit to protect against memory exhaustion DoS
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ limit: '25mb', extended: true }));
 
 app.use(express.static('public'));
-app.use(express.static('./uploads'));
 
 app.use(compression()); //Compress all routes
 app.use(
@@ -130,6 +133,7 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 app.use(authMiddleware);
+app.use('/uploads', express.static('./uploads'));
 app.use('/api/put', putRoutes);
 app.use('/api/pick', pickRoutes);
 app.use('/api/log', logRoutes);
@@ -184,8 +188,17 @@ db.sequelize.sync()
       console.warn('Auto column sync warning:', e.message);
     }
     const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`.yellow.bold);
+    });
+
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use by another process. Please stop the existing instance or update PORT in config.env.`.red.bold);
+        process.exit(1);
+      } else {
+        console.error('Server listen error:', err);
+      }
     });
   })
   .catch(err => console.log(err));

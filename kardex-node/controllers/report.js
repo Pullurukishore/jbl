@@ -715,19 +715,19 @@ exports.getSerialAuditDetails = asyncHandler(async (req, res) => {
                 include: [
                     [
                         db.sequelize.literal(
-                            `(SELECT first_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
+                            `(SELECT first_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by OR creator.user_id = log.logged_by)`
                         ),
                         'user_first_name'
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT last_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
+                            `(SELECT last_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by OR creator.user_id = log.logged_by)`
                         ),
                         'user_last_name'
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT user_id FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
+                            `(SELECT user_id FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by OR creator.user_id = log.logged_by)`
                         ),
                         'operator_user_id'
                     ]

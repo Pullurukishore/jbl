@@ -1,6 +1,11 @@
 const errorResponse = require('../utils/errorResponse');
 
 const errorHandler = (err, req, res, next) => {
+    // If response headers have already been sent (e.g. SSE stream, download started), delegate to default Express handler to prevent crash
+    if (res.headersSent) {
+        return next(err);
+    }
+
     let error = {...err };
     error.message = err.message;
     // console.log(JSON.stringify(error).red);

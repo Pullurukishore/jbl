@@ -10,7 +10,8 @@ router.post('/validate-serial', requireAccess('PICK'), validateSerialForPick);
 router.put('/update/:id', requireAccess('PICK'), updatePick);
 router.get('/get-all', getAll);
 router.delete('/delete/:id', requireAccess('PICK'), deletePick);
-router.delete('/get/:id', getPick);
+router.get('/get/:id', getPick);
+router.post('/get-undownloaded', getUndownloadedPicks);
 router.post('/get-undownoaded', getUndownloadedPicks);
 router.post('/download-text-file', requireAccess('PICK'), downloadFile);
 

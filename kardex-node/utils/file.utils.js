@@ -7,21 +7,29 @@ let lastMountCheck = 0;
 let isDriveMounted = false;
 
 exports.parseTextFile = async (fullPath) => {
-    const content = fs.readFileSync(fullPath, 'utf8');
-    return new Promise((resolve, reject) => {
-        Papa.parse(content, {
-            delimiter: "\t", // Adjust delimiter based on file format (e.g., ',' or '\t')
-            header: true, // Set to `true` if the first row contains headers
-            transformHeader: (header) => header.trim(),
-            skipEmptyLines: true,
-            complete: (results) => {
-                resolve(results.data);
-            },
-            error: (error) => {
-                resolve({ isError: true, error });
-            },
+    try {
+        if (!fullPath || !fs.existsSync(fullPath)) {
+            return { isError: true, error: new Error(`File does not exist or is inaccessible: ${fullPath}`) };
+        }
+        const content = fs.readFileSync(fullPath, 'utf8');
+        return new Promise((resolve) => {
+            Papa.parse(content, {
+                delimiter: "\t", // Adjust delimiter based on file format (e.g., ',' or '\t')
+                header: true, // Set to `true` if the first row contains headers
+                transformHeader: (header) => header.trim(),
+                skipEmptyLines: true,
+                complete: (results) => {
+                    resolve(results.data);
+                },
+                error: (error) => {
+                    resolve({ isError: true, error });
+                },
+            });
         });
-    })
+    } catch (err) {
+        console.error('Error reading/parsing file:', err.message);
+        return { isError: true, error: err };
+    }
 }
 
 

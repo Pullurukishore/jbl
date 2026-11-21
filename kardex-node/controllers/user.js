@@ -2,6 +2,7 @@ const asyncHandler = require('express-async-handler');
 const db = require('../models');
 const bcrypt = require('bcryptjs');
 const { Op, where } = require('sequelize');
+const { safeOrder } = require('../utils/sqlSecurity');
 
 
 const VALID_ACCESS_TYPES = ['PUT_ONLY', 'PICK_ONLY', 'BOTH'];
@@ -152,7 +153,7 @@ exports.getAll = asyncHandler(async (req, res) => {
                 ],
             },
             where: whereConditions,
-            order: [[db.sequelize.literal(sort[0]), sort[1]]],
+            order: safeOrder(sort, ['id', 'user_id', 'first_name', 'last_name', 'email', 'role', 'access_type', 'is_active', 'createdAt', 'updatedAt'], 'id', 'DESC'),
             limit,
             offset,
         });

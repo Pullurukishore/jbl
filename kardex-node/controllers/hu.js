@@ -40,8 +40,12 @@ function huIncludes() {
 // ─────────────────────────────────────────────────────────────────────────────
 exports.registerHU = asyncHandler(async (req, res) => {
     const { hu_id, bin_type_id, bin_name } = req.body;
-    if (!hu_id) {
+    if (!hu_id || typeof hu_id !== 'string') {
         return res.status(400).json({ error: 'hu_id is required.' });
+    }
+    const cleanHuId = hu_id.trim();
+    if (!/^[a-zA-Z0-9_\-]+$/.test(cleanHuId)) {
+        return res.status(400).json({ error: 'Invalid hu_id. Only alphanumeric characters, dashes, and underscores are allowed.' });
     }
 
     // Resolve bin specification (supporting both CON_BINC regular 30-slot and CON_BIND side vertical 30-slot)
@@ -264,8 +268,9 @@ exports.clearCompartment = asyncHandler(async (req, res) => {
     if (!compartment) return res.status(404).json({ error: 'Compartment not found.' });
     if (compartment.status === 'EMPTY') return res.status(400).json({ error: 'Compartment is already empty.' });
 
-    // Delete associated put record
-    await db.put.destroy({ where: { compartment_id: compartment.id } });
+    // Unlink put record first to prevent foreign key issues if logs reference it, then destroy
+    await db.put.update({ compartment_id: null }, { where: { compartment_id: compartment.id } }).catch(() => {});
+    await db.put.destroy({ where: { compartment_id: compartment.id } }).catch(() => {});
 
     await compartment.update({
         status: 'EMPTY',
@@ -323,8 +328,12 @@ exports.scanCompartment = asyncHandler(async (req, res) => {
     };
 
     const sendEvent = (payload) => {
-        res.write('data: ' + JSON.stringify({ process_id, ...payload }) + '\n\n');
-        if (typeof res.flush === 'function') res.flush();
+        if (!res.writableEnded && !res.destroyed) {
+            try {
+                res.write('data: ' + JSON.stringify({ process_id, ...payload }) + '\n\n');
+                if (typeof res.flush === 'function') res.flush();
+            } catch (_) { }
+        }
         logScanEvent(payload);
     };
 
@@ -615,17 +624,21 @@ exports.sendToKardex = asyncHandler(async (req, res) => {
     const fileContent = lines.join('\r\n');
     const timestamp = Date.now();
     const fileName = `PUT_${hu.hu_id}_${nextSeq}_${timestamp}.txt`;
-    const dirPath = process.env.Put_Text_File_Path || path.join('uploads', 'files', 'put');
-    fs.mkdirSync(dirPath, { recursive: true });
-    const filePath = path.join(dirPath, fileName);
-    fs.writeFileSync(filePath, fileContent, 'ascii');
 
-    // Also save a local copy in uploads
+    // Save a local copy in uploads first to ensure data persistence
     const uploadDir = path.join('uploads', 'files', 'put');
     fs.mkdirSync(uploadDir, { recursive: true });
     const uploadFilePath = path.join(uploadDir, fileName);
-    if (path.resolve(filePath) !== path.resolve(uploadFilePath)) {
-        fs.writeFileSync(uploadFilePath, fileContent, 'ascii');
+    fs.writeFileSync(uploadFilePath, fileContent, 'ascii');
+
+    // Also write to configured network drive path if available (with fallback protection)
+    if (process.env.Put_Text_File_Path) {
+        try {
+            fs.mkdirSync(process.env.Put_Text_File_Path, { recursive: true });
+            fs.writeFileSync(path.join(process.env.Put_Text_File_Path, fileName), fileContent, 'ascii');
+        } catch (netErr) {
+            console.warn(`[KARDEX] Could not write to network Put_Text_File_Path: ${netErr.message}. Local copy preserved.`);
+        }
     }
     const fileStats = fs.statSync(uploadFilePath);
 
@@ -700,16 +713,21 @@ exports.generateHUPick = asyncHandler(async (req, res) => {
     const fileContent = `${hu.hu_id}|${hu.hu_id}|5|1`;
     const timestamp = Date.now();
     const fileName = `HU_PICK_${hu.hu_id}_${timestamp}.txt`;
-    const dirPath = process.env.Pick_Text_File_Path || path.join('uploads', 'files', 'pick');
-    fs.mkdirSync(dirPath, { recursive: true });
-    const filePath = path.join(dirPath, fileName);
-    fs.writeFileSync(filePath, fileContent, 'ascii');
 
+    // Save a local copy in uploads first to ensure data persistence
     const uploadDir = path.join('uploads', 'files', 'pick');
     fs.mkdirSync(uploadDir, { recursive: true });
     const uploadFilePath = path.join(uploadDir, fileName);
-    if (path.resolve(filePath) !== path.resolve(uploadFilePath)) {
-        fs.writeFileSync(uploadFilePath, fileContent, 'ascii');
+    fs.writeFileSync(uploadFilePath, fileContent, 'ascii');
+
+    // Also write to configured network drive path if available (with fallback protection)
+    if (process.env.Pick_Text_File_Path) {
+        try {
+            fs.mkdirSync(process.env.Pick_Text_File_Path, { recursive: true });
+            fs.writeFileSync(path.join(process.env.Pick_Text_File_Path, fileName), fileContent, 'ascii');
+        } catch (netErr) {
+            console.warn(`[KARDEX] Could not write to network Pick_Text_File_Path: ${netErr.message}. Local copy preserved.`);
+        }
     }
     const fileStats = fs.statSync(uploadFilePath);
 
@@ -1054,8 +1072,12 @@ exports.pickScanGet = asyncHandler(async (req, res) => {
     res.flushHeaders();
 
     const sendEvent = (payload) => {
-        res.write('data: ' + JSON.stringify({ process_id, entity_number: serial_number, ...payload }) + '\n\n');
-        if (typeof res.flush === 'function') res.flush();
+        if (!res.writableEnded && !res.destroyed) {
+            try {
+                res.write('data: ' + JSON.stringify({ process_id, entity_number: serial_number, ...payload }) + '\n\n');
+                if (typeof res.flush === 'function') res.flush();
+            } catch (_) { }
+        }
     };
 
     try {
@@ -1299,16 +1321,21 @@ exports.sendPickToKardex = asyncHandler(async (req, res) => {
     const fileContent = lines.join('\r\n');
     const timestamp = Date.now();
     const fileName = `KARDEX_PICK_${hu.hu_id}_${timestamp}.txt`;
-    const dirPath = process.env.Pick_Text_File_Path || path.join('uploads', 'files', 'pick');
-    fs.mkdirSync(dirPath, { recursive: true });
-    const filePath = path.join(dirPath, fileName);
-    fs.writeFileSync(filePath, fileContent, 'ascii');
 
+    // Save a local copy in uploads first to ensure data persistence
     const uploadDir = path.join('uploads', 'files', 'pick');
     fs.mkdirSync(uploadDir, { recursive: true });
     const uploadFilePath = path.join(uploadDir, fileName);
-    if (path.resolve(filePath) !== path.resolve(uploadFilePath)) {
-        fs.writeFileSync(uploadFilePath, fileContent, 'ascii');
+    fs.writeFileSync(uploadFilePath, fileContent, 'ascii');
+
+    // Also write to configured network drive path if available (with fallback protection)
+    if (process.env.Pick_Text_File_Path) {
+        try {
+            fs.mkdirSync(process.env.Pick_Text_File_Path, { recursive: true });
+            fs.writeFileSync(path.join(process.env.Pick_Text_File_Path, fileName), fileContent, 'ascii');
+        } catch (netErr) {
+            console.warn(`[KARDEX] Could not write to network Pick_Text_File_Path: ${netErr.message}. Local copy preserved.`);
+        }
     }
     const fileStats = fs.statSync(uploadFilePath);
 
@@ -1364,5 +1391,42 @@ exports.sendPickToKardex = asyncHandler(async (req, res) => {
         fileName,
         lineCount: pickedPuts.length,
         fileId: fileRecord.id
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET or POST /:huId/hu-pick-download
+// Downloads the generated HU Pick text file for a handling unit
+// ─────────────────────────────────────────────────────────────────────────────
+exports.downloadHUPickFile = asyncHandler(async (req, res) => {
+    const { huId } = req.params;
+    const hu = await db.handling_unit.findOne({ where: { hu_id: huId } });
+    if (!hu) return res.status(404).json({ error: 'Handling unit not found.' });
+
+    // Look up the most recent HU pick file in db.files
+    const file = await db.files.findOne({
+        where: {
+            name: { [Op.like]: `HU_PICK_${hu.hu_id}_%` }
+        },
+        order: [['createdAt', 'DESC']]
+    });
+
+    const fileName = file?.name || `HU_PICK_${hu.hu_id}.txt`;
+    const candidatePaths = [
+        file?.path ? path.resolve(file.path) : null,
+        path.resolve('uploads', 'files', 'pick', fileName),
+        process.env.Pick_Text_File_Path ? path.resolve(process.env.Pick_Text_File_Path, fileName) : null
+    ].filter(Boolean);
+
+    const filePath = candidatePaths.find(p => fs.existsSync(p));
+    if (!filePath) {
+        return res.status(404).json({ error: 'HU pick file not found on server.' });
+    }
+
+    res.setHeader('File-Name', encodeURIComponent(fileName));
+    res.download(filePath, fileName, (err) => {
+        if (err && !res.headersSent) {
+            res.status(500).json({ error: 'Error downloading HU pick file.' });
+        }
     });
 });

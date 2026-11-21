@@ -1,6 +1,7 @@
 const asyncHandler = require('express-async-handler');
 const db = require('../models');
 const { Op } = require('sequelize');
+const { safeOrder } = require('../utils/sqlSecurity');
 
 
 exports.createLog = asyncHandler(async (req, res) => {
@@ -144,26 +145,26 @@ exports.getLogsByForPart = asyncHandler(async (req, res) => {
         // Perform the query
         const { rows, count } = await db.log.findAndCountAll({
             where: { [Op.or]: orConditions, ...(log_type && { log_type }) },
-            order: [[db.sequelize.literal(sort[0]), sort[1]]],
+            order: safeOrder(sort, ['id', 'log_type', 'entity_number', 'status', 'createdAt', 'updatedAt'], 'id', 'DESC'),
             limit,
             offset,
             attributes: {
                 include: [
                     [
                         db.sequelize.literal(
-                            `(SELECT first_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
+                            `(SELECT first_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by OR creator.user_id = log.logged_by)`
                         ),
                         'user_first_name',
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT last_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
+                            `(SELECT last_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by OR creator.user_id = log.logged_by)`
                         ),
                         'user_last_name',
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT user_id FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
+                            `(SELECT user_id FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by OR creator.user_id = log.logged_by)`
                         ),
                         'user_id',
                     ],
@@ -230,26 +231,26 @@ exports.getAll = asyncHandler(async (req, res) => {
         // Perform the query
         const { rows, count } = await db.log.findAndCountAll({
             where: whereConditions,
-            order: [[db.sequelize.literal(sort[0]), sort[1]]],
+            order: safeOrder(sort, ['id', 'log_type', 'entity_number', 'status', 'createdAt', 'updatedAt'], 'id', 'DESC'),
             limit,
             offset,
             attributes: {
                 include: [
                     [
                         db.sequelize.literal(
-                            `(SELECT first_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
+                            `(SELECT first_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by OR creator.user_id = log.logged_by)`
                         ),
                         'user_first_name',
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT last_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
+                            `(SELECT last_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by OR creator.user_id = log.logged_by)`
                         ),
                         'user_last_name',
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT user_id FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
+                            `(SELECT user_id FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by OR creator.user_id = log.logged_by)`
                         ),
                         'user_id',
                     ],
@@ -303,19 +304,19 @@ exports.getChartData = asyncHandler(async (req, res) => {
                 include: [
                     [
                         db.sequelize.literal(
-                            `(SELECT first_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
+                            `(SELECT first_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by OR creator.user_id = log.logged_by)`
                         ),
                         'user_first_name',
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT last_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
+                            `(SELECT last_name FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by OR creator.user_id = log.logged_by)`
                         ),
                         'user_last_name',
                     ],
                     [
                         db.sequelize.literal(
-                            `(SELECT user_id FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by)`
+                            `(SELECT user_id FROM ${uTable} AS creator WHERE creator.id${castText} = log.logged_by OR creator.user_id = log.logged_by)`
                         ),
                         'user_id',
                     ],

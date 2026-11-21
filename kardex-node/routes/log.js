@@ -5,7 +5,7 @@ const { createLog, updateLog, deleteLog, getLog, getAll, getLastLogsByType, getL
 router.post('/create', createLog);
 router.put('/update/:id', updateLog);
 router.delete('/delete/:id', deleteLog);
-router.delete('/get/:id', getLog);
+router.get('/get/:id', getLog);
 router.post('/get-all', getAll);
 router.post('/get-latest-by-type', getLastLogsByType);
 router.post('/get-all-for-part', getLogsByForPart);

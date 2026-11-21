@@ -837,7 +837,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
                   onClick={handleQuickNextEmpty}
                   title="Jump directly to scan the next empty slot"
                 >
-                  Next Empty (#{compartments.find((c) => c.status === 'EMPTY')?.compartment_number})
+                  Next Empty (#{compartments.find((c) => c.status === 'EMPTY')?.compartment_number ?? ''})
                 </button>
               )}
 

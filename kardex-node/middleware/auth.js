@@ -8,9 +8,11 @@ exports.authMiddleware = asyncHandler(async (req, res, next) => {
 
     let token;
 
-    const openEndpoints = ['api/auth/authenticate'];
+    // Normalize request path without query parameters to prevent auth bypass via query injection
+    const rawPath = (req.originalUrl || req.url || '').split('?')[0].replace(/\/+/g, '/').toLowerCase();
+    const openEndpoints = ['/api/auth/authenticate'];
 
-    if (openEndpoints.some(url => req.url.includes(url))) {
+    if (openEndpoints.some(endpoint => rawPath === endpoint || rawPath.endsWith(endpoint))) {
         return next();
     }
 
@@ -62,6 +64,9 @@ exports.authMiddleware = asyncHandler(async (req, res, next) => {
 
 exports.authorize = (...roles) => {
     return (req, res, next) => {
+        if (!req.user) {
+            return next(new ErrorResponse(`Authentication required`, 401));
+        }
         if (!roles.includes(req.user.role)) {
             return next(new ErrorResponse(`User role ${req.user.role} is not authorized to access this route`, 403));
         }
@@ -71,10 +76,13 @@ exports.authorize = (...roles) => {
 
 exports.requireAccess = (operation) => {
     return (req, res, next) => {
-        if (req.user?.role === 'ADMIN') {
+        if (!req.user) {
+            return next(new ErrorResponse(`Authentication required`, 401));
+        }
+        if (req.user.role === 'ADMIN') {
             return next();
         }
-        const access = req.user?.access_type || 'BOTH';
+        const access = req.user.access_type || 'BOTH';
         const allowed =
             access === 'BOTH' ||
             (operation === 'PUT' && access === 'PUT_ONLY') ||

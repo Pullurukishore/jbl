@@ -9,6 +9,7 @@ router.delete('/delete/:id', requireAccess('PUT'), deletePut);
 router.get('/get/:id', getPut);
 router.get('/get-all', getAll);
 router.post('/search-all', searchAll);
+router.post('/get-undownloaded', getUndownloadedPuts);
 router.post('/get-undownoaded', getUndownloadedPuts);
 router.post('/download-text-file', requireAccess('PUT'), downloadFile);
 router.post('/find-by-model-and-qty', findByModelAndQty);

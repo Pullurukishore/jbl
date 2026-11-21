@@ -42,10 +42,10 @@ export const HUPickModal: React.FC<HUPickModalProps> = ({
     try {
       setGenerating(true);
       setError('');
-      const res = await apiPost<{ file_name?: string; fileName?: string; message?: string }>(
+      const res = await apiPost<{ file_name?: string; fileName?: string; file?: { name?: string }; message?: string }>(
         `/hu/${hu.hu_id}/hu-pick`
       );
-      setGeneratedFileName(res?.file_name || res?.fileName || 'HU_PICK file');
+      setGeneratedFileName(res?.file?.name || res?.file_name || res?.fileName || 'HU_PICK file');
       setStep('generated');
     } catch (err: any) {
       setError(err.message || 'Failed to generate HU PICK file');
