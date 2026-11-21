@@ -31,8 +31,9 @@ import {
   CheckCircle2,
   Layers,
   Box,
+  X,
+  Loader2,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 
 function formatFileName(name?: string, maxLen = 22): string {
   if (!name) return '-';
@@ -124,6 +125,9 @@ export default function DashboardPage() {
   const [puts, setPuts] = useState<Put[]>([]);
   const [tableLoading, setTableLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const reqSeqRef = React.useRef(0);
   const [copiedSerial, setCopiedSerial] = useState<string | null>(null);
   const [copiedPo, setCopiedPo] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -133,7 +137,14 @@ export default function DashboardPage() {
 
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
-  const [exporting, setExporting] = useState(false);
+
+  // Debounce search input by 300ms to prevent lag and race conditions
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Modals
   const [isHUPutModalOpen, setIsHUPutModalOpen] = useState(false);
@@ -160,34 +171,60 @@ export default function DashboardPage() {
 
   // Fetch Puts
   const fetchPuts = useCallback(
-    async (pageNum = 1, currentSize = pageSize) => {
+    async (pageNum = 1, currentSize = pageSize, query = debouncedSearch) => {
+      const seq = ++reqSeqRef.current;
       try {
         setTableLoading(true);
         const res = await apiPost<PaginatedResponse<Put>>('/put/search-all', {
-          search,
+          search: query,
           page: pageNum,
           size: currentSize,
           sort: ['id', 'DESC'],
           startDate: startDate ? startDate.toISOString() : undefined,
           endDate: endDate ? endDate.toISOString() : undefined,
         });
-        setPuts(res.data || []);
-        setTotalPages(res.totalPages || 1);
-        setTotalItems(res.totalItems || 0);
-        setPage(pageNum);
+        if (seq === reqSeqRef.current) {
+          setPuts(res.data || []);
+          setTotalPages(res.totalPages || 1);
+          setTotalItems(res.totalItems || 0);
+          setPage(pageNum);
+        }
       } catch {
-        setPuts([]);
+        if (seq === reqSeqRef.current) {
+          setPuts([]);
+        }
       } finally {
-        setTableLoading(false);
+        if (seq === reqSeqRef.current) {
+          setTableLoading(false);
+        }
       }
     },
-    [search, startDate, endDate, pageSize]
+    [debouncedSearch, startDate, endDate, pageSize]
   );
 
   useEffect(() => {
     fetchCounts();
+  }, [fetchCounts]);
+
+  useEffect(() => {
     fetchPuts(1);
-  }, [fetchCounts, fetchPuts]);
+  }, [fetchPuts]);
+
+  const handleClearSearch = () => {
+    setSearch('');
+    setDebouncedSearch('');
+    fetchPuts(1, pageSize, '');
+    searchInputRef.current?.focus();
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const trimmed = search.trim();
+      setDebouncedSearch(trimmed);
+      fetchPuts(1, pageSize, trimmed);
+    }
+  };
 
   const handleDownloadPutFile = async (putId: number) => {
     try {
@@ -215,49 +252,6 @@ export default function DashboardPage() {
       downloadBlob(blob, fileName);
     } catch (err: any) {
       alert(err.message || 'Error downloading PO file');
-    }
-  };
-
-  const handleExportExcel = async () => {
-    try {
-      setExporting(true);
-      const res = await apiPost<PaginatedResponse<Put>>('/put/search-all', {
-        search,
-        isExport: true,
-        startDate: startDate ? startDate.toISOString() : undefined,
-        endDate: endDate ? endDate.toISOString() : undefined,
-      });
-
-      const records = res?.data || [];
-      if (records.length === 0) {
-        alert('No scan records found to export.');
-        return;
-      }
-
-      const exportData = records.map((p: any) => ({
-        'Serial Number': p.serial_number,
-        'Model Number': p.model_number,
-        'Bin Name': p.handling_unit?.hu_id || '-',
-        'Compartment': p.compartment?.compartment_number ? `#${p.compartment.compartment_number}` : '-',
-        'PV Status': p.pv_status || '-',
-        'Process Status': p.process_status || '-',
-        'PO File': p.put_po_file?.name || '-',
-        'Scanned By': p.user_first_name ? `${p.user_first_name} ${p.user_last_name || ''}`.trim() : p.scanned_by,
-        'Scanned At': p.scanned_at ? new Date(p.scanned_at).toLocaleString() : '-',
-        'PUT File': p.put_text_file?.name || '-',
-        'Pick Status': p.pick_status,
-        'Pick File': p.pick?.pick_text_file?.name || '-',
-      }));
-
-      const worksheet = XLSX.utils.json_to_sheet(exportData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Kardex Inventory');
-      XLSX.writeFile(workbook, `Kardex_Inventory_${Date.now()}.xlsx`);
-    } catch (err: any) {
-      console.error('Error exporting Excel file:', err);
-      alert(err?.message || 'Error exporting Excel file');
-    } finally {
-      setExporting(false);
     }
   };
 
@@ -877,26 +871,61 @@ export default function DashboardPage() {
       {/* Serial Numbers Data Table Card */}
       <div className="card table-card">
         <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-          <h5 className="fw-bold mb-0">Serial Numbers</h5>
+          <div className="d-flex align-items-center gap-2 flex-wrap">
+            <h5 className="fw-bold mb-0">Serial Numbers</h5>
+            {debouncedSearch && (
+              <span className="badge bg-light text-secondary border d-inline-flex align-items-center gap-1.5" style={{ fontSize: '11.5px', fontWeight: 600 }}>
+                <span>Searching: &ldquo;{debouncedSearch}&rdquo;</span>
+                <span className="text-primary fw-bold">({totalItems})</span>
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  className="btn btn-link p-0 text-muted ms-1"
+                  style={{ lineHeight: 1 }}
+                  title="Clear search filter"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            )}
+          </div>
 
           <div className="d-flex align-items-center gap-2 flex-wrap" style={{ width: 'auto' }}>
-            <div className="position-relative" style={{ minWidth: '180px', flex: '1 1 auto' }}>
+            <div className="position-relative" style={{ width: '300px', maxWidth: '100%' }}>
+              <Search
+                size={14}
+                className="position-absolute text-muted"
+                style={{ left: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+              />
               <input
+                ref={searchInputRef}
                 type="text"
                 className="form-control form-control-sm"
-                placeholder="Search..."
+                placeholder="Search serial, model, bin, PO, user..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                style={{ paddingLeft: '32px', paddingRight: search ? '30px' : '10px' }}
               />
+              {tableLoading && (
+                <Loader2
+                  size={13}
+                  className="position-absolute text-primary spin-animation"
+                  style={{ right: search ? '28px' : '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+                />
+              )}
+              {search && (
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  className="btn btn-link p-0 text-muted position-absolute"
+                  style={{ right: '8px', top: '50%', transform: 'translateY(-50%)' }}
+                  title="Clear search"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
-
-            <button
-              className="btn btn-success btn-sm d-flex align-items-center gap-1 text-nowrap"
-              onClick={handleExportExcel}
-              disabled={exporting}
-            >
-              <Download size={14} /> {exporting ? 'Exporting...' : 'Export Excel'}
-            </button>
           </div>
         </div>
 
@@ -905,7 +934,21 @@ export default function DashboardPage() {
           {tableLoading ? (
             <Loader message="Loading inventory..." />
           ) : puts.length === 0 ? (
-            <EmptyState title="No records found" description="No scan records available." />
+            <EmptyState
+              title={debouncedSearch ? "No matching records found" : "No records found"}
+              description={
+                debouncedSearch
+                  ? `No serial records matched "${debouncedSearch}". Try a different serial, model, or bin.`
+                  : "No scan records available."
+              }
+              action={
+                debouncedSearch ? (
+                  <button className="btn btn-outline-secondary btn-sm mt-2" onClick={handleClearSearch}>
+                    Clear Search
+                  </button>
+                ) : undefined
+              }
+            />
           ) : (
             <table className="table table-hover table-bordered align-middle" style={{ minWidth: '860px' }}>
               <thead>

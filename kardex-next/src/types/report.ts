@@ -1,4 +1,4 @@
-export type AgeBucket = '0-7' | '8-15' | '16-30' | '31-60' | '60+' | 'ALL';
+export type AgeBucket = '0-7' | '8-15' | '16-30' | '31-60' | '60+' | '30+' | 'ALL';
 export type KanbanSlaStatus = 'NORMAL' | 'ATTENTION' | 'WARNING' | 'OVERDUE' | 'ALL';
 
 export interface OldestUnit {

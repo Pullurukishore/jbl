@@ -1029,7 +1029,9 @@ exports.searchAll = asyncHandler(async (req, res) => {
         // Validate sort input
 
         // Clean search string to prevent SQL injection & syntax crashes in raw literals
-        const cleanSearch = String(search || '').replace(/'/g, "''");
+        const cleanSearch = String(search || '').trim().replace(/'/g, "''");
+        const likeOp = dialect === 'postgres' ? Op.iLike : Op.like;
+        const iLikeText = dialect === 'postgres' ? 'ILIKE' : 'LIKE';
 
         // Dynamic search conditions for all columns
         const searchConditions = {
@@ -1043,40 +1045,63 @@ exports.searchAll = asyncHandler(async (req, res) => {
             ...(!parsedStartDate && parsedEndDate && {
                 scanned_at: { [Op.lte]: parsedEndDate },
             }),
-            ...(search && {
+            ...(cleanSearch && {
                 [Op.or]: [
-                    { serial_number: { [Op.like]: `%${search}%` } },
-                    { pv_status: { [Op.like]: `%${search}%` } },
-                    { process_status: { [Op.like]: `%${search}%` } },
-                    { '$put_po_file.name$': { [Op.like]: `%${search}%` } },
-                    { model_number: { [Op.like]: `%${search}%` } },
-                    { scanned_by: { [Op.like]: `%${search}%` } },
-                    { '$put_text_file.name$': { [Op.like]: `%${search}%` } },
-                    { pick_status: { [Op.like]: `%${search}%` } },
-                    { '$pick.pick_text_file.name$': { [Op.like]: `%${search}%` } },
-                    {
-                        [Op.or]: [
-                            db.sequelize.literal(
-                                `(SELECT COUNT(*) FROM ${uTable} u
-                              WHERE u.id${castText} = ${pTable}.scanned_by 
-                              AND (u.first_name LIKE '%${cleanSearch}%' 
-                              OR u.last_name LIKE '%${cleanSearch}%')) > 0`
-                            ),
-                            ...(search.includes(' ')
-                                ? (() => {
-                                    const [firstName, lastName] = search.split(' ').map(s => String(s || '').replace(/'/g, "''"));
-                                    return [
-                                        db.sequelize.literal(
-                                            `(SELECT COUNT(*) FROM ${uTable} u
-                                      WHERE u.id${castText} = ${pTable}.scanned_by 
-                                      AND u.first_name LIKE '%${firstName}%'
-                                      AND u.last_name LIKE '%${lastName}%') > 0`
-                                        ),
-                                    ];
-                                })()
-                                : []),
-                        ],
-                    },
+                    { serial_number: { [likeOp]: `%${cleanSearch}%` } },
+                    { model_number: { [likeOp]: `%${cleanSearch}%` } },
+                    { scanned_by: { [likeOp]: `%${cleanSearch}%` } },
+                    db.sequelize.literal(`CAST(${pTable}.pv_status AS TEXT) ${iLikeText} '%${cleanSearch}%'`),
+                    db.sequelize.literal(`CAST(${pTable}.process_status AS TEXT) ${iLikeText} '%${cleanSearch}%'`),
+                    db.sequelize.literal(`CAST(${pTable}.pick_status AS TEXT) ${iLikeText} '%${cleanSearch}%'`),
+                    db.sequelize.literal(
+                        `(SELECT COUNT(*) FROM ${uTable} u
+                          WHERE u.id${castText} = ${pTable}.scanned_by 
+                          AND (u.first_name ${iLikeText} '%${cleanSearch}%' 
+                            OR u.last_name ${iLikeText} '%${cleanSearch}%'
+                            OR u.user_id ${iLikeText} '%${cleanSearch}%')) > 0`
+                    ),
+                    db.sequelize.literal(
+                        `(SELECT COUNT(*) FROM files f 
+                          WHERE f.id = ${pTable}.po_file_id 
+                          AND f.name ${iLikeText} '%${cleanSearch}%') > 0`
+                    ),
+                    db.sequelize.literal(
+                        `(SELECT COUNT(*) FROM files f 
+                          WHERE f.id = ${pTable}.text_file_id 
+                          AND f.name ${iLikeText} '%${cleanSearch}%') > 0`
+                    ),
+                    db.sequelize.literal(
+                        `(SELECT COUNT(*) FROM handling_unit hu 
+                          WHERE hu.id = ${pTable}.handling_unit_id 
+                          AND hu.hu_id ${iLikeText} '%${cleanSearch}%') > 0`
+                    ),
+                    db.sequelize.literal(
+                        `(SELECT COUNT(*) FROM compartment comp 
+                          WHERE comp.id = ${pTable}.compartment_id 
+                          AND comp.compartment_number${castText} ${iLikeText} '%${cleanSearch}%') > 0`
+                    ),
+                    db.sequelize.literal(
+                        `(SELECT COUNT(*) FROM pick p 
+                          LEFT JOIN files pf ON pf.id = p.text_file_id 
+                          WHERE p.id = ${pTable}.pick_id 
+                          AND pf.name ${iLikeText} '%${cleanSearch}%') > 0`
+                    ),
+                    ...(cleanSearch.includes(' ')
+                        ? (() => {
+                            const parts = cleanSearch.split(/\s+/).filter(Boolean).map(s => String(s || '').replace(/'/g, "''"));
+                            if (parts.length >= 2) {
+                                return [
+                                    db.sequelize.literal(
+                                        `(SELECT COUNT(*) FROM ${uTable} u
+                                          WHERE u.id${castText} = ${pTable}.scanned_by 
+                                          AND u.first_name ${iLikeText} '%${parts[0]}%'
+                                          AND u.last_name ${iLikeText} '%${parts[1]}%') > 0`
+                                    ),
+                                ];
+                            }
+                            return [];
+                        })()
+                        : []),
                 ],
             }),
         };
@@ -1182,7 +1207,7 @@ exports.searchAll = asyncHandler(async (req, res) => {
         });
     } catch (error) {
         console.error('Error in search API:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: 'Internal server error', message: error.message, sql: error.sql });
     }
 
 })

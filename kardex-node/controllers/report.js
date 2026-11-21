@@ -261,6 +261,8 @@ exports.getSerialAgingList = asyncHandler(async (req, res) => {
                 whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d30, [Op.gte]: d60 };
             } else if (ageBucket === '60+') {
                 whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d60 };
+            } else if (ageBucket === '30+' || ageBucket === 'CRITICAL_30_PLUS') {
+                whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d30 };
             }
         }
 
@@ -579,6 +581,8 @@ exports.getAgingExportData = asyncHandler(async (req, res) => {
                 whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d30, [Op.gte]: d60 };
             } else if (ageBucket === '60+') {
                 whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d60 };
+            } else if (ageBucket === '30+' || ageBucket === 'CRITICAL_30_PLUS') {
+                whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d30 };
             }
         }
 
