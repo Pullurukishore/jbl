@@ -6,7 +6,7 @@ import { apiPost } from '@/lib/api';
 import { saveAuthData } from '@/lib/auth';
 import { LoginResponse } from '@/types';
 import { useAuth } from '@/context/AuthContext';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,13 +15,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
+    // Only auto-redirect if already authenticated and not in middle of login success transition
+    if (!isLoading && isAuthenticated && !successMsg) {
       router.replace('/app/dashboard');
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, router, successMsg]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,14 +42,17 @@ export default function LoginPage() {
 
       if (res.success && res.data?.id_token) {
         saveAuthData(res);
-        refreshAuth();
-        router.push('/app/dashboard');
+        setSuccessMsg('Login successful! Redirecting to dashboard...');
+        setTimeout(() => {
+          refreshAuth();
+          router.push('/app/dashboard');
+        }, 1200);
       } else {
         setError('Login failed. Please check credentials.');
+        setLoading(false);
       }
     } catch (err: any) {
       setError(err.message || 'Invalid User ID or Password');
-    } finally {
       setLoading(false);
     }
   };
@@ -115,6 +120,13 @@ export default function LoginPage() {
                     <img src="/assets/logo/logo.svg" alt="Logo" className="logo" />
                     <h3 className="fw-bold mb-3 mt-3 text-center">Sign In</h3>
 
+                    {successMsg && (
+                      <div className="alert alert-success d-flex align-items-center justify-content-center gap-2 py-2" role="alert">
+                        <CheckCircle2 size={18} />
+                        <span className="fw-semibold">{successMsg}</span>
+                      </div>
+                    )}
+
                     {error && (
                       <div className="alert alert-danger" role="alert">
                         {error}
@@ -134,6 +146,7 @@ export default function LoginPage() {
                         onChange={(e) => setUserId(e.target.value)}
                         required
                         autoFocus
+                        disabled={loading || !!successMsg}
                       />
                     </div>
 
@@ -150,11 +163,13 @@ export default function LoginPage() {
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           required
+                          disabled={loading || !!successMsg}
                         />
                         <button
                           type="button"
                           className="toggle-password-btn position-absolute"
                           onClick={() => setShowPassword(!showPassword)}
+                          disabled={loading || !!successMsg}
                         >
                           {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                         </button>
@@ -163,10 +178,18 @@ export default function LoginPage() {
 
                     <button
                       type="submit"
-                      className="btn btn-primary login-btn w-100 mt-3"
-                      disabled={loading}
+                      className={`btn ${successMsg ? 'btn-success' : 'btn-primary'} login-btn w-100 mt-3 d-flex align-items-center justify-content-center gap-2`}
+                      disabled={loading || !!successMsg}
                     >
-                      {loading ? 'Authenticating...' : 'Login'}
+                      {successMsg ? (
+                        <>
+                          <CheckCircle2 size={18} /> Redirecting...
+                        </>
+                      ) : loading ? (
+                        'Authenticating...'
+                      ) : (
+                        'Login'
+                      )}
                     </button>
                   </div>
                 </div>

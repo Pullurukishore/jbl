@@ -84,6 +84,10 @@ module.exports = (sequelize, DataTypes) => {
                     ALTER TABLE "user"
                     ADD COLUMN IF NOT EXISTS "is_active" BOOLEAN NOT NULL DEFAULT TRUE;
                 `);
+                await sequelize.query(`
+                    ALTER TABLE "user"
+                    ADD COLUMN IF NOT EXISTS "token_version" INTEGER NOT NULL DEFAULT 1;
+                `);
             } else {
                 const qi = sequelize.getQueryInterface();
                 const tableDesc = await qi.describeTable('user');
@@ -101,13 +105,20 @@ module.exports = (sequelize, DataTypes) => {
                         defaultValue: true,
                     });
                 }
+                if (!tableDesc.token_version) {
+                    await qi.addColumn('user', 'token_version', {
+                        type: DataTypes.INTEGER,
+                        allowNull: false,
+                        defaultValue: 1,
+                    });
+                }
             }
         } catch (err) {
-            console.error('user access_type migration check error:', err.message);
+            console.error('user schema migration check error:', err.message);
         }
 
         const bcrypt = require('bcryptjs');
-        const existingUser = await model.findOne();
+        const existingUser = await model.findOne({ attributes: ['id'] });
         if (!existingUser) {
             await model.create({
                 first_name: 'Admin',

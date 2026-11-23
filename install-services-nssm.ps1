@@ -180,11 +180,12 @@ if (-not (Test-Path "node_modules")) {
 & $nssmPath set KardexJblBackend Start SERVICE_AUTO_START
 & $nssmPath set KardexJblBackend AppEnvironmentExtra NODE_ENV=production
 
-# Logging & automatic rotation (10 MB per file)
+# Logging & automatic rotation (2 MB per file, live online rotation)
 & $nssmPath set KardexJblBackend AppStdout "$logsPath\backend-service.log"
 & $nssmPath set KardexJblBackend AppStderr "$logsPath\backend-service-error.log"
 & $nssmPath set KardexJblBackend AppRotateFiles 1
-& $nssmPath set KardexJblBackend AppRotateBytes 10485760
+& $nssmPath set KardexJblBackend AppRotateOnline 1
+& $nssmPath set KardexJblBackend AppRotateBytes 2097152
 
 # Auto-recovery: restart after 5 seconds if crashed
 & $nssmPath set KardexJblBackend AppExit Default Restart
@@ -210,11 +211,12 @@ Write-Host "[3/4] Registering Frontend Service (KardexJblFrontend)..." -Foregrou
 & $nssmPath set KardexJblFrontend Start SERVICE_AUTO_START
 & $nssmPath set KardexJblFrontend AppEnvironmentExtra NODE_ENV=production
 
-# Logging & automatic rotation (10 MB per file)
+# Logging & automatic rotation (2 MB per file, live online rotation)
 & $nssmPath set KardexJblFrontend AppStdout "$logsPath\frontend-service.log"
 & $nssmPath set KardexJblFrontend AppStderr "$logsPath\frontend-service-error.log"
 & $nssmPath set KardexJblFrontend AppRotateFiles 1
-& $nssmPath set KardexJblFrontend AppRotateBytes 10485760
+& $nssmPath set KardexJblFrontend AppRotateOnline 1
+& $nssmPath set KardexJblFrontend AppRotateBytes 2097152
 
 # Auto-recovery: restart after 5 seconds if crashed
 & $nssmPath set KardexJblFrontend AppExit Default Restart

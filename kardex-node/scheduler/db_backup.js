@@ -7,8 +7,10 @@ const { execFile } = require('child_process');
 require('dotenv').config({ path: path.join(__dirname, '..', 'config', 'config.env') });
 
 const RETENTION_DAYS = parseInt(process.env.DB_BACKUP_RETENTION_DAYS, 10) || 20;
+const LOG_RETENTION_DAYS = parseInt(process.env.LOG_RETENTION_DAYS, 10) || 7;
 const CRON_SCHEDULE = process.env.DB_BACKUP_CRON || '0 2 * * *'; // Default: every night at 02:00 AM
 const backupDir = path.join(__dirname, '..', 'backups');
+const logsDir = path.join(__dirname, '..', '..', 'logs');
 
 /**
  * Locate pg_dump executable on Windows or system PATH
@@ -111,8 +113,9 @@ function executeBackup() {
                     console.log(`[DB BACKUP] Backup SUCCESS: ${path.basename(backupFile)}`);
                 }
 
-                // Run 20-day cleanup after successful backup
+                // Run retention cleanups after successful backup
                 cleanupOldBackups();
+                cleanupOldLogs();
                 resolve(backupFile);
             });
         } catch (err) {
@@ -122,13 +125,54 @@ function executeBackup() {
     });
 }
 
+/**
+ * Clean up rotated log files older than LOG_RETENTION_DAYS (default 7 days)
+ */
+function cleanupOldLogs() {
+    try {
+        if (!fs.existsSync(logsDir)) return;
+        const now = Date.now();
+        const maxAgeMs = LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+        const files = fs.readdirSync(logsDir);
+
+        for (const file of files) {
+            if (!file.endsWith('.log')) continue;
+
+            // Never delete active service log files, only rotated archives or old PM2 logs
+            const isActiveServiceLog = [
+                'backend-service.log',
+                'backend-service-error.log',
+                'frontend-service.log',
+                'frontend-service-error.log'
+            ].includes(file);
+            if (isActiveServiceLog) continue;
+
+            const filePath = path.join(logsDir, file);
+            try {
+                const stats = fs.statSync(filePath);
+                if (now - stats.mtimeMs > maxAgeMs) {
+                    fs.unlinkSync(filePath);
+                    console.log(`[LOG MAINTENANCE] Cleaned up expired log (> ${LOG_RETENTION_DAYS} days): ${file}`);
+                }
+            } catch (e) {
+                // Ignore transient file stat or lock errors
+            }
+        }
+    } catch (err) {
+        console.error('[LOG MAINTENANCE] Cleanup error:', err.message);
+    }
+}
+
+// Initial cleanup on server boot
+cleanupOldLogs();
+
 // Register the daily background cron schedule
 if (process.env.ENABLE_DB_BACKUP !== 'false') {
     if (cron.validate(CRON_SCHEDULE)) {
         cron.schedule(CRON_SCHEDULE, () => {
             executeBackup().catch(() => {});
         });
-        console.log(`[DB BACKUP] Scheduled daily backup job active (Schedule: "${CRON_SCHEDULE}", Retention: ${RETENTION_DAYS} days)`);
+        console.log(`[DB BACKUP] Scheduled daily backup job active (Schedule: "${CRON_SCHEDULE}", Retention: ${RETENTION_DAYS} days, Log Retention: ${LOG_RETENTION_DAYS} days)`);
     } else {
         console.error(`[DB BACKUP] Invalid CRON_SCHEDULE expression: "${CRON_SCHEDULE}". Daily backup was NOT scheduled.`);
     }
@@ -136,6 +180,7 @@ if (process.env.ENABLE_DB_BACKUP !== 'false') {
 
 module.exports = {
     executeBackup,
-    cleanupOldBackups
+    cleanupOldBackups,
+    cleanupOldLogs
 };
 
