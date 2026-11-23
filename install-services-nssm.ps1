@@ -156,6 +156,34 @@ if (-not $SkipBuild) {
     Write-Host "[1/4] Skipping build as requested..." -ForegroundColor Gray
 }
 
+# Helper to cleanly stop and remove existing service, preventing "DELETE_PENDING" errors
+function Remove-ExistingServiceSafely {
+    param([string]$ServiceName, [int]$Port = 0)
+    $existing = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if ($existing) {
+        Write-Host "Stopping and cleaning up previous $ServiceName..." -ForegroundColor Gray
+        & $nssmPath stop $ServiceName 2>$null
+        Start-Sleep -Seconds 1
+        & $nssmPath remove $ServiceName confirm 2>$null
+        Start-Sleep -Seconds 1
+        if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
+            & sc.exe delete $ServiceName 2>$null
+            Start-Sleep -Seconds 1
+        }
+    }
+    if ($Port -gt 0) {
+        try {
+            $connections = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+            foreach ($conn in $connections) {
+                if ($conn.OwningProcess -gt 0) {
+                    Write-Host "Freeing port $Port from process ID $($conn.OwningProcess)..." -ForegroundColor Yellow
+                    Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
+                }
+            }
+        } catch {}
+    }
+}
+
 # ----------------------------------------------------
 # Step 2: Install Backend Service (KardexJblBackend)
 # ----------------------------------------------------
@@ -169,8 +197,7 @@ if (-not (Test-Path "node_modules")) {
 }
 
 # Stop and remove if previously installed
-& $nssmPath stop KardexJblBackend 2>$null
-& $nssmPath remove KardexJblBackend confirm 2>$null
+Remove-ExistingServiceSafely -ServiceName "KardexJblBackend" -Port $backendPort
 
 # Register service
 & $nssmPath install KardexJblBackend "$nodePath" "index.js"
@@ -200,11 +227,11 @@ Write-Host ""
 Write-Host "[3/4] Registering Frontend Service (KardexJblFrontend)..." -ForegroundColor Yellow
 
 # Stop and remove if previously installed
-& $nssmPath stop KardexJblFrontend 2>$null
-& $nssmPath remove KardexJblFrontend confirm 2>$null
+Remove-ExistingServiceSafely -ServiceName "KardexJblFrontend" -Port $frontendPort
 
 # Register service using direct next runner (avoids cmd orphan process issues)
-& $nssmPath install KardexJblFrontend "$nodePath" "node_modules\next\dist\bin\next" "start" "-p" "$frontendPort" "-H" "0.0.0.0"
+$nextBin = Join-Path $frontendPath "node_modules\next\dist\bin\next"
+& $nssmPath install KardexJblFrontend "$nodePath" "$nextBin" "start" "-p" "$frontendPort" "-H" "0.0.0.0"
 & $nssmPath set KardexJblFrontend AppDirectory "$frontendPath"
 & $nssmPath set KardexJblFrontend DisplayName "Kardex JBL Validation Frontend"
 & $nssmPath set KardexJblFrontend Description "Kardex Put and Pick Validation Next.js Web Application"
@@ -282,4 +309,5 @@ Write-Host ""
 Write-Host "Both services will automatically start on Windows boot," -ForegroundColor Gray
 Write-Host "even without any user logged in." -ForegroundColor Gray
 Write-Host ""
+Set-Location $projectRoot
 Read-Host "Press Enter to exit"

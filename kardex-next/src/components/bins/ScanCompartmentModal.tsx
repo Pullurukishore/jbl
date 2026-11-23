@@ -37,9 +37,20 @@ export const ScanCompartmentModal: React.FC<ScanCompartmentModalProps> = ({
   const [completedData, setCompletedData] = useState<{ serial: string; material: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const sseRef = useRef<EventSource | null>(null);
+
+  // Clean up any active SSE connection on unmount
+  useEffect(() => {
+    return () => {
+      sseRef.current?.close();
+      sseRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isOpen) {
+      sseRef.current?.close();
+      sseRef.current = null;
       setSerialNumber('');
       setLogs([]);
       setIsProcessing(false);
@@ -58,6 +69,8 @@ export const ScanCompartmentModal: React.FC<ScanCompartmentModalProps> = ({
   }, [isProcessing, logs]);
 
   const handleReset = () => {
+    sseRef.current?.close();
+    sseRef.current = null;
     setSerialNumber('');
     setLogs([]);
     setIsProcessing(false);
@@ -77,7 +90,8 @@ export const ScanCompartmentModal: React.FC<ScanCompartmentModalProps> = ({
     setIsCompleted(false);
     setCompletedData(null);
 
-    connectSSE(
+    sseRef.current?.close();
+    sseRef.current = connectSSE(
       `/hu/${encodeURIComponent(huId)}/scan/${compartmentNumber}/${encodeURIComponent(serialNumber.trim())}`,
       (data: any) => {
         if (data && typeof data === 'object') {
@@ -94,11 +108,15 @@ export const ScanCompartmentModal: React.FC<ScanCompartmentModalProps> = ({
           if (data.status === 'FAILED') {
             setErrorMsg(data.message || 'Scan process failed.');
             setIsProcessing(false);
+            sseRef.current?.close();
+            sseRef.current = null;
           }
 
           if (data.activity === 'ALLOCATE' && data.status === 'SUCCESS') {
             setIsProcessing(false);
             setIsCompleted(true);
+            sseRef.current?.close();
+            sseRef.current = null;
             const materialName = data.material_name || data.model_number || '';
             setCompletedData({ serial: serialNumber.trim(), material: materialName });
             if (compartmentNumber !== null) {
@@ -109,9 +127,13 @@ export const ScanCompartmentModal: React.FC<ScanCompartmentModalProps> = ({
       },
       () => {
         setIsProcessing(false);
+        sseRef.current?.close();
+        sseRef.current = null;
       },
       () => {
         setIsProcessing(false);
+        sseRef.current?.close();
+        sseRef.current = null;
       }
     );
   };

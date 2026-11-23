@@ -45,9 +45,20 @@ export const ScanModal: React.FC<ScanModalProps> = ({
   const [isCompleted, setIsCompleted] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const sseRef = useRef<EventSource | null>(null);
+
+  // Clean up any active SSE connection on unmount
+  useEffect(() => {
+    return () => {
+      sseRef.current?.close();
+      sseRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isOpen) {
+      sseRef.current?.close();
+      sseRef.current = null;
       setSerialNumber('');
       setLogs([]);
       setIsProcessing(false);
@@ -78,6 +89,8 @@ export const ScanModal: React.FC<ScanModalProps> = ({
   }, [isProcessing, logs]);
 
   const handleReset = () => {
+    sseRef.current?.close();
+    sseRef.current = null;
     setSerialNumber('');
     setLogs([]);
     setIsProcessing(false);
@@ -104,7 +117,8 @@ export const ScanModal: React.FC<ScanModalProps> = ({
     }
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
 
-    connectSSE(
+    sseRef.current?.close();
+    sseRef.current = connectSSE(
       `/put/create/${encodeURIComponent(serialNumber.trim())}${queryString}`,
       (data: any) => {
         if (data && typeof data === 'object') {
@@ -121,6 +135,8 @@ export const ScanModal: React.FC<ScanModalProps> = ({
           if (data.status === 'FAILED') {
             setErrorMsg(data.message || 'PUT process failed.');
             setIsProcessing(false);
+            sseRef.current?.close();
+            sseRef.current = null;
           }
 
           const isFinished =
@@ -134,15 +150,21 @@ export const ScanModal: React.FC<ScanModalProps> = ({
           if (isFinished) {
             setIsProcessing(false);
             setIsCompleted(true);
+            sseRef.current?.close();
+            sseRef.current = null;
             onSuccess(serialNumber.trim());
           }
         }
       },
       () => {
         setIsProcessing(false);
+        sseRef.current?.close();
+        sseRef.current = null;
       },
       () => {
         setIsProcessing(false);
+        sseRef.current?.close();
+        sseRef.current = null;
       }
     );
   };

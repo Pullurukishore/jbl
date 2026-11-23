@@ -22,17 +22,58 @@ if (-not (Test-Path $nssmPath)) {
     exit 1
 }
 
-Write-Host "[1/2] Stopping and removing Backend Service..." -ForegroundColor Yellow
-& $nssmPath stop KardexJblBackend 2>$null
-Start-Sleep -Seconds 2
-& $nssmPath remove KardexJblBackend confirm 2>$null
-Write-Host "[OK] Backend Service removed." -ForegroundColor Green
+# Helper to remove service, release ports, and handle SCM handles
+function Remove-ServiceSafely {
+    param([string]$ServiceName, [int]$Port = 0)
+    Write-Host "Stopping and removing $ServiceName..." -ForegroundColor Yellow
+    & $nssmPath stop $ServiceName 2>$null
+    Start-Sleep -Seconds 1
+    & $nssmPath remove $ServiceName confirm 2>$null
+    Start-Sleep -Seconds 1
 
-Write-Host "[2/2] Stopping and removing Frontend Service..." -ForegroundColor Yellow
-& $nssmPath stop KardexJblFrontend 2>$null
-Start-Sleep -Seconds 2
-& $nssmPath remove KardexJblFrontend confirm 2>$null
-Write-Host "[OK] Frontend Service removed." -ForegroundColor Green
+    # Fallback to sc.exe delete if NSSM left a lingering service
+    if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
+        & sc.exe delete $ServiceName 2>$null
+        Start-Sleep -Seconds 1
+    }
+
+    # Free up port if lingering node process holds it
+    if ($Port -gt 0) {
+        try {
+            $connections = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+            foreach ($conn in $connections) {
+                if ($conn.OwningProcess -gt 0) {
+                    Write-Host "Stopping lingering process on port $Port (PID: $($conn.OwningProcess))..." -ForegroundColor Gray
+                    Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
+                }
+            }
+        } catch {}
+    }
+
+    $rem = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if (-not $rem) {
+        Write-Host "[OK] $ServiceName removed successfully." -ForegroundColor Green
+    } else {
+        Write-Host "[WARN] $ServiceName is marked for deletion (DELETE_PENDING). If open, please close 'services.msc'." -ForegroundColor Yellow
+    }
+}
+
+Write-Host "[1/3] Removing Backend Service..." -ForegroundColor Yellow
+Remove-ServiceSafely -ServiceName "KardexJblBackend" -Port 5005
+
+Write-Host ""
+Write-Host "[2/3] Removing Frontend Service..." -ForegroundColor Yellow
+Remove-ServiceSafely -ServiceName "KardexJblFrontend" -Port 3000
+
+Write-Host ""
+Write-Host "[3/3] Removing Windows Firewall Rules..." -ForegroundColor Yellow
+try {
+    Remove-NetFirewallRule -DisplayName "Kardex Frontend*" -ErrorAction SilentlyContinue
+    Remove-NetFirewallRule -DisplayName "Kardex Backend*" -ErrorAction SilentlyContinue
+    Write-Host "[OK] Inbound Firewall Rules removed." -ForegroundColor Green
+} catch {
+    Write-Host "[WARN] Could not remove firewall rules automatically: $($_.Exception.Message)" -ForegroundColor Yellow
+}
 
 Write-Host ""
 Write-Host "======================================================" -ForegroundColor Green

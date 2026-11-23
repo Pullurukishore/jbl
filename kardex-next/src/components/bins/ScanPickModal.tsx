@@ -54,6 +54,15 @@ export const ScanPickModal: React.FC<ScanPickModalProps> = ({
 
   const inputRef = useRef<HTMLInputElement>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const sseRef = useRef<EventSource | null>(null);
+
+  // Clean up any active SSE connection on unmount
+  useEffect(() => {
+    return () => {
+      sseRef.current?.close();
+      sseRef.current = null;
+    };
+  }, []);
 
   const occupiedCompartments = (hu.compartments || []).filter(
     (c) => c.status === 'OCCUPIED'
@@ -91,6 +100,8 @@ export const ScanPickModal: React.FC<ScanPickModalProps> = ({
   }, [isProcessing, logs]);
 
   const handleResetForNext = () => {
+    sseRef.current?.close();
+    sseRef.current = null;
     setSerialNumber('');
     setLogs([]);
     setIsProcessing(false);
@@ -115,7 +126,8 @@ export const ScanPickModal: React.FC<ScanPickModalProps> = ({
     const compParam = selectedCompartment ? `?compartment_number=${selectedCompartment}` : '';
     const url = `/hu/${encodeURIComponent(hu.hu_id)}/pick-scan/${encodeURIComponent(cleanSerial)}${compParam}`;
 
-    connectSSE(
+    sseRef.current?.close();
+    sseRef.current = connectSSE(
       url,
       (data: any) => {
         if (data && typeof data === 'object') {
@@ -132,11 +144,15 @@ export const ScanPickModal: React.FC<ScanPickModalProps> = ({
           if (data.status === 'FAILED') {
             setErrorMsg(data.message || 'Pick validation failed.');
             setIsProcessing(false);
+            sseRef.current?.close();
+            sseRef.current = null;
           }
 
           if (data.activity === 'FILE_GENERATED' && data.status === 'SUCCESS') {
             setIsProcessing(false);
             setIsCompleted(true);
+            sseRef.current?.close();
+            sseRef.current = null;
             const compNum = data.compartment_number || selectedCompartment || 0;
             const modelNum = data.model_number || 'N/A';
             const remaining = typeof data.remaining_occupied === 'number' ? data.remaining_occupied : occupiedCompartments.length - 1;
@@ -154,9 +170,13 @@ export const ScanPickModal: React.FC<ScanPickModalProps> = ({
       },
       () => {
         setIsProcessing(false);
+        sseRef.current?.close();
+        sseRef.current = null;
       },
       () => {
         setIsProcessing(false);
+        sseRef.current?.close();
+        sseRef.current = null;
       }
     );
   };

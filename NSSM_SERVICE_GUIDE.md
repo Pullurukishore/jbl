@@ -16,7 +16,7 @@ This will:
 2. Register and start `KardexJblBackend` (Port 5005).
 3. Register and start `KardexJblFrontend` (Port 3000).
 4. Configure auto-start on Windows boot (without requiring user login).
-5. Configure 10 MB rotating logs and auto-restart on crash.
+5. Configure 2 MB rotating logs and auto-restart on crash.
 
 ---
 

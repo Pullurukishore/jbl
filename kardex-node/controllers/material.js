@@ -225,9 +225,33 @@ exports.getMaterialDetails = asyncHandler(async (req, res) => {
             return res.status(400).json({ error: 'Model number is required.' });
         }
 
-        // Fetch all puts for this model
-        const puts = await db.put.findAll({
+        // 1. Fast SQL aggregation for counts (never loads thousands of historical picked rows into memory)
+        const counts = await db.put.findAll({
             where: { model_number: modelNumber },
+            attributes: [
+                [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'total_count'],
+                [db.sequelize.literal("COUNT(CASE WHEN pick_status = 'AVAILABLE' THEN 1 END)"), 'available_count'],
+                [db.sequelize.literal("COUNT(CASE WHEN pick_status = 'HOLD' THEN 1 END)"), 'hold_count'],
+                [db.sequelize.literal("COUNT(CASE WHEN pick_status = 'PICKED' THEN 1 END)"), 'picked_count']
+            ],
+            raw: true
+        });
+
+        const totalCount = parseInt(counts[0]?.total_count || 0, 10);
+        if (totalCount === 0) {
+            return res.status(404).json({ error: `Material ${modelNumber} not found.` });
+        }
+
+        const availableCount = parseInt(counts[0]?.available_count || 0, 10);
+        const holdCount = parseInt(counts[0]?.hold_count || 0, 10);
+        const pickedCount = parseInt(counts[0]?.picked_count || 0, 10);
+
+        // 2. Fetch only ACTIVE units (AVAILABLE or HOLD) with bin and compartment locations
+        const activeUnits = await db.put.findAll({
+            where: {
+                model_number: modelNumber,
+                pick_status: { [Op.in]: ['AVAILABLE', 'HOLD'] }
+            },
             include: [
                 {
                     model: db.handling_unit,
@@ -243,22 +267,9 @@ exports.getMaterialDetails = asyncHandler(async (req, res) => {
             nest: true
         });
 
-        if (!puts || puts.length === 0) {
-            return res.status(404).json({ error: `Material ${modelNumber} not found.` });
-        }
-
-        let availableCount = 0;
-        let holdCount = 0;
-        let pickedCount = 0;
         const binMap = {};
-
-        puts.forEach(p => {
-            if (p.pick_status === 'AVAILABLE') availableCount++;
-            else if (p.pick_status === 'HOLD') holdCount++;
-            else if (p.pick_status === 'PICKED') pickedCount++;
-
-            // Track active locations (only for available or hold)
-            if (p.pick_status !== 'PICKED' && p.handling_unit?.hu_id) {
+        activeUnits.forEach(p => {
+            if (p.handling_unit?.hu_id) {
                 const huId = p.handling_unit.hu_id;
                 if (!binMap[huId]) {
                     binMap[huId] = {
@@ -279,14 +290,27 @@ exports.getMaterialDetails = asyncHandler(async (req, res) => {
 
         const locations = Object.values(binMap);
 
+        // 3. Fetch top 100 most recent serials for the preview sample
+        const sampleUnits = await db.put.findAll({
+            where: { model_number: modelNumber },
+            include: [
+                { model: db.handling_unit, attributes: ['hu_id'] },
+                { model: db.compartment, attributes: ['compartment_number'] }
+            ],
+            order: [['scanned_at', 'DESC']],
+            limit: 100,
+            raw: true,
+            nest: true
+        });
+
         return res.status(200).json({
             model_number: modelNumber,
-            total_count: puts.length,
+            total_count: totalCount,
             available_count: availableCount,
             hold_count: holdCount,
             picked_count: pickedCount,
             locations,
-            serials_sample: puts.slice(0, 100).map(p => ({
+            serials_sample: sampleUnits.map(p => ({
                 id: p.id,
                 serial_number: p.serial_number,
                 pv_status: p.pv_status,

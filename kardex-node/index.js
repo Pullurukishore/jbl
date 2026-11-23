@@ -153,60 +153,99 @@ app.use(errorHandler);
 
 const db = require('./models');
 
-db.sequelize.sync()
-  .then(async () => {
+async function startServerWithDbRetry() {
+  const maxRetries = 10;
+  let attempt = 0;
+  let connected = false;
+
+  while (attempt < maxRetries && !connected) {
     try {
-      const qi = db.sequelize.getQueryInterface();
-      const putCols = await qi.describeTable('put').catch(() => null);
-      const userCols = await qi.describeTable('user').catch(() => null);
-      if (userCols && !userCols.token_version) {
-        if (db.sequelize.getDialect() === 'postgres') {
-          await db.sequelize.query('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "token_version" INTEGER DEFAULT 1;').catch(() => {});
-        } else {
-          await qi.addColumn('user', 'token_version', { type: db.Sequelize.INTEGER, defaultValue: 1, allowNull: false }).catch(() => {});
-        }
-      }
-      if (putCols) {
-        if (!putCols.compartment_id) {
-          if (db.sequelize.getDialect() === 'postgres') {
-            await db.sequelize.query('ALTER TABLE "put" ADD COLUMN IF NOT EXISTS "compartment_id" INTEGER;').catch(() => {});
-          } else {
-            await qi.addColumn('put', 'compartment_id', { type: db.Sequelize.INTEGER, allowNull: true }).catch(() => {});
-          }
-        }
-        if (!putCols.handling_unit_id) {
-          if (db.sequelize.getDialect() === 'postgres') {
-            await db.sequelize.query('ALTER TABLE "put" ADD COLUMN IF NOT EXISTS "handling_unit_id" INTEGER;').catch(() => {});
-          } else {
-            await qi.addColumn('put', 'handling_unit_id', { type: db.Sequelize.INTEGER, allowNull: true }).catch(() => {});
-          }
-        }
-      }
-
-      // Safe non-blocking index creation to prevent CPU spikes & full-table scan crashes
-      if (db.sequelize.getDialect() === 'postgres') {
-        await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_put_serial ON "put" (serial_number);').catch(() => {});
-        await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_put_model ON "put" (model_number);').catch(() => {});
-        await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_put_pick_status ON "put" (pick_status);').catch(() => {});
-        await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_comp_hu_id ON "compartment" (handling_unit_id);').catch(() => {});
-        await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_comp_serial ON "compartment" (serial_number);').catch(() => {});
-        await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_hu_huid ON "handling_unit" (hu_id);').catch(() => {});
-      }
-    } catch (e) {
-      console.warn('Auto column sync warning:', e.message);
-    }
-    const PORT = process.env.PORT || 5000;
-    const server = app.listen(PORT, () => {
-      console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`.yellow.bold);
-    });
-
-    server.on('error', (err) => {
-      if (err.code === 'EADDRINUSE') {
-        console.error(`Port ${PORT} is already in use by another process. Please stop the existing instance or update PORT in config.env.`.red.bold);
-        process.exit(1);
+      attempt++;
+      await db.sequelize.authenticate();
+      await db.sequelize.sync();
+      connected = true;
+      console.log('Database connection and table schema synchronization successful.'.green);
+    } catch (dbErr) {
+      console.error(`[DB] Connection attempt ${attempt}/${maxRetries} failed: ${dbErr.message}`.yellow);
+      if (attempt < maxRetries) {
+        console.log('[DB] Retrying connection in 3 seconds...'.gray);
+        await new Promise((res) => setTimeout(res, 3000));
       } else {
-        console.error('Server listen error:', err);
+        console.error('[DB FATAL] Could not connect to PostgreSQL after multiple attempts. Exiting to trigger auto-recovery.'.red.bold);
+        process.exit(1);
       }
-    });
-  })
-  .catch(err => console.log(err));
+    }
+  }
+
+  try {
+    const qi = db.sequelize.getQueryInterface();
+    const putCols = await qi.describeTable('put').catch(() => null);
+    const userCols = await qi.describeTable('user').catch(() => null);
+    if (userCols && !userCols.token_version) {
+      if (db.sequelize.getDialect() === 'postgres') {
+        await db.sequelize.query('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "token_version" INTEGER DEFAULT 1;').catch(() => {});
+      } else {
+        await qi.addColumn('user', 'token_version', { type: db.Sequelize.INTEGER, defaultValue: 1, allowNull: false }).catch(() => {});
+      }
+    }
+    if (putCols) {
+      if (!putCols.compartment_id) {
+        if (db.sequelize.getDialect() === 'postgres') {
+          await db.sequelize.query('ALTER TABLE "put" ADD COLUMN IF NOT EXISTS "compartment_id" INTEGER;').catch(() => {});
+        } else {
+          await qi.addColumn('put', 'compartment_id', { type: db.Sequelize.INTEGER, allowNull: true }).catch(() => {});
+        }
+      }
+      if (!putCols.handling_unit_id) {
+        if (db.sequelize.getDialect() === 'postgres') {
+          await db.sequelize.query('ALTER TABLE "put" ADD COLUMN IF NOT EXISTS "handling_unit_id" INTEGER;').catch(() => {});
+        } else {
+          await qi.addColumn('put', 'handling_unit_id', { type: db.Sequelize.INTEGER, allowNull: true }).catch(() => {});
+        }
+      }
+    }
+
+    // Safe non-blocking index creation to prevent CPU spikes & full-table scan crashes
+    if (db.sequelize.getDialect() === 'postgres') {
+      // Put table indexes for fast search, FIFO sorting, and aging calculations
+      await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_put_serial ON "put" (serial_number);').catch(() => {});
+      await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_put_model ON "put" (model_number);').catch(() => {});
+      await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_put_pick_status ON "put" (pick_status);').catch(() => {});
+      await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_put_scanned_at ON "put" (scanned_at);').catch(() => {});
+      await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_put_birth_date ON "put" (birth_date);').catch(() => {});
+      await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_put_status_scanned ON "put" (pick_status, scanned_at);').catch(() => {});
+      await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_put_model_status ON "put" (model_number, pick_status);').catch(() => {});
+
+      // Compartment & Handling Unit indexes
+      await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_comp_hu_id ON "compartment" (handling_unit_id);').catch(() => {});
+      await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_comp_serial ON "compartment" (serial_number);').catch(() => {});
+      await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_hu_huid ON "handling_unit" (hu_id);').catch(() => {});
+      await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_hu_storage_status ON "handling_unit" (storage_status, hu_status);').catch(() => {});
+
+      // Log table indexes (fast serial audit and dashboard metrics)
+      await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_log_entity ON "log" (entity_number);').catch(() => {});
+      await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_log_date_time ON "log" (log_date_time);').catch(() => {});
+      await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_log_type_status ON "log" (log_type, status, process_id);').catch(() => {});
+      await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_log_put_id ON "log" (put_id);').catch(() => {});
+      await db.sequelize.query('CREATE INDEX IF NOT EXISTS idx_log_pick_id ON "log" (pick_id);').catch(() => {});
+    }
+  } catch (e) {
+    console.warn('Auto column sync warning:', e.message);
+  }
+
+  const PORT = process.env.PORT || 5000;
+  const server = app.listen(PORT, () => {
+    console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`.yellow.bold);
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use by another process. Please stop the existing instance or update PORT in config.env.`.red.bold);
+      process.exit(1);
+    } else {
+      console.error('Server listen error:', err);
+    }
+  });
+}
+
+startServerWithDbRetry();

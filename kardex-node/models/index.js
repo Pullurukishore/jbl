@@ -14,11 +14,29 @@ const sequelize = new Sequelize(process.env.DB_DATABASE, process.env.DB_USERNAME
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
     logging: process.env.DB_LOGGING === 'true' ? console.log : false,
+    dialectOptions: {
+        keepAlive: true,
+        connectTimeout: 20000,
+    },
     pool: {
         max: parseInt(process.env.DB_POOL_MAX, 10) || 25,
         min: parseInt(process.env.DB_POOL_MIN, 10) || 2,
         acquire: parseInt(process.env.DB_POOL_ACQUIRE, 10) || 30000,
         idle: parseInt(process.env.DB_POOL_IDLE, 10) || 10000
+    },
+    retry: {
+        match: [
+            /SequelizeConnectionError/,
+            /SequelizeConnectionRefusedError/,
+            /SequelizeHostNotFoundError/,
+            /SequelizeHostNotReachableError/,
+            /SequelizeInvalidConnectionError/,
+            /SequelizeConnectionTimedOutError/,
+            /Connection terminated unexpectedly/,
+            /ECONNRESET/,
+            /ETIMEDOUT/
+        ],
+        max: 3
     }
 });
 
