@@ -130,9 +130,10 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
     return [...hu.compartments].sort((a, b) => a.compartment_number - b.compartment_number);
   }, [hu]);
 
-  // Auto-open scan panel and target the lowest numbered empty slot (#1, #2...) by default on page load
+  // Auto-open scan panel and target the lowest numbered empty slot (#1, #2...) by default on page load (only for unstored / floor bins)
   useEffect(() => {
-    if (hu && !userDismissedScan) {
+    const isStoredOrSent = hu?.storage_status === 'IN_KARDEX' || hu?.status === 'SENT_TO_KARDEX';
+    if (hu && !userDismissedScan && !isStoredOrSent && canPut) {
       if (selectedCompartment === null) {
         const firstEmpty = compartments.find((c) => c.status === 'EMPTY');
         if (firstEmpty) {
@@ -141,7 +142,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         }
       }
     }
-  }, [hu, compartments, selectedCompartment, userDismissedScan]);
+  }, [hu, compartments, selectedCompartment, userDismissedScan, canPut]);
 
   const handleCopyId = () => {
     if (!hu) return;
@@ -267,7 +268,6 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
   const emptyCount = totalCount - occupiedCount - pickedCount;
   const fillPct = totalCount > 0 ? Math.round((occupiedCount / totalCount) * 100) : 0;
   const isBinFull = totalCount > 0 && emptyCount === 0;
-  const isLocked = !canPut;
   const isFloorBin = hu.storage_status === 'DRAFT' || hu.storage_status === 'OUTSIDE_KARDEX';
   const canSendToKardex = canPut && occupiedCount > 0;
 
@@ -285,6 +285,9 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
     (hu.storage_status === 'IN_KARDEX' ||
       hu.last_transaction === 'PUT' ||
       Boolean(hu.put_order_seq && hu.put_order_seq > 0));
+
+  const isStored = hu.storage_status === 'IN_KARDEX' || isAlreadySent;
+  const isLocked = !canPut || isStored;
 
   const handleInitiateSend = () => {
     if (isAlreadySent) {
@@ -875,8 +878,8 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
               <CompartmentGrid
                 compartments={filteredCompartments}
                 onSelectEmpty={isLocked ? undefined : handleSelectEmpty}
-                onSelectOccupied={isLocked ? undefined : (comp) => setPickCompartmentTarget(comp)}
-                selectedCompartment={canPut && isScanModalOpen ? selectedCompartment : null}
+                onSelectOccupied={isStored || isLocked ? undefined : (comp) => setPickCompartmentTarget(comp)}
+                selectedCompartment={canPut && !isStored && isScanModalOpen ? selectedCompartment : null}
                 huId={hu.hu_id}
                 binName={hu.bin_type?.bin_name || 'CON_BINC'}
                 binType={hu.bin_type?.name}
@@ -886,7 +889,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         </div>
 
         {/* Right Side: Permanent PUT Process Scan & Live Validation Panel */}
-        {canPut && isScanModalOpen && (
+        {canPut && !isStored && isScanModalOpen && (
           <div
             className="scan-panel-col"
             style={{
@@ -1086,8 +1089,8 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         />
       )}
 
-      {/* Single Compartment Pick Modal */}
-      {pickCompartmentTarget && (
+      {/* Single Compartment Pick Modal - Only available before bin is stored in Kardex */}
+      {!isStored && pickCompartmentTarget && (
         <Modal
           isOpen={!!pickCompartmentTarget}
           onClose={() => setPickCompartmentTarget(null)}

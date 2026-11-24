@@ -58,4 +58,9 @@ text-file/*.txt
 text-file/**/*.err
 !text-file/**/.gitkeep
 
+# Temporary & extracted files
+docx_extracted/
+docx_text.txt
+
+
 
