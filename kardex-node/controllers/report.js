@@ -609,11 +609,26 @@ exports.getAgingExportData = asyncHandler(async (req, res) => {
             include: [
                 {
                     model: db.handling_unit,
-                    attributes: ['hu_id', 'storage_status']
+                    attributes: ['hu_id', 'storage_status', 'bin_type_id'],
+                    include: [{ model: db.bin_type, attributes: ['bin_name', 'name'] }]
                 },
                 {
                     model: db.compartment,
                     attributes: ['compartment_number', 'status']
+                },
+                {
+                    model: db.files,
+                    as: 'put_po_file',
+                    attributes: ['name']
+                },
+                {
+                    model: db.files,
+                    as: 'put_text_file',
+                    attributes: ['name']
+                },
+                {
+                    model: db.pick,
+                    attributes: ['id', 'scanned_at']
                 }
             ],
             order: [['scanned_at', 'ASC']],
@@ -630,14 +645,17 @@ exports.getAgingExportData = asyncHandler(async (req, res) => {
             const sla = isKanban ? getKanbanSlaStatus(age.totalHours) : null;
 
             return {
+                id: r.id,
                 serial_number: r.serial_number,
                 model_number: r.model_number,
                 hu_id: r.handling_unit?.hu_id || 'N/A',
+                bin_type: r.handling_unit?.bin_type?.bin_name || r.handling_unit?.bin_type?.name || 'N/A',
                 compartment_number: r.compartment?.compartment_number ?? 'N/A',
+                compartment_status: r.compartment?.status || (r.compartment?.compartment_number ? 'OCCUPIED' : 'N/A'),
                 storage_status: r.handling_unit?.storage_status || 'N/A',
                 process_status: r.process_status || 'N/A',
                 pick_status: r.pick_status,
-                pv_status: r.pv_status || 'N/A',
+                pv_status: r.pv_status || 'PASS',
                 scanned_at: r.scanned_at,
                 birth_date: r.birth_date || 'N/A',
                 kardex_age_days: age.days,
@@ -647,8 +665,13 @@ exports.getAgingExportData = asyncHandler(async (req, res) => {
                 age_bucket: bucket,
                 is_kanban: isKanban ? 'YES' : 'NO',
                 kanban_dwell_hours: isKanban ? age.totalHours : 'N/A',
-                kanban_sla_status: isKanban ? sla : 'N/A',
-                scanned_by: r.scanned_by || 'SYSTEM'
+                kanban_dwell_days: isKanban ? age.days : 'N/A',
+                kanban_sla_status: isKanban ? (sla || 'NORMAL') : 'N/A',
+                scanned_by: r.scanned_by || 'SYSTEM',
+                po_file_name: r.put_po_file?.name || 'N/A',
+                kardex_file_name: r.put_text_file?.name || 'N/A',
+                pick_id: r.pick?.id || 'N/A',
+                picked_at: r.pick?.scanned_at ? new Date(r.pick.scanned_at).toLocaleString() : 'N/A'
             };
         });
 

@@ -996,7 +996,7 @@ exports.getAll = asyncHandler(async (req, res) => {
         // Perform the query
         const { rows, count } = await db.pick.findAndCountAll({
             where: whereConditions,
-            order: safeOrder(sort, ['id', 'model_number', 'quantity', 'createdAt', 'updatedAt'], 'id', 'DESC'),
+            order: safeOrder(sort, ['id', 'model_number', 'quantity', 'scanned_at', 'updated_at'], 'id', 'DESC'),
             limit,
             offset,
             include: [

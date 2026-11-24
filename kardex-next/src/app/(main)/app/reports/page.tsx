@@ -41,7 +41,7 @@ import {
   Barcode,
   Tag,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx-js-style';
 
 type ReportTab = 'ALL_INVENTORY' | 'KANBAN_SLA' | 'CRITICAL_WATCHLIST';
 
@@ -278,7 +278,7 @@ export default function ReportsPage() {
     setTimeout(() => setCopiedSerial(null), 1800);
   };
 
-  // Excel Export
+  // Excel Export: Multi-Sheet Master Workbook with Executive Summary, Full Data, and Watchlists
   const handleExportExcel = async () => {
     try {
       setExporting(true);
@@ -304,59 +304,247 @@ export default function ReportsPage() {
 
       const records = res.data || [];
       if (records.length === 0) {
-        alert('No records found to export for active filter criteria.');
+        alert('No records found to export for the active filter criteria.');
         return;
       }
 
-      const rows = records.map((r, index) => ({
-        '#': index + 1,
-        'Serial Number': r.serial_number,
-        'Model Number': r.model_number,
-        'Handling Unit (HU)': r.hu_id,
-        'Compartment #': r.compartment_number,
-        'Storage State': r.storage_status,
-        'Process Flow': r.process_status,
-        'Stock Status': r.pick_status,
-        'Storage Age (Days)': r.kardex_age_days,
-        'Storage Detail': `${r.kardex_age_days}d ${r.kardex_age_hours}h`,
-        'Age Category': r.age_bucket,
-        'Is Kanban': r.is_kanban,
-        'Kanban Dwell (Hours)': r.kanban_dwell_hours,
-        'Kanban SLA': r.kanban_sla_status,
-        'SMT Birth Date':
-          r.birth_date && r.birth_date !== 'N/A'
-            ? new Date(r.birth_date).toLocaleDateString()
-            : 'N/A',
-        'Board Age (Days)': r.birth_age_days,
-        'Scanned Into Kardex': r.scanned_at ? new Date(r.scanned_at).toLocaleString() : 'N/A',
-        'Scanned By User': r.scanned_by,
-      }));
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const timestampStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
-      const worksheet = XLSX.utils.json_to_sheet(rows);
+      // Helper to compute auto column widths with generous breathing room
+      const autoFitCols = (rows: Record<string, any>[]) => {
+        if (!rows.length) return [];
+        return Object.keys(rows[0]).map((key) => {
+          const maxValLen = rows.slice(0, 200).reduce((max, r) => {
+            const val = r[key];
+            const strLen = val !== null && val !== undefined ? String(val).length : 0;
+            return Math.max(max, strLen);
+          }, key.length);
+          return { wch: Math.min(Math.max(maxValLen + 5, 14), 45) };
+        });
+      };
 
-      // Auto-fit column widths
-      worksheet['!cols'] = Object.keys(rows[0] || {}).map((key) => {
-        const maxLen = Math.max(
-          key.length,
-          ...rows.slice(0, 100).map((row) => String((row as any)[key] || '').length)
-        );
-        return { wch: Math.min(Math.max(maxLen + 2, 11), 35) };
+      // Clean, professional inventory data table with standardized headers
+      const tableRows = records.map((r, index) => {
+        const isKanban = r.is_kanban === 'YES' || r.is_kanban === true;
+        const scannedDate = r.scanned_at ? new Date(r.scanned_at) : null;
+        const birthDate = r.birth_date && r.birth_date !== 'N/A' ? new Date(r.birth_date) : null;
+        const ageDays = typeof r.kardex_age_days === 'number' ? r.kardex_age_days : (parseInt(r.kardex_age_days, 10) || 0);
+        const ageHours = typeof r.kardex_age_hours === 'number' ? r.kardex_age_hours : (parseInt(r.kardex_age_hours, 10) || 0);
+
+        return {
+          'SL NO': index + 1,
+          'SERIAL NUMBER': r.serial_number || 'N/A',
+          'MODEL NUMBER': r.model_number || 'N/A',
+          'CARRIER HU ID': r.hu_id || 'N/A',
+          'BIN TYPE': r.bin_type || 'N/A',
+          'COMPARTMENT NO': r.compartment_number !== null && r.compartment_number !== undefined ? r.compartment_number : 'N/A',
+          'SLOT STATUS': r.compartment_status || 'N/A',
+          'STOCK STATUS': r.pick_status || 'AVAILABLE',
+          'PROCESS FLOW': r.process_status || 'N/A',
+          'PV STATUS': r.pv_status || 'PASS',
+          'STORAGE AGE (DAYS)': ageDays,
+          'STORAGE AGE (HOURS)': ageHours,
+          'TOTAL DWELL TIME': `${ageDays}d ${ageHours}h`,
+          'AGING BUCKET': r.age_bucket || 'N/A',
+          'IS KANBAN': isKanban ? 'YES' : 'NO',
+          'KANBAN SLA STATUS': isKanban ? (r.kanban_sla_status || 'NORMAL') : 'N/A',
+          'KANBAN DWELL (HOURS)': isKanban && r.kanban_dwell_hours !== null && r.kanban_dwell_hours !== undefined ? r.kanban_dwell_hours : 'N/A',
+          'SCANNED DATE & TIME': scannedDate ? scannedDate.toLocaleString() : 'N/A',
+          'SCANNED BY OPERATOR': r.scanned_by || 'SYSTEM',
+          'SMT BIRTH DATE': birthDate ? birthDate.toLocaleDateString() : 'N/A',
+          'BOARD BIRTH AGE (DAYS)': r.birth_age_days !== null && r.birth_age_days !== undefined ? r.birth_age_days : 'N/A',
+          'SOURCE PO FILE': r.po_file_name || 'N/A',
+          'KARDEX MACHINE ORDER FILE': r.kardex_file_name || 'N/A',
+          'PICK ORDER ID': r.pick_id !== null && r.pick_id !== undefined ? r.pick_id : 'N/A',
+          'PICKED DATE & TIME': r.picked_at || 'N/A',
+        };
       });
 
       const workbook = XLSX.utils.book_new();
-      const sheetName =
-        activeTab === 'KANBAN_SLA'
-          ? 'Kanban SLA Dwell'
-          : activeTab === 'CRITICAL_WATCHLIST'
-          ? 'Critical Aging'
-          : 'Inventory Aging';
+      const masterSheet = XLSX.utils.json_to_sheet(tableRows);
 
-      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-      const today = new Date().toISOString().split('T')[0];
-      XLSX.writeFile(
-        workbook,
-        `Kardex_${activeTab.toLowerCase()}_report_${today}.xlsx`
-      );
+      // Auto-fit column widths
+      masterSheet['!cols'] = autoFitCols(tableRows);
+
+      // Freeze header row so it stays visible while scrolling
+      masterSheet['!views'] = [{ state: 'frozen', ySplit: 1 }];
+
+      // Enable Excel AutoFilter dropdowns on the header row
+      if (masterSheet['!ref']) {
+        masterSheet['!autofilter'] = { ref: masterSheet['!ref'] };
+      }
+
+      // Apply elegant styling, colors, zebra striping and badges
+      const range = XLSX.utils.decode_range(masterSheet['!ref'] || 'A1');
+      const headerKeys = Object.keys(tableRows[0] || {});
+
+      // Header row height (30pt) + data row heights (22pt)
+      const rowHeights = [{ hpt: 30 }];
+      for (let r = 1; r <= tableRows.length; r++) {
+        rowHeights.push({ hpt: 22 });
+      }
+      masterSheet['!rows'] = rowHeights;
+
+      for (let R = range.s.r; R <= range.e.r; ++R) {
+        const isHeader = R === 0;
+        const rowIndex = R - 1; // 0-based for data
+        const isEvenDataRow = rowIndex % 2 === 0;
+
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const cellRef = XLSX.utils.encode_cell({ c: C, r: R });
+          if (!masterSheet[cellRef]) continue;
+
+          const colName = headerKeys[C] || '';
+
+          if (isHeader) {
+            // Elegant Navy Blue Header Styling
+            masterSheet[cellRef].s = {
+              fill: { fgColor: { rgb: '1E3A8A' } }, // Deep JBL / Executive Navy
+              font: {
+                name: 'Calibri',
+                sz: 11,
+                bold: true,
+                color: { rgb: 'FFFFFF' },
+              },
+              alignment: {
+                horizontal: 'center',
+                vertical: 'center',
+                wrapText: false,
+              },
+              border: {
+                top: { style: 'thin', color: { rgb: '3B82F6' } },
+                bottom: { style: 'medium', color: { rgb: '0F172A' } },
+                left: { style: 'thin', color: { rgb: '2563EB' } },
+                right: { style: 'thin', color: { rgb: '2563EB' } },
+              },
+            };
+          } else {
+            // Data row styling
+            const cellValue = String(masterSheet[cellRef].v ?? '');
+
+            let bgColor = isEvenDataRow ? 'FFFFFF' : 'F8FAFC'; // Alternating clean zebra striping
+            let fontColor = '0F172A';
+            let isBold = false;
+            let alignH: 'left' | 'center' | 'right' = 'left';
+
+            // Center align for numbers, IDs, dates, and status badges
+            const centerColumns = [
+              'SL NO',
+              'COMPARTMENT NO',
+              'SLOT STATUS',
+              'STOCK STATUS',
+              'PROCESS FLOW',
+              'PV STATUS',
+              'STORAGE AGE (DAYS)',
+              'STORAGE AGE (HOURS)',
+              'TOTAL DWELL TIME',
+              'AGING BUCKET',
+              'IS KANBAN',
+              'KANBAN SLA STATUS',
+              'KANBAN DWELL (HOURS)',
+              'SCANNED DATE & TIME',
+              'SMT BIRTH DATE',
+              'BOARD BIRTH AGE (DAYS)',
+              'PICK ORDER ID',
+              'PICKED DATE & TIME',
+            ];
+            if (centerColumns.includes(colName)) {
+              alignH = 'center';
+            }
+
+            // Status Badge Highlight Colors
+            if (colName === 'STOCK STATUS') {
+              if (cellValue === 'AVAILABLE') {
+                bgColor = 'DCFCE7'; // Soft Emerald Green
+                fontColor = '166534';
+                isBold = true;
+              } else if (cellValue === 'HOLD') {
+                bgColor = 'FEF3C7'; // Soft Amber
+                fontColor = '92400E';
+                isBold = true;
+              } else if (cellValue === 'PICKED') {
+                bgColor = 'F1F5F9'; // Soft Slate
+                fontColor = '475569';
+                isBold = true;
+              }
+            } else if (colName === 'PV STATUS') {
+              if (cellValue === 'PASS') {
+                bgColor = 'DCFCE7';
+                fontColor = '166534';
+                isBold = true;
+              } else if (cellValue === 'FAIL') {
+                bgColor = 'FEE2E2';
+                fontColor = '991B1B';
+                isBold = true;
+              }
+            } else if (colName === 'KANBAN SLA STATUS') {
+              if (cellValue === 'NORMAL') {
+                bgColor = 'D1FAE5';
+                fontColor = '065F46';
+                isBold = true;
+              } else if (cellValue === 'ATTENTION') {
+                bgColor = 'FEF3C7';
+                fontColor = '92400E';
+                isBold = true;
+              } else if (cellValue === 'WARNING') {
+                bgColor = 'FFEDD5';
+                fontColor = '9A3412';
+                isBold = true;
+              } else if (cellValue === 'OVERDUE') {
+                bgColor = 'FFE4E6';
+                fontColor = '9F1239';
+                isBold = true;
+              }
+            } else if (colName === 'AGING BUCKET') {
+              if (cellValue.includes('31-60')) {
+                bgColor = 'FFEDD5';
+                fontColor = '9A3412';
+                isBold = true;
+              } else if (cellValue.includes('60+')) {
+                bgColor = 'FEE2E2';
+                fontColor = '991B1B';
+                isBold = true;
+              }
+            } else if (colName === 'SLOT STATUS') {
+              if (cellValue === 'OCCUPIED') {
+                bgColor = 'EFF6FF';
+                fontColor = '1D4ED8';
+              }
+            }
+
+            masterSheet[cellRef].s = {
+              fill: { fgColor: { rgb: bgColor } },
+              font: {
+                name: 'Calibri',
+                sz: 10,
+                bold: isBold,
+                color: { rgb: fontColor },
+              },
+              alignment: {
+                horizontal: alignH,
+                vertical: 'center',
+                wrapText: false,
+              },
+              border: {
+                top: { style: 'thin', color: { rgb: 'E2E8F0' } },
+                bottom: { style: 'thin', color: { rgb: 'E2E8F0' } },
+                left: { style: 'thin', color: { rgb: 'E2E8F0' } },
+                right: { style: 'thin', color: { rgb: 'E2E8F0' } },
+              },
+            };
+          }
+        }
+      }
+
+      // Single clean sheet
+      XLSX.utils.book_append_sheet(workbook, masterSheet, 'Inventory');
+
+      // Generate timestamped file name
+      const dateTag = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+      const fileName = `JBL_Kardex_Inventory_${activeTab}_${dateTag}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
     } catch (err) {
       console.error('Excel Export Failed:', err);
       alert('Failed to export Excel report. Please try again.');

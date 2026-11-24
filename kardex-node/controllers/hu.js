@@ -1409,7 +1409,7 @@ exports.downloadHUPickFile = asyncHandler(async (req, res) => {
         where: {
             name: { [Op.like]: `HU_PICK_${hu.hu_id}_%` }
         },
-        order: [['createdAt', 'DESC']]
+        order: [['created_date_time', 'DESC']]
     });
 
     const fileName = file?.name || `HU_PICK_${hu.hu_id}.txt`;
