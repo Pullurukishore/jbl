@@ -130,10 +130,9 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
     return [...hu.compartments].sort((a, b) => a.compartment_number - b.compartment_number);
   }, [hu]);
 
-  // Auto-open scan panel and target the lowest numbered empty slot (#1, #2...) by default on page load (only for unstored / floor bins)
+  // Auto-open scan panel and target the lowest numbered empty slot (#1, #2...) by default on page load
   useEffect(() => {
-    const isStored = hu?.storage_status === 'IN_KARDEX';
-    if (hu && !userDismissedScan && !isStored && canPut) {
+    if (hu && !userDismissedScan && canPut) {
       if (selectedCompartment === null) {
         const firstEmpty = compartments.find((c) => c.status === 'EMPTY');
         if (firstEmpty) {
@@ -286,8 +285,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
       hu.last_transaction === 'PUT' ||
       Boolean(hu.put_order_seq && hu.put_order_seq > 0));
 
-  const isStored = hu.storage_status === 'IN_KARDEX' || isAlreadySent;
-  const isLocked = !canPut || isStored;
+  const isLocked = !canPut;
 
   const handleInitiateSend = () => {
     if (isAlreadySent) {
@@ -878,8 +876,8 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
               <CompartmentGrid
                 compartments={filteredCompartments}
                 onSelectEmpty={isLocked ? undefined : handleSelectEmpty}
-                onSelectOccupied={isStored || isLocked ? undefined : (comp) => setPickCompartmentTarget(comp)}
-                selectedCompartment={canPut && !isStored && isScanModalOpen ? selectedCompartment : null}
+                onSelectOccupied={isLocked ? undefined : (comp) => setPickCompartmentTarget(comp)}
+                selectedCompartment={canPut && isScanModalOpen ? selectedCompartment : null}
                 huId={hu.hu_id}
                 binName={hu.bin_type?.bin_name || 'CON_BINC'}
                 binType={hu.bin_type?.name}
@@ -889,7 +887,7 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         </div>
 
         {/* Right Side: Permanent PUT Process Scan & Live Validation Panel */}
-        {canPut && !isStored && isScanModalOpen && (
+        {canPut && isScanModalOpen && (
           <div
             className="scan-panel-col"
             style={{
@@ -1089,8 +1087,8 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
         />
       )}
 
-      {/* Single Compartment Pick Modal - Only available before bin is stored in Kardex */}
-      {!isStored && pickCompartmentTarget && (
+      {/* Single Compartment Pick Modal */}
+      {pickCompartmentTarget && (
         <Modal
           isOpen={!!pickCompartmentTarget}
           onClose={() => setPickCompartmentTarget(null)}
