@@ -39,6 +39,8 @@ exports.downloadFile = asyncHandler(async(req, res) => {
 
     const safeDownloadName = path.basename(file.name || 'download');
 
+    res.setHeader('File-Name', encodeURIComponent(safeDownloadName));
+
     // Send the file for download
     res.download(filePath, safeDownloadName, (err) => {
         if (err) {

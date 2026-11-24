@@ -569,6 +569,7 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           width: 100%;
           min-width: 0;
           flex: 1;
+          height: 100%;
         }
 
         /* Individual Physical Socket Pocket */
@@ -1388,6 +1389,10 @@ export const CompartmentGrid: React.FC<CompartmentGridProps> = ({
           -webkit-overflow-scrolling: touch;
           scrollbar-width: thin;
           padding-bottom: 4px;
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          min-height: 0;
         }
 
         .scroll-hint-pill {

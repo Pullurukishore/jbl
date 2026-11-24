@@ -39,17 +39,19 @@ export async function apiFetch<T>(
   }
 
   if (res.status === 403) {
-    if (typeof window !== 'undefined') {
-      window.location.href = '/error/403';
-    }
-    throw new Error('Not authorized');
+    const errorData = await res.json().catch(() => ({}));
+    const message = typeof errorData === 'string'
+      ? errorData
+      : (errorData?.error || errorData?.message || 'Access denied: You do not have permission for this action.');
+    throw new Error(message);
   }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
-    throw new Error(
-      errorData?.error || errorData?.message || `API Error: ${res.status}`
-    );
+    const message = typeof errorData === 'string'
+      ? errorData
+      : (errorData?.error || errorData?.message || `API Error: ${res.status}`);
+    throw new Error(message);
   }
 
   // Handle 204 No Content
@@ -152,9 +154,17 @@ export async function apiDownloadFile(
     throw new Error(errorData?.error || errorData?.message || 'Download failed');
   }
 
-  const fileName = decodeURIComponent(
-    res.headers.get('File-Name') || 'download.txt'
-  );
+  let fileName = 'download.txt';
+  const customHeader = res.headers.get('File-Name');
+  if (customHeader) {
+    fileName = decodeURIComponent(customHeader);
+  } else {
+    const disposition = res.headers.get('Content-Disposition');
+    if (disposition && disposition.includes('filename=')) {
+      const match = disposition.match(/filename=["']?([^"';]+)["']?/);
+      if (match && match[1]) fileName = match[1].trim();
+    }
+  }
   const blob = await res.blob();
   return { blob, fileName };
 }

@@ -1288,11 +1288,12 @@ exports.sendPickToKardex = asyncHandler(async (req, res) => {
     });
     if (!hu) return res.status(404).json({ error: 'Handling unit not found.' });
 
-    // Find all picked puts for this HU
+    // Find all picked puts for this HU that have not yet had a Kardex pick file generated (active compartment still assigned)
     const pickedPuts = await db.put.findAll({
         where: {
             handling_unit_id: hu.id,
-            pick_status: 'PICKED'
+            pick_status: 'PICKED',
+            compartment_id: { [Op.ne]: null }
         }
     });
 

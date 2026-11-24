@@ -42,11 +42,12 @@ exports.authenticate = asyncHandler(async (req, res) => {
         expiresIn: process.env.JWT_EXPIRE || '30d',
     });
 
-    // Set secure HttpOnly cookie (protects against XSS token theft)
+    // Set secure HttpOnly cookie (auto-detect HTTPS / reverse proxy so plain HTTP LAN doesn't reject cookie)
+    const isHttps = Boolean(req.secure || req.headers['x-forwarded-proto'] === 'https' || process.env.COOKIE_SECURE === 'true');
     const cookieExpireDays = parseInt(process.env.JWT_COOKIE_EXPIRE, 10) || 30;
     res.cookie('id_token', id_token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isHttps,
         sameSite: 'lax',
         maxAge: cookieExpireDays * 24 * 60 * 60 * 1000,
         path: '/'
