@@ -132,8 +132,8 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
 
   // Auto-open scan panel and target the lowest numbered empty slot (#1, #2...) by default on page load (only for unstored / floor bins)
   useEffect(() => {
-    const isStoredOrSent = hu?.storage_status === 'IN_KARDEX' || hu?.status === 'SENT_TO_KARDEX';
-    if (hu && !userDismissedScan && !isStoredOrSent && canPut) {
+    const isStored = hu?.storage_status === 'IN_KARDEX';
+    if (hu && !userDismissedScan && !isStored && canPut) {
       if (selectedCompartment === null) {
         const firstEmpty = compartments.find((c) => c.status === 'EMPTY');
         if (firstEmpty) {
