@@ -71,20 +71,6 @@ export const ScanAndStoreModal: React.FC<ScanAndStoreModalProps> = ({
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!isOpen) {
-      handleReset();
-    } else {
-      setTimeout(() => barcodeInputRef.current?.focus(), 100);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    if ((isProcessing || logs.length > 0) && logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [isProcessing, logs]);
-
   const handleReset = () => {
     setBarcodeInput('');
     setResolvedModel('');
@@ -103,6 +89,20 @@ export const ScanAndStoreModal: React.FC<ScanAndStoreModalProps> = ({
     setErrorMsg('');
     setTimeout(() => barcodeInputRef.current?.focus(), 50);
   };
+
+  useEffect(() => {
+    if (!isOpen) {
+      handleReset();
+    } else {
+      setTimeout(() => barcodeInputRef.current?.focus(), 100);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if ((isProcessing || logs.length > 0) && logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [isProcessing, logs]);
 
   const handleLookup = async () => {
     const raw = barcodeInput.trim();

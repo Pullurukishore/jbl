@@ -51,7 +51,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
 
     const now = new Date();
     let start: Date;
-    let end: Date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const end: Date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
     if (preset === 'today') {
       start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);

@@ -66,6 +66,24 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
   const [sendingPick, setSendingPick] = useState(false);
   const [pickSendSuccess, setPickSendSuccess] = useState<string | null>(null);
 
+  const fetchLayout = useCallback(async (silent = false) => {
+    try {
+      if (!silent) setLoading(true);
+      setError('');
+      const res = await apiGet<HandlingUnit>(`/hu/${encodeURIComponent(huId)}/layout`);
+      setHu(res);
+      const comps = res.compartments || [];
+      const hasEmpty = comps.some((c) => c.status === 'EMPTY');
+      if (!hasEmpty) {
+        setIsScanModalOpen(false);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load bin details');
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, [huId]);
+
   const handleSendPickToKardex = async () => {
     if (!hu) return;
     try {
@@ -84,24 +102,6 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
       setSendingPick(false);
     }
   };
-
-  const fetchLayout = useCallback(async (silent = false) => {
-    try {
-      if (!silent) setLoading(true);
-      setError('');
-      const res = await apiGet<HandlingUnit>(`/hu/${encodeURIComponent(huId)}/layout`);
-      setHu(res);
-      const comps = res.compartments || [];
-      const hasEmpty = comps.some((c) => c.status === 'EMPTY');
-      if (!hasEmpty) {
-        setIsScanModalOpen(false);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load bin details');
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, [huId]);
 
   const handlePickCompartment = async () => {
     if (!hu || !pickCompartmentTarget) return;

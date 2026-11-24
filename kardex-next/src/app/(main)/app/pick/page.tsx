@@ -1702,7 +1702,7 @@ export default function PickWorkstationPage() {
                           {filteredPlanBins.length === 0 && (
                             <tr>
                               <td colSpan={6} className="text-center py-4 text-muted">
-                                No bins match "{binSearchQuery}".
+                                No bins match &quot;{binSearchQuery}&quot;.
                               </td>
                             </tr>
                           )}

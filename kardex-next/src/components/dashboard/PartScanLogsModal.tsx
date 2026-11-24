@@ -25,12 +25,6 @@ export const PartScanLogsModal: React.FC<PartScanLogsModalProps> = ({
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchLogs(1);
-    }
-  }, [isOpen, serialNumber, modelNumber]);
-
   const fetchLogs = async (pageNum: number) => {
     try {
       setLoading(true);
@@ -51,6 +45,12 @@ export const PartScanLogsModal: React.FC<PartScanLogsModalProps> = ({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchLogs(1);
+    }
+  }, [isOpen, serialNumber, modelNumber]);
 
   const columns: Column<Log>[] = [
     {

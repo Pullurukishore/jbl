@@ -1,8 +1,11 @@
-// Polyfill for Node 24+ where SlowBuffer was removed (required for buffer-equal-constant-time / jsonwebtoken)
+// Robust Polyfill for Node 22/24+ where SlowBuffer was removed (required for buffer-equal-constant-time / jsonwebtoken)
 const buffer = require('buffer');
 if (!buffer.SlowBuffer) {
-  buffer.SlowBuffer = function () {};
-  buffer.SlowBuffer.prototype = {};
+  function SlowBuffer(size) {
+    return Buffer.allocUnsafeSlow ? Buffer.allocUnsafeSlow(size) : Buffer.allocUnsafe(size);
+  }
+  SlowBuffer.prototype = Object.create(Buffer.prototype);
+  buffer.SlowBuffer = SlowBuffer;
 }
 
 // Global crash protection against unhandled database/network promise rejections
