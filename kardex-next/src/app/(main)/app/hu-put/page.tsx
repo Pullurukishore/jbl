@@ -414,7 +414,7 @@ export default function HUPutPage() {
         .stats-grid {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
-          gap: 0.85rem;
+          gap: 0.65rem;
           width: 100%;
         }
 
@@ -431,20 +431,18 @@ export default function HUPutPage() {
         }
 
         .stat-card {
-          background: #ffffff;
           border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          padding: 1.05rem 1.25rem;
+          border-radius: 10px;
+          padding: 0.65rem 0.95rem;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
-          transition: transform 0.15s ease, box-shadow 0.15s ease;
+          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+          transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
         }
 
         .stat-card:hover {
           transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
         }
 
         .stat-meta {
@@ -453,35 +451,109 @@ export default function HUPutPage() {
         }
 
         .stat-label {
-          font-size: 11px;
+          font-size: 10.5px;
           font-weight: 700;
           text-transform: uppercase;
-          letter-spacing: 0.6px;
-          color: #64748b;
-          margin-bottom: 3px;
+          letter-spacing: 0.5px;
+          margin-bottom: 2px;
         }
 
         .stat-value {
-          font-size: 26px;
+          font-size: 21px;
           font-weight: 800;
-          line-height: 1.1;
+          line-height: 1.15;
         }
 
         .stat-subtext {
-          font-size: 11px;
-          color: #94a3b8;
+          font-size: 10.5px;
           font-weight: 600;
-          margin-top: 3px;
+          margin-top: 2px;
         }
 
         .stat-icon-well {
-          width: 44px;
-          height: 44px;
-          border-radius: 11px;
+          width: 36px;
+          height: 36px;
+          border-radius: 9px;
           display: flex;
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
+        }
+
+        /* 1. Total Units - Sky Blue Theme */
+        .stat-card-blue {
+          background: linear-gradient(135deg, #f0f7ff 0%, #e0effe 100%);
+          border-color: #bfdbfe;
+        }
+        .stat-card-blue:hover {
+          border-color: #60a5fa;
+          background: linear-gradient(135deg, #e8f3fe 0%, #d5e9fe 100%);
+          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.12);
+        }
+        .stat-card-blue .stat-label { color: #1e40af; }
+        .stat-card-blue .stat-value { color: #1d4ed8; }
+        .stat-card-blue .stat-subtext { color: #3b82f6; }
+        .stat-card-blue .stat-icon-well {
+          background: #ffffff;
+          color: #2563eb;
+          box-shadow: 0 2px 5px rgba(37, 99, 235, 0.15);
+        }
+
+        /* 2. Empty (0%) - Cool Slate Theme */
+        .stat-card-slate {
+          background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+          border-color: #cbd5e1;
+        }
+        .stat-card-slate:hover {
+          border-color: #94a3b8;
+          background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+          box-shadow: 0 4px 12px rgba(71, 85, 105, 0.12);
+        }
+        .stat-card-slate .stat-label { color: #475569; }
+        .stat-card-slate .stat-value { color: #1e293b; }
+        .stat-card-slate .stat-subtext { color: #64748b; }
+        .stat-card-slate .stat-icon-well {
+          background: #ffffff;
+          color: #475569;
+          box-shadow: 0 2px 5px rgba(71, 85, 105, 0.15);
+        }
+
+        /* 3. Partially Filled - Warm Amber / Orange Gold Theme */
+        .stat-card-amber {
+          background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+          border-color: #fde68a;
+        }
+        .stat-card-amber:hover {
+          border-color: #fbbf24;
+          background: linear-gradient(135deg, #fef8dd 0%, #fdeebc 100%);
+          box-shadow: 0 4px 12px rgba(217, 119, 6, 0.12);
+        }
+        .stat-card-amber .stat-label { color: #92400e; }
+        .stat-card-amber .stat-value { color: #b45309; }
+        .stat-card-amber .stat-subtext { color: #d97706; }
+        .stat-card-amber .stat-icon-well {
+          background: #ffffff;
+          color: #d97706;
+          box-shadow: 0 2px 5px rgba(217, 119, 6, 0.15);
+        }
+
+        /* 4. Full (100%) - Fresh Mint Green Theme */
+        .stat-card-emerald {
+          background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+          border-color: #bbf7d0;
+        }
+        .stat-card-emerald:hover {
+          border-color: #4ade80;
+          background: linear-gradient(135deg, #e6fced 0%, #d0f9dc 100%);
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.12);
+        }
+        .stat-card-emerald .stat-label { color: #166534; }
+        .stat-card-emerald .stat-value { color: #15803d; }
+        .stat-card-emerald .stat-subtext { color: #16a34a; }
+        .stat-card-emerald .stat-icon-well {
+          background: #ffffff;
+          color: #059669;
+          box-shadow: 0 2px 5px rgba(16, 185, 129, 0.15);
         }
 
         /* Main Table Container Card */
@@ -1022,55 +1094,47 @@ export default function HUPutPage() {
 
       {/* 4 Clean Summary KPI Cards */}
       <div className="stats-grid">
-        <div className="stat-card">
+        <div className="stat-card stat-card-blue">
           <div className="stat-meta">
             <span className="stat-label">Total Units</span>
-            <span className="stat-value" style={{ color: '#0f172a' }}>
-              {stats.total || totalItems}
-            </span>
+            <span className="stat-value">{stats.total || totalItems}</span>
             <span className="stat-subtext">All Registered Bins</span>
           </div>
-          <div className="stat-icon-well" style={{ background: '#f1f5f9', color: '#475569' }}>
-            <Boxes size={20} />
+          <div className="stat-icon-well">
+            <Boxes size={18} />
           </div>
         </div>
 
-        <div className="stat-card">
+        <div className="stat-card stat-card-slate">
           <div className="stat-meta">
             <span className="stat-label">Empty (0%)</span>
-            <span className="stat-value" style={{ color: '#64748b' }}>
-              {stats.empty}
-            </span>
+            <span className="stat-value">{stats.empty}</span>
             <span className="stat-subtext">Ready for Materials</span>
           </div>
-          <div className="stat-icon-well" style={{ background: '#f8fafc', color: '#64748b' }}>
-            <Package size={20} />
+          <div className="stat-icon-well">
+            <Package size={18} />
           </div>
         </div>
 
-        <div className="stat-card">
+        <div className="stat-card stat-card-amber">
           <div className="stat-meta">
             <span className="stat-label">Partially Filled</span>
-            <span className="stat-value" style={{ color: '#d97706' }}>
-              {stats.partial}
-            </span>
+            <span className="stat-value">{stats.partial}</span>
             <span className="stat-subtext">Put In Progress</span>
           </div>
-          <div className="stat-icon-well" style={{ background: '#fffbeb', color: '#d97706' }}>
-            <Clock size={20} />
+          <div className="stat-icon-well">
+            <Clock size={18} />
           </div>
         </div>
 
-        <div className="stat-card">
+        <div className="stat-card stat-card-emerald">
           <div className="stat-meta">
             <span className="stat-label">Full (100%)</span>
-            <span className="stat-value" style={{ color: '#16a34a' }}>
-              {stats.full}
-            </span>
+            <span className="stat-value">{stats.full}</span>
             <span className="stat-subtext">100% Loaded</span>
           </div>
-          <div className="stat-icon-well" style={{ background: '#f0fdf4', color: '#16a34a' }}>
-            <CheckCircle2 size={20} />
+          <div className="stat-icon-well">
+            <CheckCircle2 size={18} />
           </div>
         </div>
       </div>

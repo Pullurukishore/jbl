@@ -596,7 +596,7 @@ export default function PickWorkstationPage() {
         partNumber: clean,
         quantity: 0,
         page: 1,
-        size: 150,
+        size: 1000,
       });
 
       const model = res?.resolvedModelNumber || clean;
@@ -604,8 +604,10 @@ export default function PickWorkstationPage() {
 
       if (res?.data && res.data.length > 0) {
         setInventoryList(res.data);
+        setSelectTargetQty((prev) => Math.min(Math.max(1, prev), res.data.length));
       } else {
         setInventoryList([]);
+        setSelectTargetQty(1);
       }
     } catch {
       setInventoryList([]);
@@ -2165,26 +2167,47 @@ export default function PickWorkstationPage() {
                         className="stepper-btn"
                         onClick={() => setSelectTargetQty((q) => Math.max(1, q - 1))}
                         disabled={isProcessing || selectTargetQty <= 1}
+                        title="Decrease Target"
                       >
                         <Minus size={12} />
                       </button>
                       <input
                         type="number"
+                        min="1"
+                        max={inventoryList.length || 1}
                         className="stepper-input"
                         value={selectTargetQty}
-                        onChange={(e) => setSelectTargetQty(Math.max(1, Number(e.target.value) || 1))}
+                        onChange={(e) => {
+                          const val = Number(e.target.value) || 1;
+                          const maxStock = Math.max(1, inventoryList.length);
+                          setSelectTargetQty(Math.max(1, Math.min(maxStock, val)));
+                        }}
                         disabled={isProcessing}
                         style={{ fontSize: '13px' }}
                       />
                       <button
                         type="button"
                         className="stepper-btn"
-                        onClick={() => setSelectTargetQty((q) => q + 1)}
-                        disabled={isProcessing}
+                        onClick={() => setSelectTargetQty((q) => Math.min(inventoryList.length || 1, q + 1))}
+                        disabled={isProcessing || selectTargetQty >= inventoryList.length}
+                        title={selectTargetQty >= inventoryList.length ? 'Maximum available stock reached' : 'Increase Target'}
                       >
                         <Plus size={12} />
                       </button>
                     </div>
+
+                    {inventoryList.length > 1 && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary py-0 px-2"
+                        style={{ height: '34px', fontSize: '11.5px', fontWeight: 600, borderRadius: '6px', whiteSpace: 'nowrap' }}
+                        onClick={() => setSelectTargetQty(inventoryList.length)}
+                        disabled={isProcessing || selectTargetQty === inventoryList.length}
+                        title="Pick all available units"
+                      >
+                        All ({inventoryList.length})
+                      </button>
+                    )}
                   </div>
                 </div>
               )}

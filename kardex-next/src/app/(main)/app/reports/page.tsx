@@ -31,7 +31,6 @@ import {
   RotateCcw,
   AlertCircle,
   AlertTriangle,
-  Layers,
   ShieldAlert,
   X,
   ArrowUpDown,
@@ -40,15 +39,12 @@ import {
   Zap,
   Barcode,
   Tag,
+  ArrowDownRight,
+  ArrowUpRight,
 } from 'lucide-react';
 import XLSX from 'xlsx-js-style';
 
-type ReportTab = 'ALL_INVENTORY' | 'KANBAN_SLA' | 'CRITICAL_WATCHLIST';
-
 export default function ReportsPage() {
-  // Active Report Tab
-  const [activeTab, setActiveTab] = useState<ReportTab>('ALL_INVENTORY');
-
   // Stats
   const [stats, setStats] = useState<AgingStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -58,7 +54,7 @@ export default function ReportsPage() {
   const [data, setData] = useState<SerialAgingItem[]>([]);
   const [tableLoading, setTableLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(15);
+  const [pageSize, setPageSize] = useState(100);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
@@ -66,11 +62,10 @@ export default function ReportsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [modelNumber, setModelNumber] = useState('');
+  const [debouncedModel, setDebouncedModel] = useState('');
   const [pickStatus, setPickStatus] = useState<string>('ACTIVE'); // 'ACTIVE', 'AVAILABLE', 'HOLD', 'PICKED', 'ALL'
   const [processStatus, setProcessStatus] = useState<string>('ALL'); // 'ALL', 'KANBAN_ONLY', 'KANBAN-IN', 'KANBAN-RTN', 'STANDARD_PUT'
   const [ageBucket, setAgeBucket] = useState<AgeBucket>('ALL');
-  const [slaStatus, setSlaStatus] = useState<KanbanSlaStatus>('ALL');
-  const [kanbanFilter, setKanbanFilter] = useState<'ALL' | 'KANBAN_ONLY' | 'KANBAN_RTN'>('ALL');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [datePreset, setDatePreset] = useState<'ALL' | 'TODAY' | '7D' | '30D'>('ALL');
@@ -83,36 +78,15 @@ export default function ReportsPage() {
   const [copiedSerial, setCopiedSerial] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
-  // Debounce search
+  // Debounce search and model queries
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery);
+      setDebouncedModel(modelNumber);
       setPage(1);
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  // Handle Tab Switch
-  const handleTabChange = (tab: ReportTab) => {
-    setActiveTab(tab);
-    setPage(1);
-    if (tab === 'ALL_INVENTORY') {
-      setProcessStatus('ALL');
-      setKanbanFilter('ALL');
-      setSlaStatus('ALL');
-      setAgeBucket('ALL');
-    } else if (tab === 'KANBAN_SLA') {
-      setProcessStatus('KANBAN_ONLY');
-      setKanbanFilter('KANBAN_ONLY');
-      setAgeBucket('ALL');
-      setSlaStatus('ALL');
-    } else if (tab === 'CRITICAL_WATCHLIST') {
-      setProcessStatus('ALL');
-      setKanbanFilter('ALL');
-      setAgeBucket('30+');
-      setSlaStatus('ALL');
-    }
-  };
+  }, [searchQuery, modelNumber]);
 
   // Fetch KPI Stats
   const fetchStats = useCallback(async () => {
@@ -136,22 +110,14 @@ export default function ReportsPage() {
     async (currentPage = page, currentSize = pageSize) => {
       try {
         setTableLoading(true);
-        let activeProcess = processStatus;
-        if (activeTab === 'KANBAN_SLA') {
-          activeProcess = kanbanFilter === 'KANBAN_RTN' ? 'KANBAN-RTN' : 'KANBAN_ONLY';
-        } else if (kanbanFilter === 'KANBAN_ONLY') {
-          activeProcess = 'KANBAN_ONLY';
-        } else if (kanbanFilter === 'KANBAN_RTN') {
-          activeProcess = 'KANBAN-RTN';
-        }
 
         const res = await apiPost<SerialAgingResponse>('/report/aging/serial', {
           search: debouncedSearch,
           ageBucket,
-          slaStatus,
-          processStatus: activeProcess,
+          slaStatus: 'ALL',
+          processStatus,
           pickStatus,
-          modelNumber,
+          modelNumber: debouncedModel,
           startDate: startDate || null,
           endDate: endDate || null,
           page: currentPage,
@@ -171,14 +137,11 @@ export default function ReportsPage() {
       }
     },
     [
-      activeTab,
       debouncedSearch,
+      debouncedModel,
       ageBucket,
-      slaStatus,
-      kanbanFilter,
       processStatus,
       pickStatus,
-      modelNumber,
       startDate,
       endDate,
       sortField,
@@ -196,6 +159,17 @@ export default function ReportsPage() {
     fetchAgingData(page, pageSize);
   }, [fetchAgingData, page, pageSize]);
 
+  // Handle Storage Age Bucket change
+  const handleAgeBucketChange = (bucket: AgeBucket) => {
+    setAgeBucket(bucket);
+    if (bucket !== 'ALL') {
+      setStartDate('');
+      setEndDate('');
+      setDatePreset('ALL');
+    }
+    setPage(1);
+  };
+
   // Handle Date Presets
   const applyDatePreset = (preset: 'ALL' | 'TODAY' | '7D' | '30D') => {
     setDatePreset(preset);
@@ -205,18 +179,21 @@ export default function ReportsPage() {
     if (preset === 'ALL') {
       setStartDate('');
       setEndDate('');
-    } else if (preset === 'TODAY') {
-      const todayStr = formatDate(now);
-      setStartDate(todayStr);
-      setEndDate(todayStr);
-    } else if (preset === '7D') {
-      const d7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      setStartDate(formatDate(d7));
-      setEndDate(formatDate(now));
-    } else if (preset === '30D') {
-      const d30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      setStartDate(formatDate(d30));
-      setEndDate(formatDate(now));
+    } else {
+      setAgeBucket('ALL'); // Prevent conflict with age bucket
+      if (preset === 'TODAY') {
+        const todayStr = formatDate(now);
+        setStartDate(todayStr);
+        setEndDate(todayStr);
+      } else if (preset === '7D') {
+        const d7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        setStartDate(formatDate(d7));
+        setEndDate(formatDate(now));
+      } else if (preset === '30D') {
+        const d30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        setStartDate(formatDate(d30));
+        setEndDate(formatDate(now));
+      }
     }
     setPage(1);
   };
@@ -226,11 +203,10 @@ export default function ReportsPage() {
     setSearchQuery('');
     setDebouncedSearch('');
     setModelNumber('');
+    setDebouncedModel('');
     setPickStatus('ACTIVE');
-    setProcessStatus(activeTab === 'KANBAN_SLA' ? 'KANBAN_ONLY' : 'ALL');
-    setAgeBucket(activeTab === 'CRITICAL_WATCHLIST' ? '30+' : 'ALL');
-    setSlaStatus('ALL');
-    setKanbanFilter(activeTab === 'KANBAN_SLA' ? 'KANBAN_ONLY' : 'ALL');
+    setProcessStatus('ALL');
+    setAgeBucket('ALL');
     setStartDate('');
     setEndDate('');
     setDatePreset('ALL');
@@ -243,33 +219,24 @@ export default function ReportsPage() {
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (debouncedSearch) count++;
-    if (modelNumber) count++;
+    if (debouncedModel) count++;
     if (pickStatus !== 'ACTIVE') count++;
-    if (activeTab === 'ALL_INVENTORY' && processStatus !== 'ALL') count++;
-    if (ageBucket !== 'ALL' && activeTab !== 'CRITICAL_WATCHLIST') count++;
-    if (slaStatus !== 'ALL') count++;
+    if (processStatus !== 'ALL') count++;
+    if (ageBucket !== 'ALL') count++;
     if (startDate || endDate) count++;
     if (sortField !== 'scanned_at' || sortDirection !== 'ASC') count++;
     return count;
   }, [
     debouncedSearch,
-    modelNumber,
+    debouncedModel,
     pickStatus,
     processStatus,
     ageBucket,
-    slaStatus,
     startDate,
     endDate,
     sortField,
     sortDirection,
-    activeTab,
   ]);
-
-  // Critical Aging Units Count (>30d)
-  const criticalAgingCount = useMemo(() => {
-    if (!stats) return 0;
-    return (stats.inventory.buckets['31-60'] || 0) + (stats.inventory.buckets['60+'] || 0);
-  }, [stats]);
 
   // Clipboard copy
   const copyToClipboard = (text: string) => {
@@ -282,24 +249,18 @@ export default function ReportsPage() {
   const handleExportExcel = async () => {
     try {
       setExporting(true);
-      let activeProcess = processStatus;
-      if (activeTab === 'KANBAN_SLA') {
-        activeProcess = kanbanFilter === 'KANBAN_RTN' ? 'KANBAN-RTN' : 'KANBAN_ONLY';
-      } else if (kanbanFilter === 'KANBAN_ONLY') {
-        activeProcess = 'KANBAN_ONLY';
-      } else if (kanbanFilter === 'KANBAN_RTN') {
-        activeProcess = 'KANBAN-RTN';
-      }
 
       const res = await apiPost<{ data: any[]; count: number }>('/report/aging/export', {
         search: debouncedSearch,
         ageBucket,
-        slaStatus,
-        processStatus: activeProcess,
+        slaStatus: 'ALL',
+        processStatus,
         pickStatus,
-        modelNumber,
+        modelNumber: debouncedModel,
         startDate: startDate || null,
         endDate: endDate || null,
+        sortField,
+        sortDirection,
       });
 
       const records = res.data || [];
@@ -325,40 +286,29 @@ export default function ReportsPage() {
         });
       };
 
-      // Clean, professional inventory data table with standardized headers
+      // Clean, professional inventory data table matching UI columns exactly
       const tableRows = records.map((r, index) => {
-        const isKanban = r.is_kanban === 'YES' || r.is_kanban === true;
+        const isKanban = r.is_kanban === 'YES' || r.is_kanban === true || String(r.process_status || '').toUpperCase().includes('KANBAN');
         const scannedDate = r.scanned_at ? new Date(r.scanned_at) : null;
         const birthDate = r.birth_date && r.birth_date !== 'N/A' ? new Date(r.birth_date) : null;
         const ageDays = typeof r.kardex_age_days === 'number' ? r.kardex_age_days : (parseInt(r.kardex_age_days, 10) || 0);
         const ageHours = typeof r.kardex_age_hours === 'number' ? r.kardex_age_hours : (parseInt(r.kardex_age_hours, 10) || 0);
+        const birthAgeDays = r.birth_age_days !== null && r.birth_age_days !== undefined && r.birth_age_days !== 'N/A' ? `${r.birth_age_days} Days Old` : 'No Birth Date';
+        const storageKanbanAging = isKanban ? `KANBAN-IN: ${ageDays}d ${ageHours}h` : `${ageDays}d ${ageHours}h`;
 
         return {
           'SL NO': index + 1,
           'SERIAL NUMBER': r.serial_number || 'N/A',
           'MODEL NUMBER': r.model_number || 'N/A',
           'CARRIER HU ID': r.hu_id || 'N/A',
-          'BIN TYPE': r.bin_type || 'N/A',
           'COMPARTMENT NO': r.compartment_number !== null && r.compartment_number !== undefined ? r.compartment_number : 'N/A',
-          'SLOT STATUS': r.compartment_status || 'N/A',
-          'STOCK STATUS': r.pick_status || 'AVAILABLE',
           'PROCESS FLOW': r.process_status || 'N/A',
           'PV STATUS': r.pv_status || 'PASS',
-          'STORAGE AGE (DAYS)': ageDays,
-          'STORAGE AGE (HOURS)': ageHours,
-          'TOTAL DWELL TIME': `${ageDays}d ${ageHours}h`,
-          'AGING BUCKET': r.age_bucket || 'N/A',
-          'IS KANBAN': isKanban ? 'YES' : 'NO',
-          'KANBAN SLA STATUS': isKanban ? (r.kanban_sla_status || 'NORMAL') : 'N/A',
-          'KANBAN DWELL (HOURS)': isKanban && r.kanban_dwell_hours !== null && r.kanban_dwell_hours !== undefined ? r.kanban_dwell_hours : 'N/A',
-          'SCANNED DATE & TIME': scannedDate ? scannedDate.toLocaleString() : 'N/A',
-          'SCANNED BY OPERATOR': r.scanned_by || 'SYSTEM',
+          'STORAGE & KANBAN AGING': storageKanbanAging,
+          'INBOUND DATE & TIME': scannedDate ? scannedDate.toLocaleString() : 'N/A',
+          'SMT BIRTH AGING': birthAgeDays,
           'SMT BIRTH DATE': birthDate ? birthDate.toLocaleDateString() : 'N/A',
-          'BOARD BIRTH AGE (DAYS)': r.birth_age_days !== null && r.birth_age_days !== undefined ? r.birth_age_days : 'N/A',
-          'SOURCE PO FILE': r.po_file_name || 'N/A',
-          'KARDEX MACHINE ORDER FILE': r.kardex_file_name || 'N/A',
-          'PICK ORDER ID': r.pick_id !== null && r.pick_id !== undefined ? r.pick_id : 'N/A',
-          'PICKED DATE & TIME': r.picked_at || 'N/A',
+          'STOCK STATUS': r.pick_status || 'AVAILABLE',
         };
       });
 
@@ -432,23 +382,15 @@ export default function ReportsPage() {
             // Center align for numbers, IDs, dates, and status badges
             const centerColumns = [
               'SL NO',
+              'CARRIER HU ID',
               'COMPARTMENT NO',
-              'SLOT STATUS',
-              'STOCK STATUS',
               'PROCESS FLOW',
               'PV STATUS',
-              'STORAGE AGE (DAYS)',
-              'STORAGE AGE (HOURS)',
-              'TOTAL DWELL TIME',
-              'AGING BUCKET',
-              'IS KANBAN',
-              'KANBAN SLA STATUS',
-              'KANBAN DWELL (HOURS)',
-              'SCANNED DATE & TIME',
+              'STORAGE & KANBAN AGING',
+              'INBOUND DATE & TIME',
+              'SMT BIRTH AGING',
               'SMT BIRTH DATE',
-              'BOARD BIRTH AGE (DAYS)',
-              'PICK ORDER ID',
-              'PICKED DATE & TIME',
+              'STOCK STATUS',
             ];
             if (centerColumns.includes(colName)) {
               alignH = 'center';
@@ -479,39 +421,51 @@ export default function ReportsPage() {
                 fontColor = '991B1B';
                 isBold = true;
               }
-            } else if (colName === 'KANBAN SLA STATUS') {
-              if (cellValue === 'NORMAL') {
-                bgColor = 'D1FAE5';
-                fontColor = '065F46';
+            } else if (colName === 'STORAGE & KANBAN AGING') {
+              if (cellValue.includes('KANBAN')) {
+                bgColor = 'F3E8FF'; // Soft purple for Kanban
+                fontColor = '7E22CE';
                 isBold = true;
-              } else if (cellValue === 'ATTENTION') {
-                bgColor = 'FEF3C7';
-                fontColor = '92400E';
-                isBold = true;
-              } else if (cellValue === 'WARNING') {
-                bgColor = 'FFEDD5';
-                fontColor = '9A3412';
-                isBold = true;
-              } else if (cellValue === 'OVERDUE') {
-                bgColor = 'FFE4E6';
-                fontColor = '9F1239';
-                isBold = true;
+              } else {
+                bgColor = 'F8FAFC';
+                fontColor = '334155';
               }
-            } else if (colName === 'AGING BUCKET') {
-              if (cellValue.includes('31-60')) {
-                bgColor = 'FFEDD5';
-                fontColor = '9A3412';
-                isBold = true;
-              } else if (cellValue.includes('60+')) {
-                bgColor = 'FEE2E2';
-                fontColor = '991B1B';
-                isBold = true;
-              }
-            } else if (colName === 'SLOT STATUS') {
-              if (cellValue === 'OCCUPIED') {
-                bgColor = 'EFF6FF';
+            } else if (colName === 'SMT BIRTH AGING') {
+              if (!cellValue.includes('No Birth')) {
+                bgColor = 'EFF6FF'; // Soft Tech Blue
                 fontColor = '1D4ED8';
+                isBold = true;
               }
+            } else if (colName === 'PROCESS FLOW') {
+              if (cellValue.includes('RTN')) {
+                bgColor = 'F3E8FF'; // Soft Violet for Return
+                fontColor = '7E22CE';
+                isBold = true;
+              } else if (cellValue.includes('OUT')) {
+                bgColor = 'FFEDD5'; // Warm Amber/Orange for Kanban Out
+                fontColor = 'C2410C';
+                isBold = true;
+              } else if (cellValue.includes('KANBAN') || cellValue.includes('IN')) {
+                bgColor = 'DCFCE7'; // Fresh Mint Green for Kanban In
+                fontColor = '15803D';
+                isBold = true;
+              } else {
+                bgColor = 'EFF6FF'; // Tech Blue for Standard Put
+                fontColor = '1D4ED8';
+                isBold = true;
+              }
+            } else if (colName === 'CARRIER HU ID') {
+              bgColor = 'F1F5F9'; // Cool Slate
+              fontColor = '0F172A';
+              isBold = true;
+            } else if (colName === 'BIN TYPE') {
+              bgColor = 'FEF3C7'; // Amber ESD Safe
+              fontColor = '92400E';
+              isBold = true;
+            } else if (colName === 'COMPARTMENT NO') {
+              bgColor = 'ECFDF5'; // Light Emerald
+              fontColor = '047857';
+              isBold = true;
             }
 
             masterSheet[cellRef].s = {
@@ -543,7 +497,7 @@ export default function ReportsPage() {
 
       // Generate timestamped file name
       const dateTag = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
-      const fileName = `JBL_Kardex_Inventory_${activeTab}_${dateTag}.xlsx`;
+      const fileName = `JBL_Kardex_Inventory_${dateTag}.xlsx`;
       XLSX.writeFile(workbook, fileName);
     } catch (err) {
       console.error('Excel Export Failed:', err);
@@ -679,33 +633,160 @@ export default function ReportsPage() {
         /* KPI Cards Grid */
         .kpi-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-          gap: 0.85rem;
-          margin-bottom: 1.25rem;
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+          gap: 0.6rem;
+          margin-bottom: 0.85rem;
+        }
+
+        @media (max-width: 1100px) {
+          .kpi-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+        }
+
+        @media (max-width: 640px) {
+          .kpi-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
         }
 
         .kpi-card {
-          background: #ffffff;
           border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          padding: 1rem 1.15rem;
-          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03), 0 2px 6px rgba(15, 23, 42, 0.02);
-          transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+          border-radius: 10px;
+          padding: 0.55rem 0.8rem;
+          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+          transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
           display: flex;
           align-items: center;
-          gap: 14px;
+          gap: 10px;
+          cursor: pointer;
+          user-select: none;
+          position: relative;
         }
 
         .kpi-card:hover {
           transform: translateY(-2px);
-          box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+        }
+
+        /* 1. Total Parts - Sky Blue Theme */
+        .kpi-card-blue {
+          background: linear-gradient(135deg, #f0f7ff 0%, #e0effe 100%);
+          border-color: #bfdbfe;
+        }
+        .kpi-card-blue:hover {
+          border-color: #60a5fa;
+          background: linear-gradient(135deg, #e8f3fe 0%, #d5e9fe 100%);
+          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.12);
+        }
+        .kpi-card-blue.active {
+          border-color: #2563eb;
+          box-shadow: 0 0 0 2px #2563eb, 0 4px 12px rgba(37, 99, 235, 0.18);
+        }
+        .kpi-card-blue .kpi-label { color: #1e40af; }
+        .kpi-card-blue .kpi-value { color: #1d4ed8; }
+        .kpi-card-blue .kpi-subtext { color: #3b82f6; }
+        .kpi-card-blue .kpi-icon-box {
+          background: #ffffff;
+          color: #2563eb;
+          box-shadow: 0 2px 5px rgba(37, 99, 235, 0.15);
+        }
+
+        /* 2. Available - Fresh Mint Green Theme */
+        .kpi-card-emerald {
+          background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+          border-color: #bbf7d0;
+        }
+        .kpi-card-emerald:hover {
+          border-color: #4ade80;
+          background: linear-gradient(135deg, #e6fced 0%, #d0f9dc 100%);
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.12);
+        }
+        .kpi-card-emerald.active {
+          border-color: #059669;
+          box-shadow: 0 0 0 2px #059669, 0 4px 12px rgba(5, 150, 105, 0.18);
+        }
+        .kpi-card-emerald .kpi-label { color: #166534; }
+        .kpi-card-emerald .kpi-value { color: #15803d; }
+        .kpi-card-emerald .kpi-subtext { color: #16a34a; }
+        .kpi-card-emerald .kpi-icon-box {
+          background: #ffffff;
+          color: #059669;
+          box-shadow: 0 2px 5px rgba(16, 185, 129, 0.15);
+        }
+
+        /* 3. Hold - Warm Amber Gold Theme */
+        .kpi-card-amber {
+          background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+          border-color: #fde68a;
+        }
+        .kpi-card-amber:hover {
+          border-color: #fbbf24;
+          background: linear-gradient(135deg, #fef8dd 0%, #fdeebc 100%);
+          box-shadow: 0 4px 12px rgba(217, 119, 6, 0.12);
+        }
+        .kpi-card-amber.active {
+          border-color: #d97706;
+          box-shadow: 0 0 0 2px #d97706, 0 4px 12px rgba(217, 119, 6, 0.18);
+        }
+        .kpi-card-amber .kpi-label { color: #92400e; }
+        .kpi-card-amber .kpi-value { color: #b45309; }
+        .kpi-card-amber .kpi-subtext { color: #d97706; }
+        .kpi-card-amber .kpi-icon-box {
+          background: #ffffff;
+          color: #d97706;
+          box-shadow: 0 2px 5px rgba(217, 119, 6, 0.15);
+        }
+
+        /* 4. Picked - Cool Slate Gray Theme */
+        .kpi-card-slate {
+          background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
           border-color: #cbd5e1;
+        }
+        .kpi-card-slate:hover {
+          border-color: #94a3b8;
+          background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+          box-shadow: 0 4px 12px rgba(71, 85, 105, 0.12);
+        }
+        .kpi-card-slate.active {
+          border-color: #475569;
+          box-shadow: 0 0 0 2px #475569, 0 4px 12px rgba(71, 85, 105, 0.18);
+        }
+        .kpi-card-slate .kpi-label { color: #475569; }
+        .kpi-card-slate .kpi-value { color: #1e293b; }
+        .kpi-card-slate .kpi-subtext { color: #64748b; }
+        .kpi-card-slate .kpi-icon-box {
+          background: #ffffff;
+          color: #475569;
+          box-shadow: 0 2px 5px rgba(71, 85, 105, 0.15);
+        }
+
+        /* 5. Returns - Royal Purple Theme */
+        .kpi-card-purple {
+          background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+          border-color: #e9d5ff;
+        }
+        .kpi-card-purple:hover {
+          border-color: #c084fc;
+          background: linear-gradient(135deg, #f5e8ff 0%, #ebd5ff 100%);
+          box-shadow: 0 4px 12px rgba(124, 58, 237, 0.12);
+        }
+        .kpi-card-purple.active {
+          border-color: #7c3aed;
+          box-shadow: 0 0 0 2px #7c3aed, 0 4px 12px rgba(124, 58, 237, 0.18);
+        }
+        .kpi-card-purple .kpi-label { color: #6b21a8; }
+        .kpi-card-purple .kpi-value { color: #7e22ce; }
+        .kpi-card-purple .kpi-subtext { color: #9333ea; }
+        .kpi-card-purple .kpi-icon-box {
+          background: #ffffff;
+          color: #7c3aed;
+          box-shadow: 0 2px 5px rgba(124, 58, 237, 0.15);
         }
 
         .kpi-icon-box {
-          width: 44px;
-          height: 44px;
-          border-radius: 10px;
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -715,6 +796,7 @@ export default function ReportsPage() {
         .kpi-icon-blue { background: #eff6ff; color: #2563eb; }
         .kpi-icon-amber { background: #fffbeb; color: #d97706; }
         .kpi-icon-purple { background: #faf5ff; color: #7c3aed; }
+        .kpi-icon-slate { background: #f1f5f9; color: #475569; }
         .kpi-icon-rose { background: #fef2f2; color: #dc2626; }
         .kpi-icon-emerald { background: #ecfdf5; color: #059669; }
 
@@ -724,30 +806,30 @@ export default function ReportsPage() {
         }
 
         .kpi-label {
-          font-size: 0.725rem;
+          font-size: 0.65rem;
           font-weight: 700;
           text-transform: uppercase;
           letter-spacing: 0.04em;
           color: #64748b;
-          margin-bottom: 2px;
+          margin-bottom: 1px;
         }
 
         .kpi-value {
-          font-size: 1.4rem;
-          font-weight: 800;
+          font-size: 1.1rem;
+          font-weight: 700;
           color: #0f172a;
           margin: 0;
           line-height: 1.15;
-          letter-spacing: -0.02em;
+          letter-spacing: -0.01em;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
 
         .kpi-subtext {
-          font-size: 0.725rem;
+          font-size: 0.675rem;
           color: #64748b;
-          margin-top: 3px;
+          margin-top: 1px;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -998,9 +1080,18 @@ export default function ReportsPage() {
           white-space: nowrap;
         }
 
-        .btn-reset-filters:hover {
+        .btn-reset-filters:hover:not(:disabled) {
           background: #fee2e2;
           border-color: #fca5a5;
+        }
+
+        .btn-reset-filters:disabled,
+        .btn-reset-filters.disabled {
+          background: #f8fafc;
+          color: #94a3b8;
+          border-color: #e2e8f0;
+          cursor: not-allowed;
+          opacity: 0.65;
         }
 
         .btn-brand-solid {
@@ -1179,30 +1270,67 @@ export default function ReportsPage() {
           letter-spacing: 0.02em;
         }
 
-        /* Location Tag */
-        .location-link {
+        /* Location Chips */
+        .location-container {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 5px;
+        }
+
+        .hu-chip {
           display: inline-flex;
           align-items: center;
-          gap: 6px;
-          color: #2563eb;
-          text-decoration: none;
-          font-weight: 700;
-          transition: all 0.15s ease;
-        }
-
-        .location-link:hover {
-          color: #1d4ed8;
-          text-decoration: none;
-        }
-
-        .slot-badge {
+          gap: 4px;
           background: #0f172a;
-          color: #ffffff;
-          padding: 2px 6px;
+          color: #38bdf8;
+          padding: 2.5px 8px;
+          border-radius: 6px;
+          font-size: 0.725rem;
+          font-weight: 700;
+          text-decoration: none;
+          transition: all 0.15s ease;
+          border: 1px solid #1e293b;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+        }
+
+        .hu-chip:hover {
+          background: #1e293b;
+          color: #7dd3fc;
+          transform: translateY(-1px);
+        }
+
+        .bin-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          background: #fef3c7;
+          color: #92400e;
+          border: 1px solid #fde68a;
+          padding: 2px 7px;
           border-radius: 5px;
           font-size: 0.7rem;
+          font-weight: 700;
+          letter-spacing: 0.02em;
+        }
+
+        .slot-chip {
+          display: inline-flex;
+          align-items: center;
+          background: #ecfdf5;
+          color: #047857;
+          border: 1px solid #a7f3d0;
+          padding: 2px 6px;
+          border-radius: 5px;
+          font-size: 0.725rem;
           font-weight: 800;
-          letter-spacing: 0.03em;
+          font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        }
+
+        .unassigned-chip {
+          color: #94a3b8;
+          font-style: italic;
+          font-size: 0.75rem;
         }
 
         /* Badges */
@@ -1236,80 +1364,75 @@ export default function ReportsPage() {
           border: 1px solid #cbd5e1;
         }
 
-        .badge-kanban {
+        /* Distinct Process Flow Badges */
+        .badge-kanban-in {
+          background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+          color: #047857;
+          border: 1px solid #6ee7b7;
+        }
+
+        .badge-kanban-out {
+          background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+          color: #c2410c;
+          border: 1px solid #fdba74;
+        }
+
+        .badge-kanban-rtn {
+          background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+          color: #7e22ce;
+          border: 1px solid #d8b4fe;
+        }
+
+        .badge-put {
           background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
           color: #1d4ed8;
           border: 1px solid #bfdbfe;
         }
 
-        .badge-rtn {
-          background: linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%);
-          color: #9333ea;
-          border: 1px solid #f0abfc;
+        .pv-pass {
+          background: #ecfdf5;
+          color: #047857;
+          border: 1px solid #a7f3d0;
         }
 
-        .badge-put {
-          background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-          color: #475569;
+        .pv-fail {
+          background: #fef2f2;
+          color: #dc2626;
+          border: 1px solid #fecaca;
+        }
+
+        .badge-storage-age {
+          background: #f8fafc;
+          color: #334155;
           border: 1px solid #cbd5e1;
+          font-weight: 600;
         }
 
-        .age-fresh {
-          background: #ecfdf5;
-          color: #047857;
-          border: 1px solid #a7f3d0;
+        .badge-kanban-age {
+          background: #faf5ff;
+          color: #7c3aed;
+          border: 1px solid #e9d5ff;
+          font-weight: 700;
         }
 
-        .age-normal {
+        .badge-birth-age {
           background: #eff6ff;
           color: #1d4ed8;
           border: 1px solid #bfdbfe;
+          font-weight: 700;
         }
 
-        .age-aging {
-          background: #fffbeb;
-          color: #b45309;
-          border: 1px solid #fde68a;
+        .inbound-date-subtext {
+          font-size: 0.7rem;
+          color: #64748b;
+          margin-top: 3px;
+          font-weight: 500;
         }
 
-        .age-high {
-          background: #fff7ed;
-          color: #c2410c;
-          border: 1px solid #fed7aa;
-        }
-
-        .age-critical {
-          background: #fef2f2;
-          color: #dc2626;
-          font-weight: 800;
-          border: 1.5px solid #fca5a5;
-          box-shadow: 0 0 6px rgba(220, 38, 38, 0.15);
-        }
-
-        .sla-normal {
-          background: #ecfdf5;
-          color: #047857;
-          border: 1px solid #a7f3d0;
-        }
-
-        .sla-attention {
-          background: #eff6ff;
-          color: #1d4ed8;
-          border: 1px solid #bfdbfe;
-        }
-
-        .sla-warning {
-          background: #fffbeb;
-          color: #b45309;
-          border: 1px solid #fde68a;
-        }
-
-        .sla-overdue {
-          background: #fef2f2;
-          color: #dc2626;
-          font-weight: 800;
-          border: 1.5px solid #f87171;
-          animation: pulse 2s infinite;
+        .no-birth-chip {
+          color: #94a3b8;
+          font-size: 0.75rem;
+          font-style: italic;
         }
 
         .status-dot {
@@ -1405,7 +1528,7 @@ export default function ReportsPage() {
           <div>
             <h1 className="page-title">Inventory Aging & Dwell Analytics</h1>
             <p className="page-subtitle">
-              Real-time FIFO storage duration, Kanban dwell SLA tracking, and component birth aging
+              Real-time FIFO storage duration and component birth aging
             </p>
           </div>
         </div>
@@ -1438,132 +1561,117 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* Report Perspectives / Mode Tabs */}
-      <div className="tabs-nav-bar">
-        <button
-          className={`tab-btn ${activeTab === 'ALL_INVENTORY' ? 'active' : ''}`}
-          onClick={() => handleTabChange('ALL_INVENTORY')}
-        >
-          <Layers size={15} /> All Inventory Aging
-          <span className="tab-badge">{stats?.inventory.totalActive ?? 0}</span>
-        </button>
-
-        <button
-          className={`tab-btn ${activeTab === 'KANBAN_SLA' ? 'active' : ''}`}
-          onClick={() => handleTabChange('KANBAN_SLA')}
-        >
-          <Zap size={15} /> Kanban Dwell & SLA Tracking
-          <span className="tab-badge">{stats?.kanban.totalActive ?? 0}</span>
-        </button>
-
-        <button
-          className={`tab-btn ${activeTab === 'CRITICAL_WATCHLIST' ? 'active' : ''}`}
-          onClick={() => handleTabChange('CRITICAL_WATCHLIST')}
-        >
-          <AlertTriangle size={15} /> Critical Aging Watchlist (&gt;30d)
-          <span className={`tab-badge ${criticalAgingCount > 0 ? 'tab-badge-alert' : ''}`}>
-            {criticalAgingCount}
-          </span>
-        </button>
-      </div>
-
       {/* KPI Summary Cards */}
       <div className="kpi-grid">
-        {/* Total In Kardex */}
-        <div className="kpi-card">
-          <div className="kpi-icon-box kpi-icon-blue">
-            <Package size={22} />
+        {/* 1. Total Parts */}
+        <div
+          className={`kpi-card kpi-card-blue ${
+            pickStatus === 'ACTIVE' && processStatus === 'ALL'
+              ? 'active'
+              : ''
+          }`}
+          onClick={() => {
+            setPickStatus('ACTIVE');
+            setProcessStatus('ALL');
+            setPage(1);
+          }}
+          title="Click to show all active stock in Kardex"
+        >
+          <div className="kpi-icon-box">
+            <Package size={17} />
           </div>
           <div className="kpi-content">
-            <div className="kpi-label">Active Kardex Stock</div>
+            <div className="kpi-label">Total Parts</div>
             <div className="kpi-value">{stats?.inventory.totalActive ?? 0}</div>
             <div className="kpi-subtext">
-              {stats?.inventory.totalAvailable ?? 0} Available | {stats?.inventory.totalHold ?? 0} Hold
+              Oldest: {stats?.inventory.oldestUnit ? `${stats.inventory.oldestUnit.age_days}d` : '0d'} in Kardex
             </div>
           </div>
         </div>
 
-        {/* Oldest Unit (FIFO priority) */}
-        <div className="kpi-card">
-          <div className="kpi-icon-box kpi-icon-amber">
-            <Clock size={22} />
+        {/* 2. Available */}
+        <div
+          className={`kpi-card kpi-card-emerald ${pickStatus === 'AVAILABLE' ? 'active' : ''}`}
+          onClick={() => {
+            setPickStatus((prev) => (prev === 'AVAILABLE' ? 'ACTIVE' : 'AVAILABLE'));
+            setPage(1);
+          }}
+          title="Click to filter by Available stock"
+        >
+          <div className="kpi-icon-box">
+            <CheckCircle2 size={17} />
           </div>
           <div className="kpi-content">
-            <div className="kpi-label">Oldest in Kardex (FIFO)</div>
-            <div className="kpi-value">
-              {stats?.inventory.oldestUnit ? `${stats.inventory.oldestUnit.age_days} Days Old` : 'N/A'}
-            </div>
-            <div className="kpi-subtext" style={{ fontFamily: 'monospace' }}>
-              {stats?.inventory.oldestUnit?.serial_number
-                ? `${stats.inventory.oldestUnit.serial_number} (${stats.inventory.oldestUnit.model_number})`
-                : 'None in stock'}
-            </div>
+            <div className="kpi-label">Available</div>
+            <div className="kpi-value">{stats?.inventory.totalAvailable ?? 0}</div>
+            <div className="kpi-subtext">Ready for pick</div>
           </div>
         </div>
 
-        {/* Kanban Active Parts */}
-        <div className="kpi-card">
-          <div className="kpi-icon-box kpi-icon-purple">
-            <Boxes size={22} />
+        {/* 3. Hold */}
+        <div
+          className={`kpi-card kpi-card-amber ${pickStatus === 'HOLD' ? 'active' : ''}`}
+          onClick={() => {
+            setPickStatus((prev) => (prev === 'HOLD' ? 'ACTIVE' : 'HOLD'));
+            setPage(1);
+          }}
+          title="Click to filter by Hold / QA stock"
+        >
+          <div className="kpi-icon-box">
+            <AlertTriangle size={17} />
           </div>
           <div className="kpi-content">
-            <div className="kpi-label">Active Kanban Parts</div>
+            <div className="kpi-label">Hold</div>
+            <div className="kpi-value">{stats?.inventory.totalHold ?? 0}</div>
+            <div className="kpi-subtext">QA / Quarantined</div>
+          </div>
+        </div>
+
+        {/* 4. Picked */}
+        <div
+          className={`kpi-card kpi-card-slate ${pickStatus === 'PICKED' ? 'active' : ''}`}
+          onClick={() => {
+            setPickStatus((prev) => (prev === 'PICKED' ? 'ACTIVE' : 'PICKED'));
+            setPage(1);
+          }}
+          title="Click to filter by Picked orders"
+        >
+          <div className="kpi-icon-box">
+            <Boxes size={17} />
+          </div>
+          <div className="kpi-content">
+            <div className="kpi-label">Picked</div>
+            <div className="kpi-value">{stats?.inventory.totalPicked ?? 0}</div>
+            <div className="kpi-subtext">Retrieved units</div>
+          </div>
+        </div>
+
+        {/* 5. Kanban In */}
+        <div
+          className={`kpi-card kpi-card-purple ${
+            processStatus === 'KANBAN_ONLY' || processStatus === 'KANBAN-IN' ? 'active' : ''
+          }`}
+          onClick={() => {
+            const isKanban = processStatus === 'KANBAN_ONLY' || processStatus === 'KANBAN-IN';
+            if (isKanban) {
+              setProcessStatus('ALL');
+              setPickStatus('ACTIVE');
+            } else {
+              setProcessStatus('KANBAN_ONLY');
+              setPickStatus('ACTIVE');
+            }
+            setPage(1);
+          }}
+          title="Click to filter by Kanban In parts"
+        >
+          <div className="kpi-icon-box">
+            <Boxes size={17} />
+          </div>
+          <div className="kpi-content">
+            <div className="kpi-label">Kanban In</div>
             <div className="kpi-value">{stats?.kanban.totalActive ?? 0}</div>
             <div className="kpi-subtext">
-              {stats?.kanban.returnsCount ?? 0} Returns (KANBAN-RTN)
-            </div>
-          </div>
-        </div>
-
-        {/* Kanban SLA Status */}
-        <div className="kpi-card">
-          <div
-            className={`kpi-icon-box ${
-              (stats?.kanban.sla.overdue ?? 0) > 0 ? 'kpi-icon-rose' : 'kpi-icon-emerald'
-            }`}
-          >
-            {(stats?.kanban.sla.overdue ?? 0) > 0 ? (
-              <ShieldAlert size={22} />
-            ) : (
-              <ShieldCheck size={22} />
-            )}
-          </div>
-          <div className="kpi-content">
-            <div className="kpi-label">Kanban SLA Health</div>
-            <div
-              className="kpi-value"
-              style={{
-                color: (stats?.kanban.sla.overdue ?? 0) > 0 ? '#dc2626' : '#059669',
-              }}
-            >
-              {(stats?.kanban.sla.overdue ?? 0) > 0
-                ? `${stats?.kanban.sla.overdue} Overdue`
-                : '100% In SLA'}
-            </div>
-            <div className="kpi-subtext">
-              {stats?.kanban.sla.normal ?? 0} Normal | {stats?.kanban.sla.attention ?? 0} Attn |{' '}
-              {stats?.kanban.sla.warning ?? 0} Warn
-            </div>
-          </div>
-        </div>
-
-        {/* Critical Aging (>30 Days) */}
-        <div className="kpi-card">
-          <div
-            className={`kpi-icon-box ${criticalAgingCount > 0 ? 'kpi-icon-rose' : 'kpi-icon-blue'}`}
-          >
-            <AlertCircle size={22} />
-          </div>
-          <div className="kpi-content">
-            <div className="kpi-label">Critical Aged (&gt;30d)</div>
-            <div
-              className="kpi-value"
-              style={{ color: criticalAgingCount > 0 ? '#b91c1c' : '#0f172a' }}
-            >
-              {criticalAgingCount}
-            </div>
-            <div className="kpi-subtext">
-              Priority stock for FIFO picking &amp; assembly
+              Oldest: {stats?.kanban.oldestUnit ? `${stats.kanban.oldestUnit.age_days}d` : 'None'} | {stats?.kanban.returnsCount ?? 0} RTN
             </div>
           </div>
         </div>
@@ -1573,13 +1681,13 @@ export default function ReportsPage() {
       <div className="filters-container">
         {/* Row 1: Search & Core Facets */}
         <div className="filters-primary-row">
-          {/* Integrated Search Box */}
+          {/* Integrated Serial Search Box */}
           <div className="search-box">
             <Search size={15} color="#64748b" style={{ flexShrink: 0 }} />
             <input
               type="text"
               className="search-input"
-              placeholder="Search serial number or model..."
+              placeholder="Search serial number..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -1595,17 +1703,27 @@ export default function ReportsPage() {
             )}
           </div>
 
-          {/* Model Filter */}
-          <input
-            type="text"
-            className="filter-input"
-            placeholder="Model Number"
-            value={modelNumber}
-            onChange={(e) => {
-              setModelNumber(e.target.value);
-              setPage(1);
-            }}
-          />
+          {/* Model Filter with Icon & Clear */}
+          <div className="search-box">
+            <Tag size={14} color="#64748b" style={{ flexShrink: 0 }} />
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Model Number..."
+              value={modelNumber}
+              onChange={(e) => setModelNumber(e.target.value)}
+            />
+            {modelNumber && (
+              <button
+                type="button"
+                className="search-clear-btn"
+                onClick={() => setModelNumber('')}
+                title="Clear Model"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
 
           {/* Pick Status Filter */}
           <select
@@ -1624,91 +1742,58 @@ export default function ReportsPage() {
             <option value="ALL">All Statuses</option>
           </select>
 
-          {/* Storage Age Bucket or Kanban SLA Tier */}
-          {activeTab !== 'KANBAN_SLA' ? (
-            <select
-              className="filter-select"
-              value={ageBucket}
-              onChange={(e) => {
-                setAgeBucket(e.target.value as AgeBucket);
-                setPage(1);
-              }}
-              title="Filter by Kardex storage age"
-            >
-              <option value="ALL">All Storage Ages</option>
-              <option value="0-7">0-7 Days (Fresh)</option>
-              <option value="8-15">8-15 Days</option>
-              <option value="16-30">16-30 Days</option>
-              <option value="31-60">31-60 Days</option>
-              <option value="60+">60+ Days (Critical)</option>
-              <option value="30+">30+ Days (All Aged)</option>
-            </select>
-          ) : (
-            <select
-              className="filter-select"
-              value={slaStatus}
-              onChange={(e) => {
-                setSlaStatus(e.target.value as KanbanSlaStatus);
-                setPage(1);
-              }}
-              title="Filter by Kanban SLA tier"
-            >
-              <option value="ALL">All SLA Tiers</option>
-              <option value="NORMAL">&lt; 24h Normal</option>
-              <option value="ATTENTION">24-48h Attention</option>
-              <option value="WARNING">48-72h Warning</option>
-              <option value="OVERDUE">&gt; 72h Overdue</option>
-            </select>
-          )}
+          {/* Storage Duration Filter */}
+          <select
+            className="filter-select"
+            value={ageBucket}
+            onChange={(e) => handleAgeBucketChange(e.target.value as AgeBucket)}
+            title="Filter by Kardex storage duration"
+          >
+            <option value="ALL">All Storage Ages</option>
+            <option value="0-7">0 - 7 Days</option>
+            <option value="8-15">8 - 15 Days</option>
+            <option value="16-30">16 - 30 Days</option>
+            <option value="31-60">31 - 60 Days</option>
+            <option value="60+">60+ Days</option>
+          </select>
 
-          {/* Process Filter (if in All Inventory or Watchlist) */}
-          {activeTab !== 'KANBAN_SLA' ? (
-            <select
-              className="filter-select"
-              value={processStatus}
-              onChange={(e) => {
-                setProcessStatus(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="ALL">All Inbound Processes</option>
-              <option value="KANBAN-IN">KANBAN-IN</option>
-              <option value="KANBAN-RTN">KANBAN-RTN (Returns)</option>
-              <option value="STANDARD_PUT">Standard PUT</option>
-              <option value="KANBAN_ONLY">Any Kanban</option>
-            </select>
-          ) : (
-            /* Kanban Specific Sub-filter */
-            <select
-              className="filter-select"
-              value={kanbanFilter}
-              onChange={(e) => {
-                setKanbanFilter(e.target.value as any);
-                setPage(1);
-              }}
-            >
-              <option value="KANBAN_ONLY">All Kanban Inbound</option>
-              <option value="KANBAN_RTN">Returns Only (KANBAN-RTN)</option>
-            </select>
-          )}
+          {/* Process Filter */}
+          <select
+            className="filter-select"
+            value={processStatus}
+            onChange={(e) => {
+              setProcessStatus(e.target.value);
+              setPage(1);
+            }}
+            title="Filter by inbound process type"
+          >
+            <option value="ALL">All Inbound Processes</option>
+            <option value="KANBAN-IN">KANBAN-IN</option>
+            <option value="KANBAN-RTN">KANBAN-RTN (Returns)</option>
+            <option value="STANDARD_PUT">Standard PUT</option>
+            <option value="KANBAN_ONLY">Any Kanban</option>
+          </select>
 
           {/* Sort Control */}
           <select
             className="filter-select"
-            value={`${sortField}_${sortDirection}`}
+            value={`${sortField}:${sortDirection}`}
             onChange={(e) => {
-              const [f, d] = e.target.value.split('_');
+              const [f, d] = e.target.value.split(':');
               setSortField(f);
               setSortDirection(d as 'ASC' | 'DESC');
               setPage(1);
             }}
             title="Sort records"
           >
-            <option value="scanned_at_ASC">FIFO Priority (Oldest Inbound First)</option>
-            <option value="scanned_at_DESC">Newest Inbound First</option>
-            <option value="birth_date_ASC">Oldest PCB (SMT Birth Date)</option>
-            <option value="serial_number_ASC">Serial Number (A → Z)</option>
-            <option value="model_number_ASC">Model Number (A → Z)</option>
+            <option value="scanned_at:ASC">FIFO Priority (Oldest Inbound First)</option>
+            <option value="scanned_at:DESC">Newest Inbound First</option>
+            <option value="birth_date:ASC">Oldest PCB (SMT Birth Date)</option>
+            <option value="birth_date:DESC">Newest PCB (SMT Birth Date)</option>
+            <option value="serial_number:ASC">Serial Number (A → Z)</option>
+            <option value="serial_number:DESC">Serial Number (Z → A)</option>
+            <option value="model_number:ASC">Model Number (A → Z)</option>
+            <option value="model_number:DESC">Model Number (Z → A)</option>
           </select>
         </div>
 
@@ -1761,6 +1846,7 @@ export default function ReportsPage() {
                 onChange={(e) => {
                   setStartDate(e.target.value);
                   setDatePreset('ALL');
+                  setAgeBucket('ALL');
                   setPage(1);
                 }}
                 title="Start Date"
@@ -1773,6 +1859,7 @@ export default function ReportsPage() {
                 onChange={(e) => {
                   setEndDate(e.target.value);
                   setDatePreset('ALL');
+                  setAgeBucket('ALL');
                   setPage(1);
                 }}
                 title="End Date"
@@ -1800,17 +1887,16 @@ export default function ReportsPage() {
               Showing {data.length} of {totalItems} records
             </span>
 
-            {/* Reset Filters */}
-            {activeFiltersCount > 0 && (
-              <button
-                type="button"
-                className="btn-reset-filters"
-                onClick={handleResetFilters}
-                title="Reset all active filters"
-              >
-                <RotateCcw size={12} /> Reset ({activeFiltersCount})
-              </button>
-            )}
+            {/* Always-Visible Reset Filters */}
+            <button
+              type="button"
+              className={`btn-reset-filters ${activeFiltersCount === 0 ? 'disabled' : ''}`}
+              onClick={handleResetFilters}
+              disabled={activeFiltersCount === 0}
+              title={activeFiltersCount > 0 ? 'Clear all active filters' : 'Default filters applied'}
+            >
+              <RotateCcw size={12} /> Reset {activeFiltersCount > 0 ? `(${activeFiltersCount})` : ''}
+            </button>
           </div>
         </div>
       </div>
@@ -1848,6 +1934,7 @@ export default function ReportsPage() {
                         setSortField('serial_number');
                         setSortDirection('ASC');
                       }
+                      setPage(1);
                     }}
                   >
                     Serial Number {sortField === 'serial_number' && (sortDirection === 'ASC' ? '↑' : '↓')}
@@ -1861,12 +1948,14 @@ export default function ReportsPage() {
                         setSortField('model_number');
                         setSortDirection('ASC');
                       }
+                      setPage(1);
                     }}
                   >
                     Model {sortField === 'model_number' && (sortDirection === 'ASC' ? '↑' : '↓')}
                   </th>
                   <th>Location (HU / Slot)</th>
-                  <th>Process</th>
+                  <th>Process Flow</th>
+                  <th>PV Status</th>
                   <th
                     className="sortable-th"
                     onClick={() => {
@@ -1876,11 +1965,11 @@ export default function ReportsPage() {
                         setSortField('scanned_at');
                         setSortDirection('ASC');
                       }
+                      setPage(1);
                     }}
                   >
-                    Kardex Storage Age {sortField === 'scanned_at' && (sortDirection === 'ASC' ? '↑' : '↓')}
+                    Storage &amp; Kanban Aging {sortField === 'scanned_at' && (sortDirection === 'ASC' ? '↑' : '↓')}
                   </th>
-                  {activeTab === 'KANBAN_SLA' && <th>Kanban SLA Dwell</th>}
                   <th
                     className="sortable-th"
                     onClick={() => {
@@ -1890,9 +1979,10 @@ export default function ReportsPage() {
                         setSortField('birth_date');
                         setSortDirection('ASC');
                       }
+                      setPage(1);
                     }}
                   >
-                    SMT Birth Date {sortField === 'birth_date' && (sortDirection === 'ASC' ? '↑' : '↓')}
+                    SMT Birth Aging {sortField === 'birth_date' && (sortDirection === 'ASC' ? '↑' : '↓')}
                   </th>
                   <th>Stock Status</th>
                   <th style={{ width: '80px', textAlign: 'center' }}>Audit</th>
@@ -1902,19 +1992,6 @@ export default function ReportsPage() {
                 {data.map((row, index) => {
                   const rowIdx = (page - 1) * pageSize + index + 1;
                   const isCopied = copiedSerial === row.serial_number;
-
-                  // Age bucket visual style
-                  let ageClass = 'age-fresh';
-                  if (row.age_bucket === '8-15') ageClass = 'age-normal';
-                  else if (row.age_bucket === '16-30') ageClass = 'age-aging';
-                  else if (row.age_bucket === '31-60') ageClass = 'age-high';
-                  else if (row.age_bucket === '60+') ageClass = 'age-critical';
-
-                  // Kanban SLA visual style
-                  let slaBadgeClass = 'sla-normal';
-                  if (row.kanban_sla_status === 'ATTENTION') slaBadgeClass = 'sla-attention';
-                  else if (row.kanban_sla_status === 'WARNING') slaBadgeClass = 'sla-warning';
-                  else if (row.kanban_sla_status === 'OVERDUE') slaBadgeClass = 'sla-overdue';
 
                   return (
                     <tr key={row.id}>
@@ -1950,59 +2027,80 @@ export default function ReportsPage() {
                       {/* Location (Handling Unit & Slot) */}
                       <td>
                         {row.hu_id ? (
-                          <Link href={`/app/bins/${row.hu_id}`} className="location-link">
-                            <Box size={14} color="#2563eb" />
-                            <span>{row.hu_id}</span>
-                            {row.compartment_number !== null && (
-                              <span className="slot-badge">
-                                Slot #{String(row.compartment_number).padStart(2, '0')}
+                          <div className="location-container">
+                            <Link href={`/app/bins/${row.hu_id}`} className="hu-chip" title="View Handling Unit Details">
+                              <Box size={12} />
+                              <span>{row.hu_id}</span>
+                            </Link>
+                            {row.compartment_number !== null && row.compartment_number !== undefined && (
+                              <span className="slot-chip" title="Compartment Socket">
+                                #{String(row.compartment_number).padStart(2, '0')}
                               </span>
                             )}
-                          </Link>
+                          </div>
                         ) : (
-                          <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.75rem' }}>
-                            Unassigned
-                          </span>
+                          <span className="unassigned-chip">Unassigned</span>
                         )}
                       </td>
 
-                      {/* Inbound Process */}
+                      {/* Process Flow Badge */}
                       <td>
-                        <span
-                          className={`badge ${
-                            row.process_status?.includes('RTN')
-                              ? 'badge-rtn'
-                              : row.process_status?.includes('KANBAN')
-                              ? 'badge-kanban'
-                              : 'badge-put'
-                          }`}
-                        >
-                          {row.process_status?.includes('RTN') ? (
-                            <RotateCcw size={11} />
-                          ) : row.process_status?.includes('KANBAN') ? (
-                            <Zap size={11} />
+                        {(() => {
+                          const p = (row.process_status || '').toUpperCase();
+                          if (p.includes('RTN')) {
+                            return (
+                              <span className="badge badge-kanban-rtn" title="Kanban Return Flow">
+                                <RotateCcw size={11} /> KANBAN-RTN
+                              </span>
+                            );
+                          } else if (p.includes('OUT')) {
+                            return (
+                              <span className="badge badge-kanban-out" title="Kanban Outbound Flow">
+                                <ArrowUpRight size={11} /> KANBAN-OUT
+                              </span>
+                            );
+                          } else if (p.includes('KANBAN') || p.includes('IN')) {
+                            return (
+                              <span className="badge badge-kanban-in" title="Kanban Inbound Flow">
+                                <ArrowDownRight size={11} /> KANBAN-IN
+                              </span>
+                            );
+                          } else {
+                            return (
+                              <span className="badge badge-put" title="Standard Put Flow">
+                                <Package size={11} /> {row.process_status || 'PUT'}
+                              </span>
+                            );
+                          }
+                        })()}
+                      </td>
+
+                      {/* PV Validation Status */}
+                      <td>
+                        <span className={`badge ${row.pv_status === 'FAIL' ? 'pv-fail' : 'pv-pass'}`}>
+                          {row.pv_status === 'FAIL' ? (
+                            <ShieldAlert size={12} />
                           ) : (
-                            <Package size={11} />
+                            <ShieldCheck size={12} />
                           )}
-                          {row.process_status || 'PUT'}
+                          {row.pv_status || 'PASS'}
                         </span>
                       </td>
 
-                      {/* Kardex Storage Age */}
+                      {/* Storage & Kanban In Aging */}
                       <td>
-                        <span className={`badge ${ageClass}`}>
-                          <Clock size={11} />
-                          {row.kardex_age_days}d {row.kardex_age_hours}h
-                        </span>
+                        {row.is_kanban ? (
+                          <span className="badge badge-kanban-age" title="Kanban Inbound Storage Aging">
+                            <Zap size={11} /> KANBAN-IN: {row.kardex_age_days}d {row.kardex_age_hours}h
+                          </span>
+                        ) : (
+                          <span className="badge badge-storage-age" title="Standard Storage Aging">
+                            <Clock size={11} style={{ color: '#64748b' }} />
+                            {row.kardex_age_days}d {row.kardex_age_hours}h
+                          </span>
+                        )}
                         {row.scanned_at && (
-                          <div
-                            style={{
-                              fontSize: '0.7rem',
-                              color: '#64748b',
-                              marginTop: '3px',
-                              fontWeight: 500,
-                            }}
-                          >
+                          <div className="inbound-date-subtext">
                             Inbound:{' '}
                             {new Date(row.scanned_at).toLocaleDateString([], {
                               day: '2-digit',
@@ -2013,50 +2111,24 @@ export default function ReportsPage() {
                         )}
                       </td>
 
-                      {/* Kanban SLA Column (Visible in Kanban SLA Tab) */}
-                      {activeTab === 'KANBAN_SLA' && (
-                        <td>
-                          {row.kanban_sla_status ? (
-                            <span className={`badge ${slaBadgeClass}`}>
-                              <Zap size={11} />
-                              {row.kanban_sla_status} ({row.kanban_dwell_hours}h)
-                            </span>
-                          ) : (
-                            <span style={{ color: '#94a3b8' }}>—</span>
-                          )}
-                        </td>
-                      )}
-
-                      {/* Birth Date / Board Age */}
+                      {/* SMT Birth Aging */}
                       <td>
-                        {row.birth_date && row.birth_date !== 'N/A' ? (
+                        {row.birth_date && row.birth_date !== 'N/A' && row.birth_age_days !== null && row.birth_age_days !== undefined ? (
                           <div>
-                            <span style={{ fontWeight: 600, color: '#334155' }}>
+                            <span className="badge badge-birth-age" title="Board Lifespan since SMT Birth">
+                              <Calendar size={11} /> {row.birth_age_days} Days Old
+                            </span>
+                            <div className="inbound-date-subtext">
+                              Mfg:{' '}
                               {new Date(row.birth_date).toLocaleDateString([], {
                                 day: '2-digit',
                                 month: 'short',
                                 year: 'numeric',
                               })}
-                            </span>
-                            {row.birth_age_days !== null && (
-                              <span
-                                style={{
-                                  color: '#475569',
-                                  fontSize: '0.7rem',
-                                  fontWeight: 600,
-                                  marginLeft: '6px',
-                                  background: '#f1f5f9',
-                                  border: '1px solid #e2e8f0',
-                                  padding: '1.5px 6px',
-                                  borderRadius: '4px',
-                                }}
-                              >
-                                {row.birth_age_days}d PCB
-                              </span>
-                            )}
+                            </div>
                           </div>
                         ) : (
-                          <span style={{ color: '#94a3b8' }}>N/A</span>
+                          <span className="no-birth-chip">No Birth Date</span>
                         )}
                       </td>
 
@@ -2115,7 +2187,7 @@ export default function ReportsPage() {
           setPageSize(newSize);
           setPage(1);
         }}
-        pageSizeOptions={[15, 30, 50, 100]}
+        pageSizeOptions={[25, 50, 100, 200]}
       />
     </div>
   );

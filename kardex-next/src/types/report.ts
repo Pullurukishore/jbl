@@ -51,8 +51,10 @@ export interface SerialAgingItem {
   birth_date: string | null;
   scanned_by: string;
   hu_id: string | null;
+  bin_type?: string | null;
   storage_status: string | null;
   compartment_number: number | null;
+  compartment_status?: string | null;
   kardex_age_days: number;
   kardex_age_hours: number;
   kardex_total_hours: number;
@@ -75,8 +77,10 @@ export interface KanbanAgingItem {
   birth_date: string | null;
   scanned_by: string;
   hu_id: string | null;
+  bin_type?: string | null;
   storage_status: string | null;
   compartment_number: number | null;
+  compartment_status?: string | null;
   dwell_days: number;
   dwell_hours: number;
   dwell_total_hours: number;

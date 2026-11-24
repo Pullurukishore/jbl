@@ -966,7 +966,7 @@ exports.findByModelAndQty = asyncHandler(async (req, res) => {
 
         const reqQty = Number(quantity) || 0;
         const totalCount = await db.put.count({ where });
-        const limit = Math.min(Math.max(Number(size) || 20, 1), 200);
+        const limit = Math.min(Math.max(Number(size) || 20, 1), 2000);
         const offset = (Number(page) - 1) * limit;
 
         // Fetch paginated rows (putting seed serial first if one was scanned)
@@ -1012,7 +1012,7 @@ exports.findByModelAndQty = asyncHandler(async (req, res) => {
 
 exports.searchAll = asyncHandler(async (req, res) => {
     try {
-        const { search, isExport = false, page = 1, size = 10, sort = ['id', 'DESC'], startDate, endDate } = req.body;
+        const { search, isExport = false, page = 1, size = 100, sort = ['id', 'DESC'], startDate, endDate } = req.body;
 
         const dialect = db.sequelize.getDialect();
         const uTable = dialect === 'postgres' ? '"user"' : 'user';

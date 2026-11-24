@@ -131,7 +131,7 @@ export default function DashboardPage() {
   const [copiedSerial, setCopiedSerial] = useState<string | null>(null);
   const [copiedPo, setCopiedPo] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
+  const [pageSize, setPageSize] = useState(100);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
@@ -1131,7 +1131,7 @@ export default function DashboardPage() {
               setPage(1);
               fetchPuts(1, newSize);
             }}
-            pageSizeOptions={[10, 20, 50, 100]}
+            pageSizeOptions={[20, 50, 100, 200]}
           />
         </div>
       </div>

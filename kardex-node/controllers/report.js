@@ -189,7 +189,7 @@ exports.getSerialAgingList = asyncHandler(async (req, res) => {
             startDate = null,
             endDate = null,
             page = 1,
-            size = 15,
+            size = 100,
             sortField = 'scanned_at',
             sortDirection = 'ASC' // Default ASC for FIFO priority (oldest first)
         } = req.body || {};
@@ -219,9 +219,10 @@ exports.getSerialAgingList = asyncHandler(async (req, res) => {
             whereClause.process_status = { [Op.notIn]: ['KANBAN-IN', 'KANBAN_IN', 'KANBAN-RTN', 'KANBAN_RTN'] };
         }
 
-        // Model Number filter
+        // Model Number filter (case-insensitive partial match)
         if (modelNumber && modelNumber.trim() !== '') {
-            whereClause.model_number = modelNumber.trim();
+            const trimmedModel = modelNumber.trim();
+            whereClause.model_number = { [Op.iLike ? Op.iLike : Op.like]: `%${trimmedModel}%` };
         }
 
         // Search filter (serial or model)
@@ -289,20 +290,24 @@ exports.getSerialAgingList = asyncHandler(async (req, res) => {
         const allowedSort = ['scanned_at', 'birth_date', 'serial_number', 'model_number', 'pick_status'];
         const safeSortField = allowedSort.includes(sortField) ? sortField : 'scanned_at';
         const safeSortDir = sortDirection?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+        const orderClause = safeSortField === 'birth_date'
+            ? [[safeSortField, `${safeSortDir} NULLS LAST`]]
+            : [[safeSortField, safeSortDir]];
 
         const { count, rows } = await db.put.findAndCountAll({
             where: whereClause,
             include: [
                 {
                     model: db.handling_unit,
-                    attributes: ['id', 'hu_id', 'storage_status']
+                    attributes: ['id', 'hu_id', 'storage_status', 'bin_type_id'],
+                    include: [{ model: db.bin_type, attributes: ['bin_name', 'name'] }]
                 },
                 {
                     model: db.compartment,
                     attributes: ['id', 'compartment_number', 'status']
                 }
             ],
-            order: [[safeSortField, safeSortDir]],
+            order: orderClause,
             limit: pageSize,
             offset: offset
         });
@@ -313,7 +318,7 @@ exports.getSerialAgingList = asyncHandler(async (req, res) => {
             const birthAge = r.birth_date ? calculateAge(r.birth_date, now) : null;
             const bucket = getAgeBucket(kardexAge.days);
 
-            const isKanban = ['KANBAN-IN', 'KANBAN_IN', 'KANBAN-RTN', 'KANBAN_RTN'].some(k =>
+            const isKanban = ['KANBAN-IN', 'KANBAN_IN', 'KANBAN-OUT', 'KANBAN_OUT', 'KANBAN-RTN', 'KANBAN_RTN'].some(k =>
                 r.process_status?.toUpperCase()?.includes(k)
             );
             const kanbanSla = isKanban ? getKanbanSlaStatus(kardexAge.totalHours) : null;
@@ -329,8 +334,10 @@ exports.getSerialAgingList = asyncHandler(async (req, res) => {
                 birth_date: r.birth_date,
                 scanned_by: r.scanned_by,
                 hu_id: r.handling_unit?.hu_id || null,
+                bin_type: r.handling_unit?.bin_type?.bin_name || r.handling_unit?.bin_type?.name || null,
                 storage_status: r.handling_unit?.storage_status || null,
                 compartment_number: r.compartment?.compartment_number || null,
+                compartment_status: r.compartment?.status || (r.compartment?.compartment_number ? 'OCCUPIED' : null),
                 kardex_age_days: kardexAge.days,
                 kardex_age_hours: kardexAge.hours,
                 kardex_total_hours: kardexAge.totalHours,
@@ -371,7 +378,7 @@ exports.getKanbanAgingList = asyncHandler(async (req, res) => {
             startDate = null,
             endDate = null,
             page = 1,
-            size = 15,
+            size = 100,
             sortField = 'scanned_at',
             sortDirection = 'ASC' // Default oldest first
         } = req.body || {};
@@ -399,9 +406,10 @@ exports.getKanbanAgingList = asyncHandler(async (req, res) => {
             whereClause.pick_status = pickStatus;
         }
 
-        // Model Number filter
+        // Model Number filter (case-insensitive partial match)
         if (modelNumber && modelNumber.trim() !== '') {
-            whereClause.model_number = modelNumber.trim();
+            const trimmedModel = modelNumber.trim();
+            whereClause.model_number = { [Op.iLike ? Op.iLike : Op.like]: `%${trimmedModel}%` };
         }
 
         // Search filter
@@ -516,7 +524,9 @@ exports.getAgingExportData = asyncHandler(async (req, res) => {
             pickStatus = 'ACTIVE',
             modelNumber = '',
             startDate = null,
-            endDate = null
+            endDate = null,
+            sortField = 'scanned_at',
+            sortDirection = 'ASC'
         } = req.body || {};
 
         const now = new Date();
@@ -529,9 +539,10 @@ exports.getAgingExportData = asyncHandler(async (req, res) => {
             whereClause.pick_status = pickStatus;
         }
 
-        // Model Number filter
+        // Model Number filter (case-insensitive partial match)
         if (modelNumber && modelNumber.trim() !== '') {
-            whereClause.model_number = modelNumber.trim();
+            const trimmedModel = modelNumber.trim();
+            whereClause.model_number = { [Op.iLike ? Op.iLike : Op.like]: `%${trimmedModel}%` };
         }
 
         // Search filter
@@ -604,6 +615,13 @@ exports.getAgingExportData = asyncHandler(async (req, res) => {
             }
         }
 
+        const allowedSort = ['scanned_at', 'birth_date', 'serial_number', 'model_number', 'pick_status'];
+        const safeSortField = allowedSort.includes(sortField) ? sortField : 'scanned_at';
+        const safeSortDir = sortDirection?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+        const orderClause = safeSortField === 'birth_date'
+            ? [[safeSortField, `${safeSortDir} NULLS LAST`]]
+            : [[safeSortField, safeSortDir]];
+
         const rows = await db.put.findAll({
             where: whereClause,
             include: [
@@ -631,7 +649,7 @@ exports.getAgingExportData = asyncHandler(async (req, res) => {
                     attributes: ['id', 'scanned_at']
                 }
             ],
-            order: [['scanned_at', 'ASC']],
+            order: orderClause,
             limit: 10000
         });
 
