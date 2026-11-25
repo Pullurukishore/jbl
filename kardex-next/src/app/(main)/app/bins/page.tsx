@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { apiPost, apiGet } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
+import { formatIndianDate } from '@/lib/date';
 import { useAuth } from '@/context/AuthContext';
 import { HandlingUnit, StorageStatus, HUStatus, HUListResponse, HUStats, BinType } from '@/types/hu';
 import { HUStatusBadge } from '@/components/bins/HUStatusBadge';
@@ -172,16 +173,7 @@ export default function BinsMasterPage() {
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '—';
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    } catch {
-      return dateStr;
-    }
+    return formatIndianDate(dateStr);
   };
 
   return (

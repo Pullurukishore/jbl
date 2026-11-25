@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { apiGet, apiPost } from '@/lib/api';
 import { copyToClipboard as copyUtil } from '@/lib/clipboard';
+import { formatIndianDate, formatIndianDateTime } from '@/lib/date';
 import {
   AgingStats,
   SerialAgingItem,
@@ -273,7 +274,7 @@ export default function ReportsPage() {
       const pad = (n: number) => String(n).padStart(2, '0');
       const timestampStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
-      // Helper to compute auto column widths with generous breathing room
+      // Smart, compact column widths to eliminate wasted space in Excel
       const autoFitCols = (rows: Record<string, any>[]) => {
         if (!rows.length) return [];
         return Object.keys(rows[0]).map((key) => {
@@ -282,11 +283,13 @@ export default function ReportsPage() {
             const strLen = val !== null && val !== undefined ? String(val).length : 0;
             return Math.max(max, strLen);
           }, key.length);
-          return { wch: Math.min(Math.max(maxValLen + 5, 14), 45) };
+          // Tight, elegant fit (+2 padding) with sensible minimums
+          const minW = key === '#' ? 5 : (key === 'COMPT' || key === 'PV' ? 6 : 8);
+          return { wch: Math.min(Math.max(maxValLen + 2, minW), 32) };
         });
       };
 
-      // Clean, professional inventory data table matching UI columns exactly
+      // Clean, professional inventory data table matching UI columns compactly
       const tableRows = records.map((r, index) => {
         const isKanban = r.is_kanban === 'YES' || r.is_kanban === true || String(r.process_status || '').toUpperCase().includes('KANBAN');
         const scannedDate = r.scanned_at ? new Date(r.scanned_at) : null;
@@ -303,21 +306,45 @@ export default function ReportsPage() {
           !isNaN(Number(r.birth_age_days))
             ? Number(r.birth_age_days)
             : 'N/A';
-        const storageKanbanAging = isKanban ? `KANBAN-IN: ${ageDays}d ${ageHours}h ${ageMinutes}m` : `${ageDays}d ${ageHours}h ${ageMinutes}m`;
+        const birthToInDays =
+          typeof r.birth_to_in_days === 'number'
+            ? r.birth_to_in_days
+            : birthDate && scannedDate
+              ? Math.max(0, Math.floor((scannedDate.getTime() - birthDate.getTime()) / (1000 * 60 * 60 * 24)))
+              : 'N/A';
+        const isPicked = r.is_picked === 'YES' || r.is_picked === true || r.pick_status === 'PICKED';
+        const inOutDays = typeof r.kanban_in_out_days === 'number' ? r.kanban_in_out_days : ageDays;
+        const inOutFormatted = r.kanban_in_out_formatted || (isKanban ? `${ageDays}d ${ageHours}h ${ageMinutes}m` : `${ageDays}d ${ageHours}h ${ageMinutes}m`);
+
+        // Resolve Outbound Pick display cleanly:
+        const pickDateRaw = r.pick_date || r.picked_at;
+        let outboundPickDisplay = 'IN KARDEX';
+        if (isPicked) {
+          if (pickDateRaw && pickDateRaw !== 'N/A' && pickDateRaw !== 'null' && pickDateRaw !== 'undefined') {
+            const formatted = formatIndianDateTime(pickDateRaw);
+            outboundPickDisplay = formatted !== 'N/A' ? formatted : 'PICKED';
+          } else {
+            outboundPickDisplay = 'PICKED';
+          }
+        }
 
         return {
-          'SL NO': index + 1,
+          '#': index + 1,
           'SERIAL NUMBER': r.serial_number || 'N/A',
           'MODEL NUMBER': r.model_number || 'N/A',
-          'CARRIER HU ID': r.hu_id || 'N/A',
-          'COMPARTMENT NO': r.compartment_number !== null && r.compartment_number !== undefined ? r.compartment_number : 'N/A',
-          'PROCESS FLOW': r.process_status || 'N/A',
-          'PV STATUS': r.pv_status || 'PASS',
-          'MES & KANBAN IN AGING': storageKanbanAging,
-          'INBOUND DATE & TIME': scannedDate ? scannedDate.toLocaleString() : 'N/A',
-          'SMT BIRTH AGING (IN DAYS)': birthAgeDays,
-          'SMT BIRTH DATE': birthDate ? birthDate.toLocaleDateString() : 'N/A',
-          'STOCK STATUS': r.pick_status || 'AVAILABLE',
+          'HU ID': r.hu_id || 'N/A',
+          'COMPT': r.compartment_number !== null && r.compartment_number !== undefined ? r.compartment_number : 'N/A',
+          'PROCESS': r.process_status || 'N/A',
+          'PV': r.pv_status || 'PASS',
+          'BIRTH → IN (DAYS)': birthToInDays,
+          'IN → OUT (DAYS)': inOutDays,
+          'IN → OUT DURATION': inOutFormatted,
+          'DWELL STATUS': isPicked ? 'PICKED' : 'IN KARDEX',
+          'SMT AGE (DAYS)': birthAgeDays,
+          'SMT BIRTH': birthDate ? formatIndianDate(birthDate) : 'N/A',
+          'INBOUND TIME': scannedDate ? formatIndianDateTime(scannedDate) : 'N/A',
+          'OUTBOUND PICK': outboundPickDisplay,
+          'STATUS': r.pick_status || 'AVAILABLE',
         };
       });
 
@@ -390,23 +417,27 @@ export default function ReportsPage() {
 
             // Center align for numbers, IDs, dates, and status badges
             const centerColumns = [
-              'SL NO',
-              'CARRIER HU ID',
-              'COMPARTMENT NO',
-              'PROCESS FLOW',
-              'PV STATUS',
-              'MES & KANBAN IN AGING',
-              'INBOUND DATE & TIME',
-              'SMT BIRTH AGING (IN DAYS)',
-              'SMT BIRTH DATE',
-              'STOCK STATUS',
+              '#',
+              'HU ID',
+              'COMPT',
+              'PROCESS',
+              'PV',
+              'BIRTH → IN (DAYS)',
+              'IN → OUT (DAYS)',
+              'IN → OUT DURATION',
+              'DWELL STATUS',
+              'SMT AGE (DAYS)',
+              'INBOUND TIME',
+              'OUTBOUND PICK',
+              'SMT BIRTH',
+              'STATUS',
             ];
             if (centerColumns.includes(colName)) {
               alignH = 'center';
             }
 
             // Status Badge Highlight Colors
-            if (colName === 'STOCK STATUS') {
+            if (colName === 'STATUS') {
               if (cellValue === 'AVAILABLE') {
                 bgColor = 'DCFCE7'; // Soft Emerald Green
                 fontColor = '166534';
@@ -420,7 +451,16 @@ export default function ReportsPage() {
                 fontColor = '475569';
                 isBold = true;
               }
-            } else if (colName === 'PV STATUS') {
+            } else if (colName === 'DWELL STATUS') {
+              if (cellValue === 'IN KARDEX') {
+                bgColor = 'DCFCE7'; // Soft green live
+                fontColor = '166534';
+                isBold = true;
+              } else {
+                bgColor = 'F1F5F9';
+                fontColor = '475569';
+              }
+            } else if (colName === 'PV') {
               if (cellValue === 'PASS') {
                 bgColor = 'DCFCE7';
                 fontColor = '166534';
@@ -430,22 +470,23 @@ export default function ReportsPage() {
                 fontColor = '991B1B';
                 isBold = true;
               }
-            } else if (colName === 'MES & KANBAN IN AGING') {
-              if (cellValue.includes('KANBAN')) {
-                bgColor = 'F3E8FF'; // Soft purple for Kanban
-                fontColor = '7E22CE';
+            } else if (colName === 'BIRTH → IN (DAYS)') {
+              if (cellValue !== 'N/A' && cellValue !== '') {
+                bgColor = 'F0FDF4'; // Mint green
+                fontColor = '15803D';
                 isBold = true;
-              } else {
-                bgColor = 'F8FAFC';
-                fontColor = '334155';
               }
-            } else if (colName === 'SMT BIRTH AGING (IN DAYS)') {
+            } else if (colName === 'IN → OUT (DAYS)' || colName === 'IN → OUT DURATION') {
+              bgColor = 'FAF5FF'; // Soft purple for dwell/Kanban age
+              fontColor = '7E22CE';
+              isBold = true;
+            } else if (colName === 'SMT AGE (DAYS)') {
               if (cellValue !== 'N/A' && cellValue !== 'No Birth Date' && cellValue !== '' && !isNaN(Number(cellValue))) {
                 bgColor = 'EFF6FF'; // Soft Tech Blue
                 fontColor = '1D4ED8';
                 isBold = true;
               }
-            } else if (colName === 'PROCESS FLOW') {
+            } else if (colName === 'PROCESS') {
               if (cellValue.includes('RTN')) {
                 bgColor = 'F3E8FF'; // Soft Violet for Return
                 fontColor = '7E22CE';
@@ -463,15 +504,11 @@ export default function ReportsPage() {
                 fontColor = '1D4ED8';
                 isBold = true;
               }
-            } else if (colName === 'CARRIER HU ID') {
+            } else if (colName === 'HU ID') {
               bgColor = 'F1F5F9'; // Cool Slate
               fontColor = '0F172A';
               isBold = true;
-            } else if (colName === 'BIN TYPE') {
-              bgColor = 'FEF3C7'; // Amber ESD Safe
-              fontColor = '92400E';
-              isBold = true;
-            } else if (colName === 'COMPARTMENT NO') {
+            } else if (colName === 'COMPT') {
               bgColor = 'ECFDF5'; // Light Emerald
               fontColor = '047857';
               isBold = true;
@@ -1173,9 +1210,9 @@ export default function ReportsPage() {
         .table-card {
           background: #ffffff;
           border: 1px solid #e2e8f0;
-          border-radius: 14px;
+          border-radius: 12px;
           overflow: hidden;
-          box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+          box-shadow: 0 4px 18px -2px rgba(15, 23, 42, 0.05), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
           margin-bottom: 1.25rem;
           width: 100%;
         }
@@ -1185,10 +1222,16 @@ export default function ReportsPage() {
           overflow-x: auto;
         }
 
+        @media (min-width: 1100px) {
+          .table-responsive {
+            overflow-x: hidden;
+          }
+        }
+
         .aging-table {
           width: 100%;
           border-collapse: collapse;
-          font-size: 0.8125rem;
+          font-size: 0.735rem;
           text-align: left;
         }
 
@@ -1200,10 +1243,10 @@ export default function ReportsPage() {
         .aging-table th {
           color: #334155;
           font-weight: 700;
-          font-size: 0.725rem;
+          font-size: 0.675rem;
           text-transform: uppercase;
-          letter-spacing: 0.05em;
-          padding: 12px 14px;
+          letter-spacing: 0.02em;
+          padding: 6px 5px;
           white-space: nowrap;
           border-bottom: 2px solid #e2e8f0;
         }
@@ -1233,7 +1276,7 @@ export default function ReportsPage() {
         }
 
         .aging-table td {
-          padding: 11px 14px;
+          padding: 5px 5px;
           border-bottom: 1px solid #f1f5f9;
           color: #1e293b;
           vertical-align: middle;
@@ -1243,18 +1286,19 @@ export default function ReportsPage() {
         .serial-pill {
           display: inline-flex;
           align-items: center;
-          gap: 6px;
+          gap: 3.5px;
           background: #ffffff;
           border: 1.5px solid #cbd5e1;
-          padding: 4px 9px;
-          border-radius: 7px;
+          padding: 2px 5px;
+          border-radius: 5px;
           font-family: 'JetBrains Mono', 'Fira Code', monospace;
-          font-size: 0.825rem;
+          font-size: 0.73rem;
           font-weight: 700;
           color: #0f172a;
           cursor: pointer;
           transition: all 0.18s ease;
           box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+          white-space: nowrap;
         }
 
         .serial-pill:hover {
@@ -1273,34 +1317,36 @@ export default function ReportsPage() {
           color: #1e40af;
           border: 1px solid #bfdbfe;
           font-weight: 700;
-          border-radius: 6px;
-          padding: 3px 9px;
-          font-size: 0.775rem;
-          letter-spacing: 0.02em;
+          border-radius: 4px;
+          padding: 1.5px 5px;
+          font-size: 0.7rem;
+          letter-spacing: 0.01em;
+          white-space: nowrap;
         }
 
         /* Location Chips */
         .location-container {
-          display: flex;
+          display: inline-flex;
           align-items: center;
-          flex-wrap: wrap;
-          gap: 5px;
+          gap: 2.5px;
+          white-space: nowrap;
         }
 
         .hu-chip {
           display: inline-flex;
           align-items: center;
-          gap: 4px;
+          gap: 2.5px;
           background: #0f172a;
           color: #38bdf8;
-          padding: 2.5px 8px;
-          border-radius: 6px;
-          font-size: 0.725rem;
+          padding: 1.5px 4px;
+          border-radius: 4px;
+          font-size: 0.675rem;
           font-weight: 700;
           text-decoration: none;
           transition: all 0.15s ease;
           border: 1px solid #1e293b;
           box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+          white-space: nowrap;
         }
 
         .hu-chip:hover {
@@ -1312,15 +1358,16 @@ export default function ReportsPage() {
         .bin-chip {
           display: inline-flex;
           align-items: center;
-          gap: 3px;
+          gap: 2.5px;
           background: #fef3c7;
           color: #92400e;
           border: 1px solid #fde68a;
-          padding: 2px 7px;
-          border-radius: 5px;
-          font-size: 0.7rem;
+          padding: 1.5px 5px;
+          border-radius: 4px;
+          font-size: 0.675rem;
           font-weight: 700;
           letter-spacing: 0.02em;
+          white-space: nowrap;
         }
 
         .slot-chip {
@@ -1329,27 +1376,28 @@ export default function ReportsPage() {
           background: #ecfdf5;
           color: #047857;
           border: 1px solid #a7f3d0;
-          padding: 2px 6px;
-          border-radius: 5px;
-          font-size: 0.725rem;
+          padding: 1px 3px;
+          border-radius: 3.5px;
+          font-size: 0.675rem;
           font-weight: 800;
           font-family: 'JetBrains Mono', 'Fira Code', monospace;
+          white-space: nowrap;
         }
 
         .unassigned-chip {
           color: #94a3b8;
           font-style: italic;
-          font-size: 0.75rem;
+          font-size: 0.7rem;
         }
 
         /* Badges */
         .badge {
           display: inline-flex;
           align-items: center;
-          gap: 5px;
-          padding: 3.5px 9px;
-          border-radius: 6px;
-          font-size: 0.75rem;
+          gap: 3px;
+          padding: 1.5px 5px;
+          border-radius: 4px;
+          font-size: 0.7rem;
           font-weight: 700;
           white-space: nowrap;
           box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
@@ -1417,6 +1465,13 @@ export default function ReportsPage() {
           font-weight: 600;
         }
 
+        .badge-birth-to-in {
+          background: #f0fdf4;
+          color: #15803d;
+          border: 1px solid #bbf7d0;
+          font-weight: 700;
+        }
+
         .badge-kanban-age {
           background: #faf5ff;
           color: #7c3aed;
@@ -1432,21 +1487,22 @@ export default function ReportsPage() {
         }
 
         .inbound-date-subtext {
-          font-size: 0.7rem;
+          font-size: 0.66rem;
           color: #64748b;
-          margin-top: 3px;
+          margin-top: 1.5px;
           font-weight: 500;
+          white-space: nowrap;
         }
 
         .no-birth-chip {
           color: #94a3b8;
-          font-size: 0.75rem;
+          font-size: 0.72rem;
           font-style: italic;
         }
 
         .status-dot {
-          width: 6px;
-          height: 6px;
+          width: 5px;
+          height: 5px;
           border-radius: 50%;
           display: inline-block;
         }
@@ -1460,15 +1516,16 @@ export default function ReportsPage() {
           text-decoration: none;
           display: inline-flex;
           align-items: center;
-          gap: 4px;
-          font-size: 0.75rem;
+          gap: 3px;
+          font-size: 0.7rem;
           font-weight: 700;
-          padding: 4px 10px;
-          border-radius: 7px;
+          padding: 2.5px 7px;
+          border-radius: 5px;
           background: #ffffff;
           border: 1.5px solid #dbeafe;
           transition: all 0.18s ease;
           box-shadow: 0 1px 2px rgba(37, 99, 235, 0.05);
+          white-space: nowrap;
         }
 
         .audit-btn:hover {
@@ -1938,7 +1995,7 @@ export default function ReportsPage() {
             <table className="aging-table">
               <thead>
                 <tr>
-                  <th style={{ width: '40px' }}>#</th>
+                  <th style={{ width: '32px', textAlign: 'center', padding: '8px 4px' }}>#</th>
                   <th
                     className="sortable-th"
                     onClick={() => {
@@ -1951,7 +2008,7 @@ export default function ReportsPage() {
                       setPage(1);
                     }}
                   >
-                    Serial Number {sortField === 'serial_number' && (sortDirection === 'ASC' ? '↑' : '↓')}
+                    Serial {sortField === 'serial_number' && (sortDirection === 'ASC' ? '↑' : '↓')}
                   </th>
                   <th
                     className="sortable-th"
@@ -1967,9 +2024,13 @@ export default function ReportsPage() {
                   >
                     Model {sortField === 'model_number' && (sortDirection === 'ASC' ? '↑' : '↓')}
                   </th>
-                  <th>Location (HU / Slot)</th>
-                  <th>Process Flow</th>
-                  <th>PV Status</th>
+                  <th>Location</th>
+                  <th>Process</th>
+                  <th>PV</th>
+                  {/* 1. Birth to Kanban IN */}
+                  <th title="Pre-Storage Dwell: Birth to Kanban IN">Birth → IN</th>
+
+                  {/* 2. Aging (Kanban IN to OUT) */}
                   <th
                     className="sortable-th"
                     onClick={() => {
@@ -1981,9 +2042,12 @@ export default function ReportsPage() {
                       }
                       setPage(1);
                     }}
+                    title="Storage Dwell: Aging from Kanban IN to OUT (or to Present if still in Kardex)"
                   >
-                    MES &amp; KANBAN IN Aging {sortField === 'scanned_at' && (sortDirection === 'ASC' ? '↑' : '↓')}
+                    IN → OUT (Aging) {sortField === 'scanned_at' && (sortDirection === 'ASC' ? '↑' : '↓')}
                   </th>
+
+                  {/* 3. Total SMT Birth Aging */}
                   <th
                     className="sortable-th"
                     onClick={() => {
@@ -1995,11 +2059,12 @@ export default function ReportsPage() {
                       }
                       setPage(1);
                     }}
+                    title="Total Board Lifespan since SMT Birth"
                   >
-                    SMT Birth Aging {sortField === 'birth_date' && (sortDirection === 'ASC' ? '↑' : '↓')}
+                    SMT Age {sortField === 'birth_date' && (sortDirection === 'ASC' ? '↑' : '↓')}
                   </th>
-                  <th>Stock Status</th>
-                  <th style={{ width: '80px', textAlign: 'center' }}>Audit</th>
+                  <th>Status</th>
+                  <th style={{ width: '45px', textAlign: 'center', padding: '8px 4px' }}>Audit</th>
                 </tr>
               </thead>
               <tbody>
@@ -2101,54 +2166,88 @@ export default function ReportsPage() {
                         </span>
                       </td>
 
-                      {/* MES & Kanban In Aging */}
+                      {/* 1. Birth to Kanban IN (Days) */}
                       <td>
                         {(() => {
+                          const birthDate = row.birth_date && row.birth_date !== 'N/A' ? new Date(row.birth_date) : null;
+                          const scannedDate = row.scanned_at ? new Date(row.scanned_at) : null;
+                          const bToInDays =
+                            typeof row.birth_to_in_days === 'number'
+                              ? row.birth_to_in_days
+                              : birthDate && scannedDate
+                                ? Math.max(0, Math.floor((scannedDate.getTime() - birthDate.getTime()) / (1000 * 60 * 60 * 24)))
+                                : null;
+
+                          return bToInDays !== null ? (
+                            <span
+                              className="badge badge-birth-to-in"
+                              title={`Pre-Storage Buffer: ${bToInDays} Days from SMT Birth to Kanban IN`}
+                            >
+                              <Clock size={10} />
+                              <strong>{bToInDays}d</strong>
+                            </span>
+                          ) : (
+                            <span className="no-birth-chip">N/A</span>
+                          );
+                        })()}
+                      </td>
+
+                      {/* 2. Aging (Kanban IN to OUT / Present) Days */}
+                      <td>
+                        {(() => {
+                          const inOutDays = typeof row.kanban_in_out_days === 'number' ? row.kanban_in_out_days : row.kardex_age_days;
+                          const inOutHours = typeof row.kanban_in_out_hours === 'number' ? row.kanban_in_out_hours : row.kardex_age_hours;
                           const mins = typeof row.kardex_age_minutes === 'number'
                             ? row.kardex_age_minutes
                             : (row.scanned_at ? Math.floor((Math.max(0, Date.now() - new Date(row.scanned_at).getTime()) % (1000 * 60 * 60)) / (1000 * 60)) : 0);
 
-                          return row.is_kanban ? (
-                            <span className="badge badge-kanban-age" title="Kanban Inbound Storage Aging">
-                              <Zap size={11} /> KANBAN-IN: {row.kardex_age_days}d {row.kardex_age_hours}h {mins}m
-                            </span>
-                          ) : (
-                            <span className="badge badge-storage-age" title="Standard Storage Aging">
-                              <Clock size={11} style={{ color: '#64748b' }} />
-                              {row.kardex_age_days}d {row.kardex_age_hours}h {mins}m
-                            </span>
+                          const isPicked = row.is_picked && row.pick_date;
+
+                          return (
+                            <div>
+                              <span
+                                className={`badge ${row.is_kanban ? 'badge-kanban-age' : 'badge-storage-age'}`}
+                                title={
+                                  isPicked
+                                    ? `Completed Aging (Kanban IN to OUT): ${inOutDays} Days (${inOutHours}h ${mins}m)`
+                                    : `Live Storage Aging (IN to Present): ${inOutDays} Days (${inOutHours}h ${mins}m) currently sitting in Kardex`
+                                }
+                              >
+                                <Zap size={10} />
+                                <strong>{inOutDays}d</strong>
+                                <span style={{ opacity: 0.85, fontWeight: 500, fontSize: '9px' }}>({inOutHours}h)</span>
+                              </span>
+                              {row.scanned_at && (
+                                <div
+                                  className="inbound-date-subtext"
+                                  title={`IN: ${formatIndianDateTime(row.scanned_at)}${isPicked ? ` → OUT: ${formatIndianDateTime(row.pick_date!)}` : ' (Still in Kardex)'}`}
+                                >
+                                  {formatIndianDate(row.scanned_at)}
+                                  {isPicked ? (
+                                    <> → {formatIndianDate(row.pick_date!)}</>
+                                  ) : (
+                                    <span style={{ color: '#059669', fontWeight: 600 }}> (In Kardex)</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           );
                         })()}
-                        {row.scanned_at && (
-                          <div className="inbound-date-subtext">
-                            Inbound:{' '}
-                            {new Date(row.scanned_at).toLocaleDateString([], {
-                              day: '2-digit',
-                              month: 'short',
-                              year: 'numeric',
-                            })}
-                          </div>
-                        )}
                       </td>
 
-                      {/* SMT Birth Aging */}
+                      {/* 3. Total SMT Birth Aging */}
                       <td>
                         {row.birth_date && row.birth_date !== 'N/A' && row.birth_age_days !== null && row.birth_age_days !== undefined ? (
                           <div>
-                            <span className="badge badge-birth-age" title="Board Lifespan since SMT Birth">
-                              <Calendar size={11} /> {row.birth_age_days} Days Old
+                            <span className="badge badge-birth-age" title={`Total Board Lifespan since SMT Birth: ${row.birth_age_days} Days Old`}>
+                              <Calendar size={10} /> <strong>{row.birth_age_days}d</strong>
                             </span>
                             <div className="inbound-date-subtext">
-                              Mfg:{' '}
-                              {new Date(row.birth_date).toLocaleDateString([], {
-                                day: '2-digit',
-                                month: 'short',
-                                year: 'numeric',
-                              })}
+                              {formatIndianDate(row.birth_date)}
                             </div>
                           </div>
                         ) : (
-                          <span className="no-birth-chip">No Birth Date</span>
+                          <span className="no-birth-chip">N/A</span>
                         )}
                       </td>
 

@@ -5,6 +5,7 @@ import { Modal } from '@/components/shared/Modal';
 import { Loader } from '@/components/shared/Loader';
 import { apiPost, apiDownloadFile, downloadBlob } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
+import { formatIndianDate, formatIndianDateTime } from '@/lib/date';
 import { Log, PaginatedResponse } from '@/types';
 import { Put } from '@/types/put';
 import {
@@ -676,7 +677,7 @@ export const ViewLogsModal: React.FC<ViewLogsModalProps> = ({
                               {l.message || '—'}
                             </td>
                             <td className="text-nowrap text-muted" style={{ fontSize: '11px' }}>
-                              {new Date(l.log_date_time).toLocaleDateString()}{' '}
+                              {formatIndianDate(l.log_date_time)}{' '}
                               <span style={{ fontSize: '10px' }}>
                                 {new Date(l.log_date_time).toLocaleTimeString([], {
                                   hour: '2-digit',
@@ -788,7 +789,7 @@ export const ViewLogsModal: React.FC<ViewLogsModalProps> = ({
                               {l.message || '—'}
                             </td>
                             <td className="text-nowrap text-muted" style={{ fontSize: '11px' }}>
-                              {new Date(l.log_date_time).toLocaleDateString()}{' '}
+                              {formatIndianDate(l.log_date_time)}{' '}
                               <span style={{ fontSize: '10px' }}>
                                 {new Date(l.log_date_time).toLocaleTimeString([], {
                                   hour: '2-digit',

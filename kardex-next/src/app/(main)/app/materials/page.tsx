@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { apiGet, apiPost } from '@/lib/api';
 import { copyToClipboard as copyUtil } from '@/lib/clipboard';
+import { formatIndianDate } from '@/lib/date';
 import {
   MaterialStats,
   MaterialSummaryItem,
@@ -744,7 +745,7 @@ export default function MaterialsPage() {
                       <td>
                         <span className="text-muted font-monospace small">
                           {m.last_scanned_at
-                            ? new Date(m.last_scanned_at).toLocaleDateString()
+                            ? formatIndianDate(m.last_scanned_at)
                             : '—'}
                         </span>
                       </td>

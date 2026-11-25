@@ -323,6 +323,11 @@ exports.getSerialAgingList = asyncHandler(async (req, res) => {
                 {
                     model: db.compartment,
                     attributes: ['id', 'compartment_number', 'status']
+                },
+                {
+                    model: db.pick,
+                    attributes: ['id', 'scanned_at'],
+                    required: false
                 }
             ],
             order: orderClause,
@@ -332,14 +337,20 @@ exports.getSerialAgingList = asyncHandler(async (req, res) => {
 
         // Enrich items with both Serial Aging and Kanban Aging calculations
         const items = rows.map(r => {
+            const inDate = r.scanned_at || r.createdAt;
+            const isPicked = r.pick_status === 'PICKED' || Boolean(r.pick_id);
+            const pickTimestamp = isPicked ? (r.pick?.scanned_at || r.updatedAt || null) : null;
+            const outDate = isPicked ? (pickTimestamp || now) : now;
+            const inOutAge = calculateAge(inDate, outDate);
             const kardexAge = calculateAge(r.scanned_at, now);
             const birthAge = r.birth_date ? calculateAge(r.birth_date, now) : null;
-            const bucket = getAgeBucket(kardexAge.days, kardexAge.totalHours);
+            const birthToInAge = (r.birth_date && r.scanned_at) ? calculateAge(r.birth_date, new Date(r.scanned_at)) : null;
+            const bucket = getAgeBucket(inOutAge.days, inOutAge.totalHours);
 
             const isKanban = ['KANBAN-IN', 'KANBAN_IN', 'KANBAN-OUT', 'KANBAN_OUT', 'KANBAN-RTN', 'KANBAN_RTN'].some(k =>
                 r.process_status?.toUpperCase()?.includes(k)
             );
-            const kanbanSla = isKanban ? getKanbanSlaStatus(kardexAge.totalHours) : null;
+            const kanbanSla = isKanban ? getKanbanSlaStatus(inOutAge.totalHours) : null;
 
             return {
                 id: r.id,
@@ -356,16 +367,25 @@ exports.getSerialAgingList = asyncHandler(async (req, res) => {
                 storage_status: r.handling_unit?.storage_status || null,
                 compartment_number: r.compartment?.compartment_number || null,
                 compartment_status: r.compartment?.status || (r.compartment?.compartment_number ? 'OCCUPIED' : null),
-                kardex_age_days: kardexAge.days,
-                kardex_age_hours: kardexAge.hours,
-                kardex_age_minutes: kardexAge.minutes,
-                kardex_total_hours: kardexAge.totalHours,
+                birth_to_in_days: birthToInAge ? birthToInAge.days : null,
+                birth_to_in_hours: birthToInAge ? birthToInAge.hours : null,
+                birth_to_in_formatted: birthToInAge ? `${birthToInAge.days}d ${birthToInAge.hours}h` : 'N/A',
+                kanban_in_out_days: inOutAge.days,
+                kanban_in_out_hours: inOutAge.hours,
+                kanban_in_out_minutes: inOutAge.minutes,
+                kanban_in_out_formatted: `${inOutAge.days}d ${inOutAge.hours}h ${inOutAge.minutes}m`,
+                is_picked: isPicked,
+                pick_date: isPicked ? outDate : null,
+                kardex_age_days: inOutAge.days,
+                kardex_age_hours: inOutAge.hours,
+                kardex_age_minutes: inOutAge.minutes,
+                kardex_total_hours: inOutAge.totalHours,
                 birth_age_days: birthAge ? birthAge.days : null,
                 age_bucket: bucket,
                 is_kanban: isKanban,
-                kanban_dwell_hours: isKanban ? kardexAge.totalHours : null,
-                kanban_dwell_days: isKanban ? kardexAge.days : null,
-                kanban_dwell_minutes: isKanban ? kardexAge.minutes : null,
+                kanban_dwell_hours: isKanban ? inOutAge.totalHours : null,
+                kanban_dwell_days: isKanban ? inOutAge.days : null,
+                kanban_dwell_minutes: isKanban ? inOutAge.minutes : null,
                 kanban_sla_status: kanbanSla
             };
         });
@@ -689,13 +709,18 @@ exports.getAgingExportData = asyncHandler(async (req, res) => {
         });
 
         const items = rows.map(r => {
-            const age = calculateAge(r.scanned_at, now);
+            const inDate = r.scanned_at || r.createdAt;
+            const isPicked = r.pick_status === 'PICKED' || Boolean(r.pick_id);
+            const pickTimestamp = isPicked ? (r.pick?.scanned_at || r.updatedAt || null) : null;
+            const outDate = isPicked ? (pickTimestamp || now) : now;
+            const inOutAge = calculateAge(inDate, outDate);
             const birthAge = r.birth_date ? calculateAge(r.birth_date, now) : null;
-            const bucket = getAgeBucket(age.days, age.totalHours);
-            const isKanban = ['KANBAN-IN', 'KANBAN_IN', 'KANBAN-RTN', 'KANBAN_RTN'].some(k =>
+            const birthToInAge = (r.birth_date && r.scanned_at) ? calculateAge(r.birth_date, new Date(r.scanned_at)) : null;
+            const bucket = getAgeBucket(inOutAge.days, inOutAge.totalHours);
+            const isKanban = ['KANBAN-IN', 'KANBAN_IN', 'KANBAN-OUT', 'KANBAN_OUT', 'KANBAN-RTN', 'KANBAN_RTN'].some(k =>
                 r.process_status?.toUpperCase()?.includes(k)
             );
-            const sla = isKanban ? getKanbanSlaStatus(age.totalHours) : null;
+            const sla = isKanban ? getKanbanSlaStatus(inOutAge.totalHours) : null;
 
             return {
                 id: r.id,
@@ -711,21 +736,29 @@ exports.getAgingExportData = asyncHandler(async (req, res) => {
                 pv_status: r.pv_status || 'PASS',
                 scanned_at: r.scanned_at,
                 birth_date: r.birth_date || 'N/A',
-                kardex_age_days: age.days,
-                kardex_age_hours: age.hours,
-                kardex_age_minutes: age.minutes,
-                kardex_total_hours: age.totalHours,
+                birth_to_in_days: birthToInAge ? birthToInAge.days : 'N/A',
+                birth_to_in_formatted: birthToInAge ? `${birthToInAge.days}d ${birthToInAge.hours}h` : 'N/A',
+                kanban_in_out_days: inOutAge.days,
+                kanban_in_out_hours: inOutAge.hours,
+                kanban_in_out_minutes: inOutAge.minutes,
+                kanban_in_out_formatted: `${inOutAge.days}d ${inOutAge.hours}h ${inOutAge.minutes}m`,
+                is_picked: isPicked ? 'YES' : 'NO',
+                kardex_age_days: inOutAge.days,
+                kardex_age_hours: inOutAge.hours,
+                kardex_age_minutes: inOutAge.minutes,
+                kardex_total_hours: inOutAge.totalHours,
                 birth_age_days: birthAge ? birthAge.days : 'N/A',
                 age_bucket: bucket,
                 is_kanban: isKanban ? 'YES' : 'NO',
-                kanban_dwell_hours: isKanban ? age.totalHours : 'N/A',
-                kanban_dwell_days: isKanban ? age.days : 'N/A',
+                kanban_dwell_hours: isKanban ? inOutAge.totalHours : 'N/A',
+                kanban_dwell_days: isKanban ? inOutAge.days : 'N/A',
                 kanban_sla_status: isKanban ? (sla || 'NORMAL') : 'N/A',
                 scanned_by: r.scanned_by || 'SYSTEM',
                 po_file_name: r.put_po_file?.name || 'N/A',
                 kardex_file_name: r.put_text_file?.name || 'N/A',
                 pick_id: r.pick?.id || 'N/A',
-                picked_at: r.pick?.scanned_at ? new Date(r.pick.scanned_at).toLocaleString() : 'N/A'
+                pick_date: pickTimestamp,
+                picked_at: pickTimestamp
             };
         });
 
@@ -815,24 +848,39 @@ exports.getSerialAuditDetails = asyncHandler(async (req, res) => {
         // 3. Calculate exact aging metrics
         let aging = null;
         if (put) {
+            const inDate = put.scanned_at || put.createdAt;
+            const isPicked = put.pick_status === 'PICKED' || Boolean(put.pick_id);
+            const outDate = isPicked ? (put.pick?.scanned_at || put.updatedAt || now) : now;
+            const inOutAge = calculateAge(inDate, outDate);
             const kardexAge = calculateAge(put.scanned_at, now);
             const birthAge = put.birth_date ? calculateAge(put.birth_date, now) : null;
-            const isKanban = ['KANBAN-IN', 'KANBAN_IN', 'KANBAN-RTN', 'KANBAN_RTN'].some(k =>
+            const birthToInAge = (put.birth_date && put.scanned_at) ? calculateAge(put.birth_date, new Date(put.scanned_at)) : null;
+            const isKanban = ['KANBAN-IN', 'KANBAN_IN', 'KANBAN-OUT', 'KANBAN_OUT', 'KANBAN-RTN', 'KANBAN_RTN'].some(k =>
                 put.process_status?.toUpperCase()?.includes(k)
             );
 
             aging = {
-                storage_age_days: kardexAge.days,
-                storage_age_hours: kardexAge.hours,
-                storage_age_minutes: kardexAge.minutes,
-                storage_total_hours: kardexAge.totalHours,
-                storage_formatted: `${kardexAge.days}d ${kardexAge.hours}h ${kardexAge.minutes}m`,
+                storage_age_days: inOutAge.days,
+                storage_age_hours: inOutAge.hours,
+                storage_age_minutes: inOutAge.minutes,
+                storage_total_hours: inOutAge.totalHours,
+                storage_formatted: `${inOutAge.days}d ${inOutAge.hours}h ${inOutAge.minutes}m`,
+                birth_to_in_days: birthToInAge ? birthToInAge.days : null,
+                birth_to_in_hours: birthToInAge ? birthToInAge.hours : null,
+                birth_to_in_formatted: birthToInAge ? `${birthToInAge.days}d ${birthToInAge.hours}h` : 'N/A',
+                kanban_in_out_days: inOutAge.days,
+                kanban_in_out_hours: inOutAge.hours,
+                kanban_in_out_minutes: inOutAge.minutes,
+                kanban_in_out_formatted: `${inOutAge.days}d ${inOutAge.hours}h ${inOutAge.minutes}m`,
+                is_picked: isPicked,
+                in_date: inDate,
+                out_date: isPicked ? outDate : null,
                 birth_date: put.birth_date,
                 birth_age_days: birthAge ? birthAge.days : null,
                 is_kanban: isKanban,
-                kanban_dwell_hours: isKanban ? kardexAge.totalHours : null,
-                kanban_dwell_days: isKanban ? kardexAge.days : null,
-                kanban_dwell_minutes: isKanban ? kardexAge.minutes : null
+                kanban_dwell_hours: isKanban ? inOutAge.totalHours : null,
+                kanban_dwell_days: isKanban ? inOutAge.days : null,
+                kanban_dwell_minutes: isKanban ? inOutAge.minutes : null
             };
         }
 

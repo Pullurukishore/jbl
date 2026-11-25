@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { apiGet, apiDownloadFile, downloadBlob } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
+import { formatIndianDate, formatIndianDateTime } from '@/lib/date';
 import { Log } from '@/types';
 import { Put } from '@/types/put';
 import { Loader } from '@/components/shared/Loader';
@@ -49,6 +50,15 @@ interface SerialAuditResponse {
     storage_age_minutes?: number;
     storage_total_hours: number;
     storage_formatted: string;
+    kanban_in_out_days?: number;
+    kanban_in_out_hours?: number;
+    kanban_in_out_minutes?: number;
+    kanban_in_out_formatted?: string;
+    birth_to_in_days?: number | null;
+    birth_to_in_formatted?: string | null;
+    is_picked?: boolean;
+    in_date?: string;
+    out_date?: string | null;
     birth_date: string | null;
     birth_age_days: number | null;
     is_kanban: boolean;
@@ -1678,17 +1688,22 @@ export default function LogDetailPage({ params }: LogDetailPageProps) {
 
           {/* AGING HIGHLIGHT CARDS (Clean, Non-Redundant) */}
           <div className="aging-cards-grid">
-            {/* Card 1: Storage Age in Kardex */}
+            {/* Card 1: Aging (Kanban IN to OUT) */}
             <div className="aging-card card-storage">
               <div className="aging-card-header">
-                <span className="aging-card-title">Storage Age (In Kardex)</span>
+                <span className="aging-card-title">Aging (Kanban IN to OUT)</span>
                 <Clock size={16} color="#2563eb" />
               </div>
               <p className="aging-card-val">
-                {aging ? aging.storage_formatted : '—'}
+                {aging?.kanban_in_out_days !== undefined
+                  ? `${aging.kanban_in_out_days} Days`
+                  : aging?.storage_age_days !== undefined
+                    ? `${aging.storage_age_days} Days`
+                    : '—'}
               </p>
               <p className="aging-card-sub">
-                Put on: {put?.scanned_at ? new Date(put.scanned_at).toLocaleString() : '—'}
+                {aging?.kanban_in_out_formatted || (aging ? aging.storage_formatted : '—')}
+                {aging?.is_picked ? ' (Pick Complete)' : ' (In Storage)'}
               </p>
             </div>
 
@@ -1699,7 +1714,7 @@ export default function LogDetailPage({ params }: LogDetailPageProps) {
                 <Calendar size={16} color="#10b981" />
               </div>
               <p className="aging-card-val" style={{ fontSize: '1.15rem' }}>
-                {put?.birth_date ? new Date(put.birth_date).toLocaleDateString() : 'N/A'}
+                {put?.birth_date ? formatIndianDate(put.birth_date) : 'N/A'}
               </p>
               <p className="aging-card-sub">
                 {aging?.birth_age_days !== null && aging?.birth_age_days !== undefined
@@ -1766,12 +1781,30 @@ export default function LogDetailPage({ params }: LogDetailPageProps) {
               <div className="spec-row">
                 <span className="spec-key">MES Birth Date</span>
                 <span className="spec-val">
-                  {put?.birth_date ? new Date(put.birth_date).toLocaleDateString() : 'N/A'}
+                  {put?.birth_date ? formatIndianDate(put.birth_date) : 'N/A'}
                 </span>
               </div>
               <div className="spec-row">
-                <span className="spec-key">Total Board Age</span>
-                <span className="spec-val">
+                <span className="spec-key">1. Birth to Kanban IN Aging</span>
+                <span className="spec-val fw-bold" style={{ color: '#16a34a' }}>
+                  {aging?.birth_to_in_days !== null && aging?.birth_to_in_days !== undefined
+                    ? `${aging.birth_to_in_days} Days (${aging.birth_to_in_formatted})`
+                    : 'N/A'}
+                </span>
+              </div>
+              <div className="spec-row">
+                <span className="spec-key">2. Aging (Kanban IN to OUT)</span>
+                <span className="spec-val fw-bold" style={{ color: '#7c3aed' }}>
+                  {aging?.kanban_in_out_days !== undefined
+                    ? `${aging.kanban_in_out_days} Days (${aging.kanban_in_out_formatted})`
+                    : aging?.storage_age_days !== undefined
+                      ? `${aging.storage_age_days} Days`
+                      : 'N/A'}
+                </span>
+              </div>
+              <div className="spec-row">
+                <span className="spec-key">3. Total SMT Birth Aging</span>
+                <span className="spec-val fw-bold" style={{ color: '#1d4ed8' }}>
                   {aging?.birth_age_days !== null && aging?.birth_age_days !== undefined
                     ? `${aging.birth_age_days} Days`
                     : 'N/A'}
@@ -1818,7 +1851,7 @@ export default function LogDetailPage({ params }: LogDetailPageProps) {
               <div className="spec-row">
                 <span className="spec-key">Put Timestamp</span>
                 <span className="spec-val">
-                  {put?.scanned_at ? new Date(put.scanned_at).toLocaleString() : '—'}
+                  {put?.scanned_at ? formatIndianDateTime(put.scanned_at) : '—'}
                 </span>
               </div>
             </div>
@@ -1991,7 +2024,7 @@ export default function LogDetailPage({ params }: LogDetailPageProps) {
                           {l.message || '—'}
                         </td>
                         <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#64748b' }}>
-                          {l.log_date_time ? new Date(l.log_date_time).toLocaleString() : '—'}
+                          {l.log_date_time ? formatIndianDateTime(l.log_date_time) : '—'}
                         </td>
                         <td style={{ fontSize: '0.75rem', color: '#64748b' }}>
                           {l.user_id || l.user_first_name || 'SYSTEM'}

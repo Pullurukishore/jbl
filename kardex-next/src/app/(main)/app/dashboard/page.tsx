@@ -13,6 +13,7 @@ import { Loader } from '@/components/shared/Loader';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { apiPost, apiDownloadFile, downloadBlob } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
+import { formatIndianDate } from '@/lib/date';
 import { useAuth } from '@/context/AuthContext';
 import { DashboardCounts, Put, PaginatedResponse } from '@/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
@@ -757,8 +758,8 @@ export default function DashboardPage() {
           },
           {
             label: 'Date Range',
-            value: startDate ? startDate.toLocaleDateString() : 'All Time',
-            sub: endDate ? `to ${endDate.toLocaleDateString()}` : 'to Now',
+            value: startDate ? formatIndianDate(startDate) : 'All Time',
+            sub: endDate ? `to ${formatIndianDate(endDate)}` : 'to Now',
             isDate: true,
             color: '#0f172a',
             accent: 'linear-gradient(90deg, #f59e0b, #fbbf24)',

@@ -1175,9 +1175,9 @@ exports.searchAll = asyncHandler(async (req, res) => {
                 const data = results.rows.map((entry) => ({
                     serial_number: entry?.serial_number,
                     model_number: entry?.model_number,
-                    scanned_at: entry?.scanned_at,
+                    scanned_at: entry?.scanned_at ? moment(entry.scanned_at).format('DD-MM-YYYY HH:mm:ss') : 'N/A',
                     scanned_by: entry?.scanned_by,
-                    birth_date: entry?.birth_date,
+                    birth_date: entry?.birth_date ? moment(entry.birth_date).format('DD-MM-YYYY') : 'N/A',
                     pick_status: entry?.pick_status,
                     put_po_file: entry?.put_po_file?.name,
                     pv_status: entry?.pv_status,

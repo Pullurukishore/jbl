@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { apiGet, apiPost } from '@/lib/api';
 import { copyToClipboard as copyUtil } from '@/lib/clipboard';
+import { formatIndianDate, formatIndianDateTime } from '@/lib/date';
 import {
   MaterialDetailResponse,
   MaterialSerialItem,
@@ -149,8 +150,8 @@ export const MaterialDetailDrawer: React.FC<MaterialDetailDrawerProps> = ({
       'Bin Location (HU)': s.hu_id || 'Unassigned',
       'Compartment #': s.compartment_number ?? 'N/A',
       'Scanned By': s.scanned_by || 'SYSTEM',
-      'Scanned At': s.scanned_at ? new Date(s.scanned_at).toLocaleString() : 'N/A',
-      'Birth Date': s.birth_date ? new Date(s.birth_date).toLocaleDateString() : 'N/A'
+      'Scanned At': s.scanned_at ? formatIndianDateTime(s.scanned_at) : 'N/A',
+      'Birth Date': s.birth_date ? formatIndianDate(s.birth_date) : 'N/A'
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);

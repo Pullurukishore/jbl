@@ -68,6 +68,14 @@ export interface SerialAgingItem {
   storage_status: string | null;
   compartment_number: number | null;
   compartment_status?: string | null;
+  birth_to_in_days?: number | null;
+  birth_to_in_formatted?: string | null;
+  kanban_in_out_days?: number;
+  kanban_in_out_hours?: number;
+  kanban_in_out_minutes?: number;
+  kanban_in_out_formatted?: string;
+  is_picked?: boolean;
+  pick_date?: string | null;
   kardex_age_days: number;
   kardex_age_hours: number;
   kardex_age_minutes?: number;

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { apiGet, apiPost } from '@/lib/api';
 import { copyToClipboard as copyUtil } from '@/lib/clipboard';
+import { formatIndianDate, formatIndianDateTime } from '@/lib/date';
 import {
   MaterialDetailResponse,
   MaterialSerialItem,
@@ -178,8 +179,8 @@ export default function MaterialDetailPage({ params }: MaterialDetailPageProps) 
         'Bin Location (HU)': s.hu_id || 'Unassigned',
         'Compartment #': s.compartment_number ?? 'N/A',
         'Inbound Operator': s.scanned_by || 'SYSTEM',
-        'Inbound Timestamp': s.scanned_at ? new Date(s.scanned_at).toLocaleString() : 'N/A',
-        'Birth / MFD': s.birth_date ? new Date(s.birth_date).toLocaleDateString() : 'N/A',
+        'Inbound Timestamp': s.scanned_at ? formatIndianDateTime(s.scanned_at) : 'N/A',
+        'Birth / MFD': s.birth_date ? formatIndianDate(s.birth_date) : 'N/A',
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -996,7 +997,7 @@ export default function MaterialDetailPage({ params }: MaterialDetailPageProps) 
                           {/* Inbound Date */}
                           <td>
                             <span className="font-monospace small text-muted">
-                              {s.scanned_at ? new Date(s.scanned_at).toLocaleString() : '—'}
+                              {s.scanned_at ? formatIndianDateTime(s.scanned_at) : '—'}
                             </span>
                           </td>
 

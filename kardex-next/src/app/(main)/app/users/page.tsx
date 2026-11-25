@@ -7,6 +7,7 @@ import { Pagination } from '@/components/shared/Pagination';
 import { Loader } from '@/components/shared/Loader';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { apiGet, apiPost, apiDelete } from '@/lib/api';
+import { formatIndianDate } from '@/lib/date';
 import { User, PaginatedResponse } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -219,15 +220,7 @@ export default function UsersPage() {
 
   const formatDate = (iso?: string) => {
     if (!iso) return '—';
-    try {
-      return new Date(iso).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    } catch {
-      return '—';
-    }
+    return formatIndianDate(iso);
   };
 
   const getInitials = (u: User) => {
