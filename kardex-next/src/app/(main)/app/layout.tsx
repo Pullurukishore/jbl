@@ -138,17 +138,18 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           opacity: 0.85 !important;
         }
 
-        .brand-logo-pill {
-          background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-          color: #ffffff;
-          padding: 3.5px 8px;
-          border-radius: 6px;
-          font-size: 10.5px;
-          font-weight: 800;
-          letter-spacing: 0.7px;
-          box-shadow: 0 1px 3px rgba(37, 99, 235, 0.28);
-          line-height: 1.2;
+        .brand-logo-img {
+          height: 34px;
+          width: auto;
+          object-fit: contain;
           display: inline-block;
+          vertical-align: middle;
+          transition: transform 0.15s ease;
+        }
+
+        :global(a.brand-title-badge:hover) .brand-logo-img,
+        .brand-title-badge:hover .brand-logo-img {
+          transform: scale(1.03);
         }
 
         .brand-title-text {
@@ -422,7 +423,11 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             </button>
 
             <Link href="/app/dashboard" className="brand-title-badge" title="Jabil Adapter Validation">
-              <span className="brand-logo-pill">JABIL</span>
+              <img
+                src="/assets/images/Jabil-Logo.png"
+                alt="Jabil"
+                className="brand-logo-img"
+              />
               <span className="brand-title-text">Adapter Validation</span>
             </Link>
 

@@ -92,8 +92,11 @@ export default function LoginPage() {
           text-align: center;
         }
         .card .logo {
-          height: 48px;
-          margin-bottom: 12px;
+          height: 52px;
+          width: auto;
+          max-width: 190px;
+          object-fit: contain;
+          margin-bottom: 14px;
         }
         .card .form-control {
           border-radius: 6px;
@@ -117,7 +120,7 @@ export default function LoginPage() {
               <div className="col-lg-5 col-md-7 col-12 my-auto mx-auto">
                 <div className="card z-index-0 fadeIn3 fadeInBottom">
                   <div className="login-container">
-                    <img src="/assets/logo/logo.svg" alt="Logo" className="logo" />
+                    <img src="/assets/images/Jabil-Logo.png" alt="Jabil Logo" className="logo" />
                     <h4 className="fw-bold mt-3 mb-1 text-center">Jabil Adapter Validation</h4>
                     <p className="text-muted small mb-3">Sign in to your account</p>
 
