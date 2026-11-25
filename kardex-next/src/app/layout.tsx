@@ -10,10 +10,12 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Kardex - Put & Pick Validation',
-  description: 'Kardex Put and Pick Inventory Validation System',
+  title: 'Jabil Kardex | Adapter Validation',
+  description: 'Jabil Kardex Put and Pick Inventory Validation System',
   icons: {
-    icon: '/assets/logo/logo.svg',
+    icon: '/assets/images/images.png',
+    shortcut: '/assets/images/images.png',
+    apple: '/assets/images/images.png',
   },
 };
 
@@ -25,7 +27,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="icon" type="image/svg+xml" href="/assets/logo/logo.svg" />
+        <link rel="icon" type="image/png" href="/assets/images/images.png" />
+        <link rel="shortcut icon" type="image/png" href="/assets/images/images.png" />
+        <link rel="apple-touch-icon" href="/assets/images/images.png" />
       </head>
       <body>
         <AuthProvider>{children}</AuthProvider>
