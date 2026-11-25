@@ -9,27 +9,53 @@ require('dotenv').config({ path: path.join(__dirname, '..', 'config', 'config.en
 const RETENTION_DAYS = parseInt(process.env.DB_BACKUP_RETENTION_DAYS, 10) || 20;
 const LOG_RETENTION_DAYS = parseInt(process.env.LOG_RETENTION_DAYS, 10) || 7;
 const CRON_SCHEDULE = process.env.DB_BACKUP_CRON || '0 2 * * *'; // Default: every night at 02:00 AM
-const backupDir = path.join(__dirname, '..', 'backups');
-const logsDir = path.join(__dirname, '..', '..', 'logs');
+const backupDir = process.env.DB_BACKUP_DIR || path.join(__dirname, '..', 'backups');
+const logsDir = process.env.LOGS_DIR || path.join(__dirname, '..', '..', 'logs');
 
 /**
- * Locate pg_dump executable on Windows or system PATH
+ * Locate pg_dump executable on Windows or system PATH dynamically across any drive/version
  */
 function getPgDumpBinary() {
+    // 1. Explicit path in config.env
     if (process.env.PG_DUMP_PATH && fs.existsSync(process.env.PG_DUMP_PATH)) {
         return process.env.PG_DUMP_PATH;
     }
-    const candidates = [
-        'C:\\Program Files\\PostgreSQL\\17\\bin\\pg_dump.exe',
-        'C:\\Program Files\\PostgreSQL\\16\\bin\\pg_dump.exe',
-        'C:\\Program Files\\PostgreSQL\\15\\bin\\pg_dump.exe',
-        'C:\\Program Files\\PostgreSQL\\14\\bin\\pg_dump.exe',
+
+    // 2. Scan standard base installation directories for any version on C: or D:
+    const baseDirs = [
+        'C:\\Program Files\\PostgreSQL',
+        'C:\\Program Files (x86)\\PostgreSQL',
+        'D:\\Program Files\\PostgreSQL',
+        'C:\\PostgreSQL',
+        'D:\\PostgreSQL',
+        'E:\\PostgreSQL'
     ];
-    for (const p of candidates) {
-        if (fs.existsSync(p)) {
-            return p;
+
+    for (const base of baseDirs) {
+        if (fs.existsSync(base)) {
+            try {
+                const subdirs = fs.readdirSync(base)
+                    .sort((a, b) => (parseFloat(b) || 0) - (parseFloat(a) || 0)); // Highest version first (17, 16, 15...)
+                for (const sub of subdirs) {
+                    const candidate = path.join(base, sub, 'bin', 'pg_dump.exe');
+                    if (fs.existsSync(candidate)) {
+                        return candidate;
+                    }
+                }
+            } catch (_) {}
         }
     }
+
+    // 3. Check Windows system PATH
+    try {
+        const { execSync } = require('child_process');
+        const found = execSync('where pg_dump 2>nul', { encoding: 'utf8' }).trim().split('\r\n')[0];
+        if (found && fs.existsSync(found)) {
+            return found;
+        }
+    } catch (_) {}
+
+    // 4. Default fallback to global binary command
     return 'pg_dump';
 }
 
