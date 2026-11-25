@@ -1,6 +1,14 @@
 import { getToken, clearAuth } from './auth';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5005/api';
+export function getApiBase(): string {
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return `${window.location.protocol}//${hostname}:5005/api`;
+    }
+  }
+  return process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5005/api';
+}
 
 interface FetchOptions extends RequestInit {
   skipAuth?: boolean;
@@ -24,7 +32,7 @@ export async function apiFetch<T>(
     }
   }
 
-  const res = await fetch(`${API_BASE}${endpoint}`, {
+  const res = await fetch(`${getApiBase()}${endpoint}`, {
     credentials: 'include',
     ...rest,
     headers,
@@ -101,7 +109,7 @@ export function connectSSE(
 ): EventSource {
   const token = getToken();
   const separator = endpoint.includes('?') ? '&' : '?';
-  const url = `${API_BASE}${endpoint}${separator}id_token=${token}`;
+  const url = `${getApiBase()}${endpoint}${separator}id_token=${token}`;
 
   const eventSource = new EventSource(url);
 
@@ -142,7 +150,7 @@ export async function apiDownloadFile(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_BASE}${endpoint}`, {
+  const res = await fetch(`${getApiBase()}${endpoint}`, {
     method: 'POST',
     credentials: 'include',
     headers,

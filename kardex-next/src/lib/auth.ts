@@ -52,8 +52,14 @@ export function isAdmin(): boolean {
 export async function logout(): Promise<void> {
   const token = getToken();
   try {
-    const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5005/api';
-    await fetch(`${API_BASE}/auth/logout`, {
+    let apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5005/api';
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+        apiBase = `${window.location.protocol}//${hostname}:5005/api`;
+      }
+    }
+    await fetch(`${apiBase}/auth/logout`, {
       method: 'POST',
       credentials: 'include',
       headers: {
