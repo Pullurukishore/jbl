@@ -55,17 +55,26 @@ function renderProcessStatusBadge(status?: string | null) {
   if (s.includes('IN')) {
     return (
       <span
-        className="badge"
+        className="badge rounded-pill d-inline-flex align-items-center gap-1 shadow-sm"
         style={{
-          backgroundColor: '#e0f2fe',
-          color: '#0369a1',
-          border: '1px solid #7dd3fc',
+          backgroundColor: '#eff6ff',
+          color: '#1d4ed8',
+          border: '1px solid #bfdbfe',
           fontWeight: 700,
           fontSize: '11px',
           letterSpacing: '0.4px',
-          padding: '4px 8px',
+          padding: '4px 10px',
         }}
       >
+        <span
+          style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            backgroundColor: '#2563eb',
+            display: 'inline-block',
+          }}
+        />
         {status}
       </span>
     );
@@ -74,17 +83,26 @@ function renderProcessStatusBadge(status?: string | null) {
   if (s.includes('OUT')) {
     return (
       <span
-        className="badge"
+        className="badge rounded-pill d-inline-flex align-items-center gap-1 shadow-sm"
         style={{
-          backgroundColor: '#f3e8ff',
-          color: '#7e22ce',
-          border: '1px solid #c084fc',
+          backgroundColor: '#fff7ed',
+          color: '#c2410c',
+          border: '1px solid #fed7aa',
           fontWeight: 700,
           fontSize: '11px',
           letterSpacing: '0.4px',
-          padding: '4px 8px',
+          padding: '4px 10px',
         }}
       >
+        <span
+          style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            backgroundColor: '#ea580c',
+            display: 'inline-block',
+          }}
+        />
         {status}
       </span>
     );
@@ -93,24 +111,51 @@ function renderProcessStatusBadge(status?: string | null) {
   if (s.includes('RTN')) {
     return (
       <span
-        className="badge"
+        className="badge rounded-pill d-inline-flex align-items-center gap-1 shadow-sm"
         style={{
-          backgroundColor: '#fef3c7',
-          color: '#b45309',
-          border: '1px solid #fcd34d',
+          backgroundColor: '#fef2f2',
+          color: '#b91c1c',
+          border: '1px solid #fecaca',
           fontWeight: 700,
           fontSize: '11px',
           letterSpacing: '0.4px',
-          padding: '4px 8px',
+          padding: '4px 10px',
         }}
       >
+        <span
+          style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            backgroundColor: '#dc2626',
+            display: 'inline-block',
+          }}
+        />
         {status}
       </span>
     );
   }
 
   return (
-    <span className="badge bg-secondary" style={{ fontSize: '11px', padding: '4px 8px' }}>
+    <span
+      className="badge rounded-pill d-inline-flex align-items-center gap-1 shadow-sm"
+      style={{
+        backgroundColor: '#f1f5f9',
+        color: '#475569',
+        border: '1px solid #cbd5e1',
+        fontSize: '11px',
+        padding: '4px 10px',
+      }}
+    >
+      <span
+        style={{
+          width: '6px',
+          height: '6px',
+          borderRadius: '50%',
+          backgroundColor: '#64748b',
+          display: 'inline-block',
+        }}
+      />
       {status}
     </span>
   );
@@ -130,6 +175,7 @@ export default function DashboardPage() {
   const reqSeqRef = React.useRef(0);
   const [copiedSerial, setCopiedSerial] = useState<string | null>(null);
   const [copiedPo, setCopiedPo] = useState<string | null>(null);
+  const [copiedModel, setCopiedModel] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [totalPages, setTotalPages] = useState(1);
@@ -1060,7 +1106,37 @@ export default function DashboardPage() {
                         '-'
                       )}
                     </td>
-                    <td>{row.model_number}</td>
+                    <td>
+                      {row.model_number ? (
+                        <div className="d-flex align-items-center justify-content-between gap-1" style={{ maxWidth: '160px' }}>
+                          <span className="fw-semibold text-dark" style={{ fontSize: '13px' }}>
+                            {row.model_number}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-sm p-1 border-0 text-muted flex-shrink-0 ms-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (row.model_number) {
+                                copyToClipboard(row.model_number);
+                                setCopiedModel(row.model_number);
+                                setTimeout(() => setCopiedModel(null), 1500);
+                              }
+                            }}
+                            title={copiedModel === row.model_number ? 'Copied Model!' : 'Copy Model Number'}
+                            style={{ lineHeight: 1 }}
+                          >
+                            {copiedModel === row.model_number ? (
+                              <Check size={14} className="text-success" />
+                            ) : (
+                              <Copy size={13} className="text-secondary" />
+                            )}
+                          </button>
+                        </div>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
                     <td>
                       {row.user_first_name
                         ? `${row.user_first_name} ${row.user_last_name || ''}`
