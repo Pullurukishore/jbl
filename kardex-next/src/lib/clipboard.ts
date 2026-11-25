@@ -2,7 +2,7 @@
  * Cross-browser clipboard copy helper.
  * Supports:
  * 1. Secure contexts (HTTPS and http://localhost) via navigator.clipboard.writeText
- * 2. Insecure contexts (such as accessing via local LAN IP: http://10.132.61.205:3000)
+ * 2. Insecure contexts (such as accessing via local LAN IP: http://10.132.61.206:3000)
  *    via fallback to document.execCommand('copy') with an offscreen textarea.
  */
 export async function copyToClipboard(text: string): Promise<boolean> {
