@@ -57,12 +57,14 @@ export interface SerialAgingItem {
   compartment_status?: string | null;
   kardex_age_days: number;
   kardex_age_hours: number;
+  kardex_age_minutes?: number;
   kardex_total_hours: number;
   birth_age_days: number | null;
   age_bucket: '0-7' | '8-15' | '16-30' | '31-60' | '60+';
   is_kanban?: boolean;
   kanban_dwell_hours?: number | null;
   kanban_dwell_days?: number | null;
+  kanban_dwell_minutes?: number | null;
   kanban_sla_status?: 'NORMAL' | 'ATTENTION' | 'WARNING' | 'OVERDUE' | null;
 }
 

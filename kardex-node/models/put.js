@@ -51,7 +51,7 @@ module.exports = (sequelize, DataTypes) => {
             paranoid: false,
             timestamps: true,
             createdAt: 'scanned_at',
-            updatedAt: 'scanned_at',
+            updatedAt: false,
             freezeTableName: true,
         })
 

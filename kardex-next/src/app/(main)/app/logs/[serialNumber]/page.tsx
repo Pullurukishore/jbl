@@ -46,6 +46,7 @@ interface SerialAuditResponse {
   aging: {
     storage_age_days: number;
     storage_age_hours: number;
+    storage_age_minutes?: number;
     storage_total_hours: number;
     storage_formatted: string;
     birth_date: string | null;
@@ -53,6 +54,7 @@ interface SerialAuditResponse {
     is_kanban: boolean;
     kanban_dwell_hours: number | null;
     kanban_dwell_days: number | null;
+    kanban_dwell_minutes?: number | null;
   } | null;
   logs: Log[];
 }

@@ -293,8 +293,17 @@ export default function ReportsPage() {
         const birthDate = r.birth_date && r.birth_date !== 'N/A' ? new Date(r.birth_date) : null;
         const ageDays = typeof r.kardex_age_days === 'number' ? r.kardex_age_days : (parseInt(r.kardex_age_days, 10) || 0);
         const ageHours = typeof r.kardex_age_hours === 'number' ? r.kardex_age_hours : (parseInt(r.kardex_age_hours, 10) || 0);
-        const birthAgeDays = r.birth_age_days !== null && r.birth_age_days !== undefined && r.birth_age_days !== 'N/A' ? `${r.birth_age_days} Days Old` : 'No Birth Date';
-        const storageKanbanAging = isKanban ? `KANBAN-IN: ${ageDays}d ${ageHours}h` : `${ageDays}d ${ageHours}h`;
+        const ageMinutes = typeof r.kardex_age_minutes === 'number'
+          ? r.kardex_age_minutes
+          : (r.scanned_at ? Math.floor((Math.max(0, Date.now() - new Date(r.scanned_at).getTime()) % (1000 * 60 * 60)) / (1000 * 60)) : 0);
+        const birthAgeDays =
+          r.birth_age_days !== null &&
+          r.birth_age_days !== undefined &&
+          r.birth_age_days !== 'N/A' &&
+          !isNaN(Number(r.birth_age_days))
+            ? Number(r.birth_age_days)
+            : 'N/A';
+        const storageKanbanAging = isKanban ? `KANBAN-IN: ${ageDays}d ${ageHours}h ${ageMinutes}m` : `${ageDays}d ${ageHours}h ${ageMinutes}m`;
 
         return {
           'SL NO': index + 1,
@@ -304,9 +313,9 @@ export default function ReportsPage() {
           'COMPARTMENT NO': r.compartment_number !== null && r.compartment_number !== undefined ? r.compartment_number : 'N/A',
           'PROCESS FLOW': r.process_status || 'N/A',
           'PV STATUS': r.pv_status || 'PASS',
-          'STORAGE & KANBAN AGING': storageKanbanAging,
+          'MES & KANBAN IN AGING': storageKanbanAging,
           'INBOUND DATE & TIME': scannedDate ? scannedDate.toLocaleString() : 'N/A',
-          'SMT BIRTH AGING': birthAgeDays,
+          'SMT BIRTH AGING (IN DAYS)': birthAgeDays,
           'SMT BIRTH DATE': birthDate ? birthDate.toLocaleDateString() : 'N/A',
           'STOCK STATUS': r.pick_status || 'AVAILABLE',
         };
@@ -386,9 +395,9 @@ export default function ReportsPage() {
               'COMPARTMENT NO',
               'PROCESS FLOW',
               'PV STATUS',
-              'STORAGE & KANBAN AGING',
+              'MES & KANBAN IN AGING',
               'INBOUND DATE & TIME',
-              'SMT BIRTH AGING',
+              'SMT BIRTH AGING (IN DAYS)',
               'SMT BIRTH DATE',
               'STOCK STATUS',
             ];
@@ -421,7 +430,7 @@ export default function ReportsPage() {
                 fontColor = '991B1B';
                 isBold = true;
               }
-            } else if (colName === 'STORAGE & KANBAN AGING') {
+            } else if (colName === 'MES & KANBAN IN AGING') {
               if (cellValue.includes('KANBAN')) {
                 bgColor = 'F3E8FF'; // Soft purple for Kanban
                 fontColor = '7E22CE';
@@ -430,8 +439,8 @@ export default function ReportsPage() {
                 bgColor = 'F8FAFC';
                 fontColor = '334155';
               }
-            } else if (colName === 'SMT BIRTH AGING') {
-              if (!cellValue.includes('No Birth')) {
+            } else if (colName === 'SMT BIRTH AGING (IN DAYS)') {
+              if (cellValue !== 'N/A' && cellValue !== 'No Birth Date' && cellValue !== '' && !isNaN(Number(cellValue))) {
                 bgColor = 'EFF6FF'; // Soft Tech Blue
                 fontColor = '1D4ED8';
                 isBold = true;
@@ -1968,7 +1977,7 @@ export default function ReportsPage() {
                       setPage(1);
                     }}
                   >
-                    Storage &amp; Kanban Aging {sortField === 'scanned_at' && (sortDirection === 'ASC' ? '↑' : '↓')}
+                    MES &amp; KANBAN IN Aging {sortField === 'scanned_at' && (sortDirection === 'ASC' ? '↑' : '↓')}
                   </th>
                   <th
                     className="sortable-th"
@@ -2087,18 +2096,24 @@ export default function ReportsPage() {
                         </span>
                       </td>
 
-                      {/* Storage & Kanban In Aging */}
+                      {/* MES & Kanban In Aging */}
                       <td>
-                        {row.is_kanban ? (
-                          <span className="badge badge-kanban-age" title="Kanban Inbound Storage Aging">
-                            <Zap size={11} /> KANBAN-IN: {row.kardex_age_days}d {row.kardex_age_hours}h
-                          </span>
-                        ) : (
-                          <span className="badge badge-storage-age" title="Standard Storage Aging">
-                            <Clock size={11} style={{ color: '#64748b' }} />
-                            {row.kardex_age_days}d {row.kardex_age_hours}h
-                          </span>
-                        )}
+                        {(() => {
+                          const mins = typeof row.kardex_age_minutes === 'number'
+                            ? row.kardex_age_minutes
+                            : (row.scanned_at ? Math.floor((Math.max(0, Date.now() - new Date(row.scanned_at).getTime()) % (1000 * 60 * 60)) / (1000 * 60)) : 0);
+
+                          return row.is_kanban ? (
+                            <span className="badge badge-kanban-age" title="Kanban Inbound Storage Aging">
+                              <Zap size={11} /> KANBAN-IN: {row.kardex_age_days}d {row.kardex_age_hours}h {mins}m
+                            </span>
+                          ) : (
+                            <span className="badge badge-storage-age" title="Standard Storage Aging">
+                              <Clock size={11} style={{ color: '#64748b' }} />
+                              {row.kardex_age_days}d {row.kardex_age_hours}h {mins}m
+                            </span>
+                          );
+                        })()}
                         {row.scanned_at && (
                           <div className="inbound-date-subtext">
                             Inbound:{' '}

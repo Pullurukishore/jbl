@@ -6,12 +6,13 @@ const { Op } = require('sequelize');
  * Helper to calculate age in days and hours
  */
 function calculateAge(fromDate, toDate = new Date()) {
-    if (!fromDate) return { days: 0, hours: 0, totalHours: 0 };
+    if (!fromDate) return { days: 0, hours: 0, minutes: 0, totalHours: 0 };
     const diffMs = Math.max(0, toDate.getTime() - new Date(fromDate).getTime());
     const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
     const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    return { days, hours, totalHours };
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    return { days, hours, minutes, totalHours };
 }
 
 /**
@@ -340,12 +341,14 @@ exports.getSerialAgingList = asyncHandler(async (req, res) => {
                 compartment_status: r.compartment?.status || (r.compartment?.compartment_number ? 'OCCUPIED' : null),
                 kardex_age_days: kardexAge.days,
                 kardex_age_hours: kardexAge.hours,
+                kardex_age_minutes: kardexAge.minutes,
                 kardex_total_hours: kardexAge.totalHours,
                 birth_age_days: birthAge ? birthAge.days : null,
                 age_bucket: bucket,
                 is_kanban: isKanban,
                 kanban_dwell_hours: isKanban ? kardexAge.totalHours : null,
                 kanban_dwell_days: isKanban ? kardexAge.days : null,
+                kanban_dwell_minutes: isKanban ? kardexAge.minutes : null,
                 kanban_sla_status: kanbanSla
             };
         });
@@ -490,6 +493,7 @@ exports.getKanbanAgingList = asyncHandler(async (req, res) => {
                 compartment_number: r.compartment?.compartment_number || null,
                 dwell_days: age.days,
                 dwell_hours: age.hours,
+                dwell_minutes: age.minutes,
                 dwell_total_hours: age.totalHours,
                 birth_age_days: birthAge ? birthAge.days : null,
                 sla_status: sla
@@ -678,6 +682,7 @@ exports.getAgingExportData = asyncHandler(async (req, res) => {
                 birth_date: r.birth_date || 'N/A',
                 kardex_age_days: age.days,
                 kardex_age_hours: age.hours,
+                kardex_age_minutes: age.minutes,
                 kardex_total_hours: age.totalHours,
                 birth_age_days: birthAge ? birthAge.days : 'N/A',
                 age_bucket: bucket,
@@ -788,13 +793,15 @@ exports.getSerialAuditDetails = asyncHandler(async (req, res) => {
             aging = {
                 storage_age_days: kardexAge.days,
                 storage_age_hours: kardexAge.hours,
+                storage_age_minutes: kardexAge.minutes,
                 storage_total_hours: kardexAge.totalHours,
-                storage_formatted: `${kardexAge.days}d ${kardexAge.hours}h`,
+                storage_formatted: `${kardexAge.days}d ${kardexAge.hours}h ${kardexAge.minutes}m`,
                 birth_date: put.birth_date,
                 birth_age_days: birthAge ? birthAge.days : null,
                 is_kanban: isKanban,
                 kanban_dwell_hours: isKanban ? kardexAge.totalHours : null,
-                kanban_dwell_days: isKanban ? kardexAge.days : null
+                kanban_dwell_days: isKanban ? kardexAge.days : null,
+                kanban_dwell_minutes: isKanban ? kardexAge.minutes : null
             };
         }
 

@@ -760,6 +760,7 @@ exports.createPut = asyncHandler(async (req, res) => {
                 text_file_id: null,
                 pick_id: null,
                 scanned_by: finalUserId,
+                scanned_at: new Date(),
                 text_file_downloaded: false
             });
         }
