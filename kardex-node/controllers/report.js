@@ -18,12 +18,15 @@ function calculateAge(fromDate, toDate = new Date()) {
 /**
  * Classify inventory age into standard buckets
  */
-function getAgeBucket(days) {
-    if (days <= 7) return '0-7';
+function getAgeBucket(days, totalHours) {
+    if (totalHours !== undefined && totalHours < 24) return '<24h';
+    if (days <= 3) return '1-3';
+    if (days <= 7) return '4-7';
     if (days <= 15) return '8-15';
     if (days <= 30) return '16-30';
     if (days <= 60) return '31-60';
-    return '60+';
+    if (days <= 120) return '61-120';
+    return '120+';
 }
 
 /**
@@ -248,12 +251,22 @@ exports.getSerialAgingList = asyncHandler(async (req, res) => {
 
         // Age Bucket filter
         if (ageBucket && ageBucket !== 'ALL') {
+            const h24 = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            const d1 = h24;
+            const d3 = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
             const d7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
             const d15 = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000);
             const d30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
             const d60 = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+            const d120 = new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000);
 
-            if (ageBucket === '0-7') {
+            if (ageBucket === '<24h' || ageBucket === '0-1') {
+                whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.gte]: h24 };
+            } else if (ageBucket === '1-3') {
+                whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d1, [Op.gte]: d3 };
+            } else if (ageBucket === '4-7') {
+                whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d3, [Op.gte]: d7 };
+            } else if (ageBucket === '0-7') {
                 whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.gte]: d7 };
             } else if (ageBucket === '8-15') {
                 whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d7, [Op.gte]: d15 };
@@ -261,6 +274,10 @@ exports.getSerialAgingList = asyncHandler(async (req, res) => {
                 whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d15, [Op.gte]: d30 };
             } else if (ageBucket === '31-60') {
                 whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d30, [Op.gte]: d60 };
+            } else if (ageBucket === '61-120') {
+                whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d60, [Op.gte]: d120 };
+            } else if (ageBucket === '120+') {
+                whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d120 };
             } else if (ageBucket === '60+') {
                 whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d60 };
             } else if (ageBucket === '30+' || ageBucket === 'CRITICAL_30_PLUS') {
@@ -317,7 +334,7 @@ exports.getSerialAgingList = asyncHandler(async (req, res) => {
         const items = rows.map(r => {
             const kardexAge = calculateAge(r.scanned_at, now);
             const birthAge = r.birth_date ? calculateAge(r.birth_date, now) : null;
-            const bucket = getAgeBucket(kardexAge.days);
+            const bucket = getAgeBucket(kardexAge.days, kardexAge.totalHours);
 
             const isKanban = ['KANBAN-IN', 'KANBAN_IN', 'KANBAN-OUT', 'KANBAN_OUT', 'KANBAN-RTN', 'KANBAN_RTN'].some(k =>
                 r.process_status?.toUpperCase()?.includes(k)
@@ -581,12 +598,22 @@ exports.getAgingExportData = asyncHandler(async (req, res) => {
         }
 
         if (ageBucket && ageBucket !== 'ALL') {
+            const h24 = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            const d1 = h24;
+            const d3 = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
             const d7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
             const d15 = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000);
             const d30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
             const d60 = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+            const d120 = new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000);
 
-            if (ageBucket === '0-7') {
+            if (ageBucket === '<24h' || ageBucket === '0-1') {
+                whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.gte]: h24 };
+            } else if (ageBucket === '1-3') {
+                whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d1, [Op.gte]: d3 };
+            } else if (ageBucket === '4-7') {
+                whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d3, [Op.gte]: d7 };
+            } else if (ageBucket === '0-7') {
                 whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.gte]: d7 };
             } else if (ageBucket === '8-15') {
                 whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d7, [Op.gte]: d15 };
@@ -594,6 +621,10 @@ exports.getAgingExportData = asyncHandler(async (req, res) => {
                 whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d15, [Op.gte]: d30 };
             } else if (ageBucket === '31-60') {
                 whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d30, [Op.gte]: d60 };
+            } else if (ageBucket === '61-120') {
+                whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d60, [Op.gte]: d120 };
+            } else if (ageBucket === '120+') {
+                whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d120 };
             } else if (ageBucket === '60+') {
                 whereClause.scanned_at = { ...(whereClause.scanned_at || {}), [Op.lt]: d60 };
             } else if (ageBucket === '30+' || ageBucket === 'CRITICAL_30_PLUS') {
@@ -660,7 +691,7 @@ exports.getAgingExportData = asyncHandler(async (req, res) => {
         const items = rows.map(r => {
             const age = calculateAge(r.scanned_at, now);
             const birthAge = r.birth_date ? calculateAge(r.birth_date, now) : null;
-            const bucket = getAgeBucket(age.days);
+            const bucket = getAgeBucket(age.days, age.totalHours);
             const isKanban = ['KANBAN-IN', 'KANBAN_IN', 'KANBAN-RTN', 'KANBAN_RTN'].some(k =>
                 r.process_status?.toUpperCase()?.includes(k)
             );

@@ -1751,19 +1751,24 @@ export default function ReportsPage() {
             <option value="ALL">All Statuses</option>
           </select>
 
-          {/* Storage Duration Filter */}
+          {/* MES & KANBAN IN Duration Filter */}
           <select
             className="filter-select"
             value={ageBucket}
             onChange={(e) => handleAgeBucketChange(e.target.value as AgeBucket)}
-            title="Filter by Kardex storage duration"
+            title="Filter by MES & KANBAN IN duration"
           >
-            <option value="ALL">All Storage Ages</option>
-            <option value="0-7">0 - 7 Days</option>
+            <option value="ALL">All MES & KANBAN IN Ages</option>
+            <option value="<24h">&lt; 24 Hours (New Today)</option>
+            <option value="1-3">1 - 3 Days</option>
+            <option value="4-7">4 - 7 Days</option>
             <option value="8-15">8 - 15 Days</option>
             <option value="16-30">16 - 30 Days</option>
             <option value="31-60">31 - 60 Days</option>
-            <option value="60+">60+ Days</option>
+            <option value="61-120">61 - 120 Days</option>
+            <option value="120+">120+ Days</option>
+            <option value="30+">30+ Days (All Critical)</option>
+            <option value="60+">60+ Days (Severe Overdue)</option>
           </select>
 
           {/* Process Filter */}

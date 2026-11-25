@@ -1,4 +1,17 @@
-export type AgeBucket = '0-7' | '8-15' | '16-30' | '31-60' | '60+' | '30+' | 'ALL';
+export type AgeBucket =
+  | '<24h'
+  | '0-1'
+  | '1-3'
+  | '4-7'
+  | '0-7'
+  | '8-15'
+  | '16-30'
+  | '31-60'
+  | '61-120'
+  | '60+'
+  | '120+'
+  | '30+'
+  | 'ALL';
 export type KanbanSlaStatus = 'NORMAL' | 'ATTENTION' | 'WARNING' | 'OVERDUE' | 'ALL';
 
 export interface OldestUnit {
@@ -60,7 +73,7 @@ export interface SerialAgingItem {
   kardex_age_minutes?: number;
   kardex_total_hours: number;
   birth_age_days: number | null;
-  age_bucket: '0-7' | '8-15' | '16-30' | '31-60' | '60+';
+  age_bucket: '<24h' | '0-1' | '1-3' | '4-7' | '0-7' | '8-15' | '16-30' | '31-60' | '61-120' | '120+' | '60+' | '30+';
   is_kanban?: boolean;
   kanban_dwell_hours?: number | null;
   kanban_dwell_days?: number | null;
