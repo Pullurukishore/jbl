@@ -47,6 +47,11 @@ module.exports = (sequelize, DataTypes) => {
             paranoid: false,
             timestamps: false,
             freezeTableName: true,
+            indexes: [
+                { name: 'idx_log_entity_number', fields: ['entity_number'] },
+                { name: 'idx_log_type_status_time', fields: ['log_type', 'status', 'log_date_time'] },
+                { name: 'idx_log_process_id', fields: ['process_id'] }
+            ]
         })
 
     return model;

@@ -53,6 +53,14 @@ module.exports = (sequelize, DataTypes) => {
             createdAt: 'scanned_at',
             updatedAt: false,
             freezeTableName: true,
+            indexes: [
+                { name: 'idx_put_serial_number', fields: ['serial_number'] },
+                { name: 'idx_put_pick_status_scanned_at', fields: ['pick_status', 'scanned_at'] },
+                { name: 'idx_put_model_number', fields: ['model_number'] },
+                { name: 'idx_put_handling_unit_id', fields: ['handling_unit_id'] },
+                { name: 'idx_put_compartment_id', fields: ['compartment_id'] },
+                { name: 'idx_put_pick_id', fields: ['pick_id'] }
+            ]
         })
 
     return model;
