@@ -43,8 +43,19 @@ exports.registerHU = asyncHandler(async (req, res) => {
     if (!hu_id || typeof hu_id !== 'string') {
         return res.status(400).json({ error: 'hu_id is required.' });
     }
-    const cleanHuId = hu_id.trim();
-    if (!/^[a-zA-Z0-9_\-]+$/.test(cleanHuId)) {
+    const cleanHuId = hu_id.trim().toUpperCase();
+
+    // Validation 1: First 4 characters must be 'BIN-'
+    if (!cleanHuId.startsWith('BIN-')) {
+        return res.status(400).json({ error: "Bin ID must start with prefix 'BIN-' (e.g. BIN-00001)." });
+    }
+
+    // Validation 2: Total length must be at least 9 characters
+    if (cleanHuId.length < 9) {
+        return res.status(400).json({ error: `Bin ID must be at least 9 characters long. You entered ${cleanHuId.length} characters (e.g. BIN-00001).` });
+    }
+
+    if (!/^BIN-[A-Z0-9_\-]+$/.test(cleanHuId)) {
         return res.status(400).json({ error: 'Invalid hu_id. Only alphanumeric characters, dashes, and underscores are allowed.' });
     }
 
@@ -82,7 +93,7 @@ exports.registerHU = asyncHandler(async (req, res) => {
 
     const effectiveBinTypeId = binType.id;
 
-    const existing = await db.handling_unit.findOne({ where: { hu_id } });
+    const existing = await db.handling_unit.findOne({ where: { hu_id: cleanHuId } });
     if (existing && existing.storage_status !== 'DRAFT') {
         return res.status(409).json({ error: 'Bin already registered and cannot be re-registered.' });
     }
@@ -115,7 +126,7 @@ exports.registerHU = asyncHandler(async (req, res) => {
         hu = existing;
     } else {
         hu = await db.handling_unit.create({
-            hu_id,
+            hu_id: cleanHuId,
             bin_type_id: effectiveBinTypeId,
             hu_status: 'EMPTY',
             storage_status: 'DRAFT',

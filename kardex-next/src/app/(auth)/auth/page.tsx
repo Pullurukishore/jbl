@@ -118,7 +118,8 @@ export default function LoginPage() {
                 <div className="card z-index-0 fadeIn3 fadeInBottom">
                   <div className="login-container">
                     <img src="/assets/logo/logo.svg" alt="Logo" className="logo" />
-                    <h3 className="fw-bold mb-3 mt-3 text-center">Sign In</h3>
+                    <h4 className="fw-bold mt-3 mb-1 text-center">Jabil Adapter Validation</h4>
+                    <p className="text-muted small mb-3">Sign in to your account</p>
 
                     {successMsg && (
                       <div className="alert alert-success d-flex align-items-center justify-content-center gap-2 py-2" role="alert">

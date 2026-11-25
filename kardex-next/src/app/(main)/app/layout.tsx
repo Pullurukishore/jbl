@@ -56,11 +56,11 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
         /* Top Header Navbar Bar */
         .app-header-navbar {
-          background: rgba(255, 255, 255, 0.96);
+          background: rgba(255, 255, 255, 0.98);
           backdrop-filter: blur(14px);
           -webkit-backdrop-filter: blur(14px);
           border-bottom: 1px solid #e2e8f0;
-          padding: 10px 24px;
+          padding: 8px 24px;
           box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 14px rgba(15, 23, 42, 0.03);
           position: sticky;
           top: 0;
@@ -78,20 +78,15 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           align-items: center;
           justify-content: space-between;
           width: 100%;
-          gap: 0.75rem;
+          gap: 1rem;
         }
 
-        /* Mobile Header Left */
-        .mobile-header-brand {
-          display: none;
+        /* Header Left: Brand + Divider + Nav Dock */
+        .header-left-group {
+          display: flex;
           align-items: center;
-          gap: 8px;
-        }
-
-        @media (max-width: 768px) {
-          .mobile-header-brand {
-            display: flex;
-          }
+          gap: 14px;
+          min-width: 0;
         }
 
         .btn-hamburger {
@@ -101,11 +96,18 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           width: 36px;
           height: 36px;
           border-radius: 9px;
-          display: flex;
+          display: none;
           align-items: center;
           justify-content: center;
           cursor: pointer;
           transition: all 0.15s ease;
+          flex-shrink: 0;
+        }
+
+        @media (max-width: 992px) {
+          .btn-hamburger {
+            display: flex;
+          }
         }
 
         .btn-hamburger:hover {
@@ -113,25 +115,55 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           color: #0f172a;
         }
 
+        :global(a.brand-title-badge),
         .brand-title-badge {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          text-decoration: none;
-          color: #0f172a;
-          font-weight: 800;
-          font-size: 14.5px;
-          letter-spacing: -0.3px;
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 10px !important;
+          text-decoration: none !important;
+          color: #0f172a !important;
+          font-weight: 700 !important;
+          font-size: 14.5px !important;
+          letter-spacing: -0.2px !important;
+          transition: opacity 0.15s ease !important;
+          flex-shrink: 0 !important;
+          user-select: none !important;
+        }
+
+        :global(a.brand-title-badge:hover),
+        :global(a.brand-title-badge:focus),
+        .brand-title-badge:hover {
+          text-decoration: none !important;
+          color: #0f172a !important;
+          opacity: 0.85 !important;
         }
 
         .brand-logo-pill {
           background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
           color: #ffffff;
-          padding: 3px 6px;
+          padding: 3.5px 8px;
           border-radius: 6px;
-          font-size: 10px;
+          font-size: 10.5px;
           font-weight: 800;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.7px;
+          box-shadow: 0 1px 3px rgba(37, 99, 235, 0.28);
+          line-height: 1.2;
+          display: inline-block;
+        }
+
+        .brand-title-text {
+          font-weight: 700;
+          color: #0f172a;
+          white-space: nowrap;
+          text-decoration: none !important;
+        }
+
+        .header-v-divider {
+          width: 1px;
+          height: 22px;
+          background: #cbd5e1;
+          flex-shrink: 0;
+          margin: 0 2px;
         }
 
         /* Navigation Dock (Desktop & Tablet) */
@@ -378,8 +410,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       {/* Modern Clean Header Navigation Bar */}
       <header className="app-header-navbar">
         <div className="header-inner-row">
-          {/* Mobile Left: Menu Toggle + Brand */}
-          <div className="mobile-header-brand">
+          {/* Header Left: Hamburger Toggle (mobile) + Brand Badge + Nav Dock */}
+          <div className="header-left-group">
             <button
               className="btn-hamburger"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -388,62 +420,65 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             >
               {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
-            <Link href="/app/dashboard" className="brand-title-badge">
-              <span className="brand-logo-pill">KARDEX</span>
-              <span>Inventory</span>
+
+            <Link href="/app/dashboard" className="brand-title-badge" title="Jabil Adapter Validation">
+              <span className="brand-logo-pill">JABIL</span>
+              <span className="brand-title-text">Adapter Validation</span>
             </Link>
+
+            <div className="header-v-divider d-none d-md-block" />
+
+            {/* Desktop & Tablet: Segmented Navigation Dock */}
+            <nav className="nav-dock-wrapper" aria-label="Main Navigation">
+              <Link
+                href="/app/dashboard"
+                className={`dock-nav-link ${pathname === '/app/dashboard' ? 'active' : ''}`}
+              >
+                <PieChart size={14} /> Dashboard
+              </Link>
+
+              {canPut && (
+                <Link
+                  href="/app/hu-put"
+                  className={`dock-nav-link ${pathname.startsWith('/app/hu-put') ? 'active' : ''}`}
+                >
+                  <PackagePlus size={14} /> HU Put
+                </Link>
+              )}
+
+              {canPick && (
+                <Link
+                  href="/app/pick"
+                  className={`dock-nav-link ${pathname.startsWith('/app/pick') ? 'active' : ''}`}
+                >
+                  <PackageMinus size={14} /> Pick
+                </Link>
+              )}
+
+              <Link
+                href="/app/materials"
+                className={`dock-nav-link ${pathname.startsWith('/app/materials') ? 'active' : ''}`}
+              >
+                <Layers size={14} /> Materials
+              </Link>
+
+              <Link
+                href="/app/reports"
+                className={`dock-nav-link ${pathname.startsWith('/app/reports') ? 'active' : ''}`}
+              >
+                <FileBarChart size={14} /> Reports
+              </Link>
+
+              {isAdmin && (
+                <Link
+                  href="/app/users"
+                  className={`dock-nav-link ${pathname === '/app/users' ? 'active' : ''}`}
+                >
+                  <Users size={14} /> User List
+                </Link>
+              )}
+            </nav>
           </div>
-
-          {/* Desktop & Tablet: Segmented Navigation Dock */}
-          <nav className="nav-dock-wrapper" aria-label="Main Navigation">
-            <Link
-              href="/app/dashboard"
-              className={`dock-nav-link ${pathname === '/app/dashboard' ? 'active' : ''}`}
-            >
-              <PieChart size={14} /> Dashboard
-            </Link>
-
-            {canPut && (
-              <Link
-                href="/app/hu-put"
-                className={`dock-nav-link ${pathname.startsWith('/app/hu-put') ? 'active' : ''}`}
-              >
-                <PackagePlus size={14} /> HU Put
-              </Link>
-            )}
-
-            {canPick && (
-              <Link
-                href="/app/pick"
-                className={`dock-nav-link ${pathname.startsWith('/app/pick') ? 'active' : ''}`}
-              >
-                <PackageMinus size={14} /> Pick
-              </Link>
-            )}
-
-            <Link
-              href="/app/materials"
-              className={`dock-nav-link ${pathname.startsWith('/app/materials') ? 'active' : ''}`}
-            >
-              <Layers size={14} /> Materials
-            </Link>
-
-            <Link
-              href="/app/reports"
-              className={`dock-nav-link ${pathname.startsWith('/app/reports') ? 'active' : ''}`}
-            >
-              <FileBarChart size={14} /> Reports
-            </Link>
-
-            {isAdmin && (
-              <Link
-                href="/app/users"
-                className={`dock-nav-link ${pathname === '/app/users' ? 'active' : ''}`}
-              >
-                <Users size={14} /> User List
-              </Link>
-            )}
-          </nav>
 
           {/* Right: User Profile Capsule & Logout */}
           <div className="operator-card-pill">

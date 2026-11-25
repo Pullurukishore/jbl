@@ -28,7 +28,7 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
   onSuccess,
   initialHuId,
 }) => {
-  const [huId, setHuId] = useState('');
+  const [huId, setHuId] = useState('BIN-');
   const [selectedBinType, setSelectedBinType] = useState<'CON_BINC' | 'CON_BIND'>('CON_BINC');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -36,25 +36,50 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) {
-      setHuId('');
+      setHuId('BIN-');
       setSelectedBinType('CON_BINC');
       setError('');
       setSubmitting(false);
     } else {
-      setHuId(initialHuId || '');
+      const init = initialHuId
+        ? (initialHuId.toUpperCase().startsWith('BIN-') ? initialHuId.toUpperCase() : `BIN-${initialHuId}`)
+        : 'BIN-';
+      setHuId(init);
       setSelectedBinType('CON_BINC');
-      setTimeout(() => inputRef.current?.focus(), 150);
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          const len = inputRef.current.value.length;
+          inputRef.current.setSelectionRange(len, len);
+        }
+      }, 150);
     }
   }, [isOpen, initialHuId]);
 
+  const cleanId = huId.trim().toUpperCase();
+  const isPrefixValid = cleanId.startsWith('BIN-');
+  const isLengthValid = cleanId.length >= 9;
+  const isFormatValid = /^BIN-[A-Z0-9_\-]+$/.test(cleanId);
+  const isBinValid = isPrefixValid && isLengthValid && isFormatValid;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanId = huId.trim();
-    if (!cleanId) {
-      setError('Please enter a valid Bin ID (e.g. H1, B01)');
+    if (!isPrefixValid) {
+      setError("Bin ID must start with prefix 'BIN-' (e.g. BIN-00001)");
       inputRef.current?.focus();
       return;
     }
+    if (!isLengthValid) {
+      setError(`Bin ID must be at least 9 characters long (currently ${cleanId.length}/9, e.g. BIN-00001)`);
+      inputRef.current?.focus();
+      return;
+    }
+    if (!isFormatValid) {
+      setError("Invalid format. Only alphanumeric characters, dashes, and underscores are allowed.");
+      inputRef.current?.focus();
+      return;
+    }
+
     try {
       setSubmitting(true);
       setError('');
@@ -118,7 +143,7 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
             type="submit"
             form="register-bin-form"
             className="btn-submit-register"
-            disabled={submitting || !huId.trim()}
+            disabled={submitting || !isBinValid}
           >
             {submitting ? (
               <>
@@ -426,17 +451,30 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
                   ref={inputRef}
                   type="text"
                   className="input-clean-field"
-                  placeholder="e.g. H1, H2, BIN-01"
+                  placeholder="e.g. BIN-00001"
                   value={huId}
-                  onChange={(e) => setHuId(e.target.value)}
+                  onChange={(e) => {
+                    setHuId(e.target.value.toUpperCase());
+                    setError('');
+                  }}
                   disabled={submitting}
                   autoComplete="off"
                 />
               </div>
 
+              {/* Real-time Validation Indicators */}
+              <div className="d-flex align-items-center gap-3 mt-1 px-1" style={{ fontSize: '11.5px' }}>
+                <span className={`d-inline-flex align-items-center gap-1 fw-bold ${isPrefixValid ? 'text-success' : 'text-danger'}`}>
+                  <span>{isPrefixValid ? '✓' : '✗'}</span> Starts with BIN-
+                </span>
+                <span className={`d-inline-flex align-items-center gap-1 fw-bold ${isLengthValid ? 'text-success' : 'text-muted'}`}>
+                  <span>{isLengthValid ? '✓' : '○'}</span> Min 9 chars ({cleanId.length}/9)
+                </span>
+              </div>
+
               <span className="helper-text">
                 <Info size={12} className="text-muted" />
-                Scan or enter the barcode printed on the physical tray.
+                Prefix must be BIN- followed by at least 5 alphanumeric characters (e.g. BIN-00001).
               </span>
             </div>
 
