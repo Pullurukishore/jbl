@@ -30,7 +30,7 @@ import {
   ShieldAlert,
   ArrowUpRight
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx-js-style';
 
 interface MaterialDetailDrawerProps {
   modelNumber: string | null;

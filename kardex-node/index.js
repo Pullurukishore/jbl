@@ -45,7 +45,6 @@ const authRoutes = require('./routes/auth');
 const huRoutes = require('./routes/hu');
 const materialRoutes = require('./routes/material');
 const reportRoutes = require('./routes/report');
-const { create } = require('xmlbuilder2');
 
 // Automated Daily Database Backup Scheduler (20-day retention)
 require('./scheduler/db_backup');

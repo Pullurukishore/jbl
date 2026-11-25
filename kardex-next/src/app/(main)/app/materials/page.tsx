@@ -36,7 +36,7 @@ import {
   Sparkles,
   PackageMinus,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx-js-style';
 
 export default function MaterialsPage() {
   // Stats State
