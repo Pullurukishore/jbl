@@ -635,7 +635,9 @@ exports.getPickPlan = asyncHandler(async (req, res) => {
                 model_number: item.model_number,
                 compartment_number: item.compartment?.compartment_number || null,
                 compartment_id: item.compartment_id,
-                birth_date: item.birth_date
+                birth_date: item.birth_date,
+                process_status: item.process_status || null,
+                pick_status: item.pick_status || 'AVAILABLE'
             });
         }
 

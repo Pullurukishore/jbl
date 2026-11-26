@@ -40,6 +40,8 @@ interface AvailableInventoryItem {
   serial_number: string;
   model_number: string;
   birth_date?: string | null;
+  process_status?: string | null;
+  pick_status?: string | null;
   compartment?: {
     compartment_number?: number | null;
   } | null;
@@ -55,6 +57,8 @@ interface PickPlanItem {
   compartment_number: number | null;
   compartment_id?: number | null;
   birth_date?: string | null;
+  process_status?: string | null;
+  pick_status?: string | null;
 }
 
 interface PickPlanBin {
@@ -290,6 +294,8 @@ export default function PickWorkstationPage() {
             compartment_number: compNum,
             compartment_id: item.compartment_id || null,
             birth_date: item.birth_date,
+            process_status: item.process_status || null,
+            pick_status: item.pick_status || 'AVAILABLE',
           });
         });
 
@@ -645,6 +651,8 @@ export default function PickWorkstationPage() {
     const query = inventorySearch.toLowerCase();
     return (
       item.serial_number.toLowerCase().includes(query) ||
+      (item.process_status && item.process_status.toLowerCase().includes(query)) ||
+      (item.pick_status && item.pick_status.toLowerCase().includes(query)) ||
       (item.handling_unit?.hu_id && item.handling_unit.hu_id.toLowerCase().includes(query)) ||
       (item.compartment?.compartment_number && String(item.compartment.compartment_number).includes(query))
     );
@@ -1760,14 +1768,40 @@ export default function PickWorkstationPage() {
                                 {/* Serials & Slots */}
                                 <td>
                                   <div className="d-flex flex-wrap gap-1 align-items-center">
-                                    {(isExpanded ? bin.items : bin.items.slice(0, 3)).map((item: PickPlanItem) => (
-                                      <span key={item.serial_number} className="serial-chip py-0 px-1" style={{ fontSize: '10.5px' }}>
-                                        <span className="serial-slot-tag" style={{ fontSize: '9px', padding: '0 3px' }}>
-                                          {item.compartment_number ? `#${item.compartment_number}` : 'D'}
+                                    {(isExpanded ? bin.items : bin.items.slice(0, 3)).map((item: PickPlanItem) => {
+                                      const isHold = item.pick_status === 'HOLD';
+                                      const isRtn = item.process_status && item.process_status.toUpperCase().includes('RTN');
+                                      return (
+                                        <span
+                                          key={item.serial_number}
+                                          className={`serial-chip py-0 px-1 ${isHold ? 'border-danger' : isRtn ? 'border-purple' : ''}`}
+                                          style={{
+                                            fontSize: '10.5px',
+                                            ...(isHold
+                                              ? { borderColor: '#fca5a5', backgroundColor: '#fef2f2' }
+                                              : isRtn
+                                              ? { borderColor: '#d8b4fe', backgroundColor: '#faf5ff' }
+                                              : {})
+                                          }}
+                                          title={isHold ? 'Serial is ON HOLD' : isRtn ? 'Kanban Return Unit' : undefined}
+                                        >
+                                          <span className="serial-slot-tag" style={{ fontSize: '9px', padding: '0 3px' }}>
+                                            {item.compartment_number ? `#${item.compartment_number}` : 'D'}
+                                          </span>
+                                          <span
+                                            className="serial-num-text"
+                                            style={{
+                                              color: isHold ? '#b91c1c' : isRtn ? '#7e22ce' : undefined,
+                                              fontWeight: isHold || isRtn ? 700 : undefined
+                                            }}
+                                          >
+                                            {item.serial_number}
+                                            {isHold && ' (HOLD)'}
+                                            {!isHold && isRtn && ' (RTN)'}
+                                          </span>
                                         </span>
-                                        <span className="serial-num-text">{item.serial_number}</span>
-                                      </span>
-                                    ))}
+                                      );
+                                    })}
 
                                     {bin.items.length > 3 && (
                                       <button
@@ -2249,7 +2283,7 @@ export default function PickWorkstationPage() {
                     <input
                       type="text"
                       className="field-input"
-                      placeholder="Filter serials or slot..."
+                      placeholder="Filter serials, status (HOLD / RTN) or slot..."
                       value={inventorySearch}
                       onChange={(e) => setInventorySearch(e.target.value)}
                       style={{ height: '34px', fontSize: '12px' }}
@@ -2260,19 +2294,77 @@ export default function PickWorkstationPage() {
                   <div className="inventory-table-container">
                     {filteredInventory.map((item) => {
                       const isSelected = selectedSerialNumbers.includes(item.serial_number);
+                      const isHold = item.pick_status === 'HOLD';
                       return (
                         <div
                           key={item.serial_number}
-                          className={`inventory-row ${isSelected ? 'selected' : ''}`}
+                          className={`inventory-row ${isSelected ? 'selected' : ''} ${isHold ? 'border-danger-subtle' : ''}`}
                           onClick={() => handleToggleSelectSerial(item.serial_number)}
                         >
                           <div className="text-primary flex-shrink-0">
                             {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
                           </div>
 
-                          <span className="font-monospace fw-bold text-dark flex-1">
-                            {item.serial_number}
-                          </span>
+                          <div className="d-flex align-items-center gap-1 flex-1 flex-wrap">
+                            <span className="font-monospace fw-bold text-dark">
+                              {item.serial_number}
+                            </span>
+
+                            {isHold && (
+                              <span
+                                className="badge d-inline-flex align-items-center gap-1 py-0 px-1"
+                                style={{
+                                  fontSize: '10px',
+                                  backgroundColor: '#fee2e2',
+                                  color: '#b91c1c',
+                                  border: '1px solid #fca5a5',
+                                  borderRadius: '4px',
+                                  fontWeight: 700,
+                                }}
+                                title="Serial is currently on HOLD in MES"
+                              >
+                                <AlertCircle size={10} />
+                                ON HOLD
+                              </span>
+                            )}
+
+                            {item.process_status && item.process_status.toUpperCase().includes('RTN') && (
+                              <span
+                                className="badge d-inline-flex align-items-center gap-1 py-0 px-1"
+                                style={{
+                                  fontSize: '10px',
+                                  backgroundColor: '#f3e8ff',
+                                  color: '#7e22ce',
+                                  border: '1px solid #d8b4fe',
+                                  borderRadius: '4px',
+                                  fontWeight: 600,
+                                }}
+                                title="Kanban Return Flow"
+                              >
+                                <RotateCcw size={10} />
+                                KANBAN-RTN
+                              </span>
+                            )}
+
+                            {item.process_status &&
+                              (item.process_status.toUpperCase() === 'KANBAN_IN' ||
+                                item.process_status.toUpperCase() === 'KANBAN-IN') &&
+                              !isHold && (
+                                <span
+                                  className="badge d-inline-flex align-items-center gap-1 py-0 px-1"
+                                  style={{
+                                    fontSize: '10px',
+                                    backgroundColor: '#eff6ff',
+                                    color: '#1d4ed8',
+                                    border: '1px solid #bfdbfe',
+                                    borderRadius: '4px',
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  KANBAN-IN
+                                </span>
+                              )}
+                          </div>
 
                           <div className="d-flex align-items-center gap-1 text-muted" style={{ fontSize: '11px' }}>
                             <MapPin size={11} />
