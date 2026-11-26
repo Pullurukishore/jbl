@@ -13,7 +13,7 @@ function safeWriteSSE(res, data) {
         try {
             res.write("data: " + JSON.stringify(data) + "\n\n");
             if (typeof res.flush === 'function') res.flush();
-        } catch (_) {}
+        } catch (_) { }
     }
 }
 

@@ -247,7 +247,7 @@ export default function PickWorkstationPage() {
         partNumber: clean,
         quantity: qty,
         page: 1,
-        size: 50,
+        size: Math.max(500, qty),
       });
 
       const totalItems = res?.totalItems ?? res?.availableCount ?? 0;

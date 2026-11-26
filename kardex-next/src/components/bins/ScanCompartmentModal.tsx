@@ -141,7 +141,7 @@ export const ScanCompartmentModal: React.FC<ScanCompartmentModalProps> = ({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={isProcessing ? () => {} : onClose}
+      onClose={isProcessing ? () => { } : onClose}
       title={
         <div className="d-flex align-items-center gap-2">
           <div
