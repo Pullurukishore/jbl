@@ -1,13 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/hu");
-const { requireAccess } = require("../middleware/auth");
+const { requireAccess, authorize } = require("../middleware/auth");
 
 // Bin Types
 router.get('/bin-types', ctrl.getBinTypes);
-router.post('/bin-types', requireAccess('PUT'), ctrl.createBinType);
-router.put('/bin-types/:id', requireAccess('PUT'), ctrl.updateBinType);
-router.delete('/bin-types/:id', requireAccess('PUT'), ctrl.deleteBinType);
+router.post('/bin-types', authorize('ADMIN'), ctrl.createBinType);
+router.put('/bin-types/:id', authorize('ADMIN'), ctrl.updateBinType);
+router.delete('/bin-types/:id', authorize('ADMIN'), ctrl.deleteBinType);
 
 // HU Management — static routes MUST come before /:huId dynamic routes
 router.post('/register', requireAccess('PUT'), ctrl.registerHU);
@@ -19,6 +19,8 @@ router.get('/partial', ctrl.getPartialHUs);
 // Material pick confirmation — must be before /:huId to avoid route conflict
 router.post('/confirm-material-pick', requireAccess('PICK'), ctrl.confirmMaterialPick);
 router.get('/:huId/layout', ctrl.getLayout);
+router.put('/:huId/specification', authorize('ADMIN'), ctrl.updateHUSpecification);
+router.delete('/:huId', authorize('ADMIN'), ctrl.deleteHU);
 
 // Compartment operations
 // GET version for SSE via browser EventSource (connectSSE uses GET)

@@ -451,6 +451,13 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 </Link>
               )}
 
+              <Link
+                href="/app/bins"
+                className={`dock-nav-link ${pathname.startsWith('/app/bins') ? 'active' : ''}`}
+              >
+                <Boxes size={14} /> Bins
+              </Link>
+
               {canPick && (
                 <Link
                   href="/app/pick"
@@ -546,6 +553,13 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 <PackagePlus size={16} /> Handling Unit PUT
               </Link>
             )}
+
+            <Link
+              href="/app/bins"
+              className={`mobile-nav-item ${pathname.startsWith('/app/bins') ? 'active' : ''}`}
+            >
+              <Boxes size={16} /> Bins & Handling Units
+            </Link>
 
             {canPick && (
               <Link

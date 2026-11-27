@@ -5,9 +5,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { apiPost } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
-import { HandlingUnit, StorageStatus, HUStatus, HUListResponse, HUStats } from '@/types/hu';
+import { HandlingUnit, StorageStatus, HUStatus, HUListResponse, HUStats, BinType } from '@/types/hu';
 import { RegisterBinModal } from '@/components/bins/RegisterBinModal';
 import { SendToKardexModal } from '@/components/bins/SendToKardexModal';
+import { BinTypeFormModal } from '@/components/bins/BinTypeFormModal';
+import { DeleteBinTypeModal } from '@/components/bins/DeleteBinTypeModal';
+import { EditBinSpecificationModal } from '@/components/bins/EditBinSpecificationModal';
+import { DeleteBinModal } from '@/components/bins/DeleteBinModal';
 import { Loader } from '@/components/shared/Loader';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Pagination } from '@/components/shared/Pagination';
@@ -31,13 +35,16 @@ import {
   CornerDownLeft,
   Activity,
   Cpu,
+  Edit2,
+  Trash2,
+  Sliders,
 } from 'lucide-react';
 
 const DEFAULT_PAGE_SIZE = 100;
 
 export default function HUPutPage() {
   const router = useRouter();
-  const { canPut, isLoading: authLoading } = useAuth();
+  const { canPut, isAdmin, isLoading: authLoading } = useAuth();
   const [hus, setHus] = useState<HandlingUnit[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -48,6 +55,18 @@ export default function HUPutPage() {
   // Search
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedHuId, setCopiedHuId] = useState<string | null>(null);
+
+  // Bin type modals for admin
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [binTypeToEdit, setBinTypeToEdit] = useState<BinType | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [binTypeToDelete, setBinTypeToDelete] = useState<BinType | null>(null);
+
+  // Edit bin specification modal & delete bin modal (Handling Unit)
+  const [selectedHUForSpecEdit, setSelectedHUForSpecEdit] = useState<HandlingUnit | null>(null);
+  const [isEditSpecOpen, setIsEditSpecOpen] = useState(false);
+  const [selectedHUForDelete, setSelectedHUForDelete] = useState<HandlingUnit | null>(null);
+  const [isDeleteHUOpen, setIsDeleteHUOpen] = useState(false);
 
   // Banner message for actions
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
@@ -820,6 +839,61 @@ export default function HUPutPage() {
           white-space: nowrap;
         }
 
+        .btn-table-spec-action {
+          background: #ffffff;
+          border: 1px solid #cbd5e1;
+          color: #475569;
+          padding: 2px 5px;
+          border-radius: 5px;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.15s ease;
+          line-height: 1;
+        }
+
+        .btn-table-spec-edit:hover {
+          background: #eff6ff;
+          border-color: #93c5fd;
+          color: #2563eb;
+          transform: translateY(-1px);
+        }
+
+        .btn-table-spec-delete {
+          border-color: #fecaca;
+          color: #dc2626;
+        }
+
+        .btn-table-spec-delete:hover {
+          background: #fef2f2;
+          border-color: #f87171;
+          color: #b91c1c;
+          transform: translateY(-1px);
+        }
+
+        .btn-manage-specs-link {
+          background: #eff6ff;
+          border: 1px solid #bfdbfe;
+          color: #1d4ed8;
+          padding: 6px 12px;
+          border-radius: 8px;
+          font-size: 12.5px;
+          font-weight: 700;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          text-decoration: none;
+          transition: all 0.15s ease;
+        }
+
+        .btn-manage-specs-link:hover {
+          background: #dbeafe;
+          color: #1e40af;
+          transform: translateY(-1px);
+          text-decoration: none;
+        }
+
         .spec-icon-badge {
           width: 22px;
           height: 22px;
@@ -1178,6 +1252,16 @@ export default function HUPutPage() {
           </form>
 
           <div className="search-meta-cluster">
+            {isAdmin && (
+              <Link
+                href="/app/bins"
+                className="btn-manage-specs-link"
+                title="Manage all bin specifications"
+              >
+                <Sliders size={13} />
+                <span>Bin Specifications</span>
+              </Link>
+            )}
             <div className="bins-counter-badge">
               <Boxes size={15} className="text-primary" />
               <span>
@@ -1313,6 +1397,37 @@ export default function HUPutPage() {
                             <span className="pps-active-dot" />
                             PPS: {hu.bin_type?.bin_name || 'CON_BINC'}
                           </span>
+
+                          {isAdmin && (
+                            <span className="d-inline-flex align-items-center gap-1 ms-1">
+                              <button
+                                type="button"
+                                className="btn-table-spec-action btn-table-spec-edit"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedHUForSpecEdit(hu);
+                                  setIsEditSpecOpen(true);
+                                }}
+                                title={`Edit specification for ${hu.hu_id}`}
+                              >
+                                <Edit2 size={11} />
+                              </button>
+                              {occupied === 0 && (
+                                <button
+                                  type="button"
+                                  className="btn-table-spec-action btn-table-spec-delete"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedHUForDelete(hu);
+                                    setIsDeleteHUOpen(true);
+                                  }}
+                                  title={`Delete empty bin ${hu.hu_id}`}
+                                >
+                                  <Trash2 size={11} />
+                                </button>
+                              )}
+                            </span>
+                          )}
                         </div>
                       </td>
 
@@ -1425,6 +1540,37 @@ export default function HUPutPage() {
           />
         </div>
       </div>
+
+      {/* Edit Bin Specification Modal (Handling Unit) */}
+      <EditBinSpecificationModal
+        isOpen={isEditSpecOpen}
+        onClose={() => setIsEditSpecOpen(false)}
+        onSuccess={() => fetchHUs(page, pageSize, searchQuery)}
+        hu={selectedHUForSpecEdit}
+      />
+
+      {/* Delete Bin Modal (Handling Unit) */}
+      <DeleteBinModal
+        isOpen={isDeleteHUOpen}
+        onClose={() => setIsDeleteHUOpen(false)}
+        onSuccess={() => fetchHUs(page, pageSize, searchQuery)}
+        hu={selectedHUForDelete}
+      />
+
+      {/* Bin Type Modals for Admin */}
+      <BinTypeFormModal
+        isOpen={isFormModalOpen}
+        onClose={() => setIsFormModalOpen(false)}
+        onSuccess={() => fetchHUs(page, pageSize, searchQuery)}
+        binTypeToEdit={binTypeToEdit}
+      />
+
+      <DeleteBinTypeModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onSuccess={() => fetchHUs(page, pageSize, searchQuery)}
+        binType={binTypeToDelete}
+      />
 
       {/* Modals */}
       <RegisterBinModal

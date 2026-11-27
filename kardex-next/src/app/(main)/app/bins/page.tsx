@@ -9,6 +9,11 @@ import { useAuth } from '@/context/AuthContext';
 import { HandlingUnit, StorageStatus, HUStatus, HUListResponse, HUStats, BinType } from '@/types/hu';
 import { HUStatusBadge } from '@/components/bins/HUStatusBadge';
 import { RegisterBinModal } from '@/components/bins/RegisterBinModal';
+import { BinTypeFormModal } from '@/components/bins/BinTypeFormModal';
+import { DeleteBinTypeModal } from '@/components/bins/DeleteBinTypeModal';
+import { ManageBinTypesModal } from '@/components/bins/ManageBinTypesModal';
+import { EditBinSpecificationModal } from '@/components/bins/EditBinSpecificationModal';
+import { DeleteBinModal } from '@/components/bins/DeleteBinModal';
 import { Loader } from '@/components/shared/Loader';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Pagination } from '@/components/shared/Pagination';
@@ -32,6 +37,10 @@ import {
   Archive,
   ChevronRight,
   PieChart,
+  Edit2,
+  Trash2,
+  Plus,
+  Sliders,
 } from 'lucide-react';
 
 const PAGE_SIZE = 20;
@@ -39,7 +48,7 @@ const PAGE_SIZE = 20;
 type SortOption = 'HU_ASC' | 'HU_DESC' | 'CAPACITY_DESC' | 'CAPACITY_ASC' | 'DATE_DESC';
 
 export default function BinsMasterPage() {
-  const { canPut } = useAuth();
+  const { canPut, isAdmin } = useAuth();
   const [hus, setHus] = useState<HandlingUnit[]>([]);
   const [binTypes, setBinTypes] = useState<BinType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,8 +74,46 @@ export default function BinsMasterPage() {
     full: 0,
   });
 
-  // Modal
+  // Modals
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [isManageTypesOpen, setIsManageTypesOpen] = useState(false);
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [binTypeToEdit, setBinTypeToEdit] = useState<BinType | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [binTypeToDelete, setBinTypeToDelete] = useState<BinType | null>(null);
+
+  // Edit bin specification modal & delete bin modal (Handling Unit)
+  const [selectedHUForSpecEdit, setSelectedHUForSpecEdit] = useState<HandlingUnit | null>(null);
+  const [isEditSpecOpen, setIsEditSpecOpen] = useState(false);
+  const [selectedHUForDelete, setSelectedHUForDelete] = useState<HandlingUnit | null>(null);
+  const [isDeleteHUOpen, setIsDeleteHUOpen] = useState(false);
+
+  const handleOpenEditBinSpec = (hu: HandlingUnit) => {
+    setSelectedHUForSpecEdit(hu);
+    setIsEditSpecOpen(true);
+  };
+
+  const handleOpenDeleteBin = (hu: HandlingUnit) => {
+    setSelectedHUForDelete(hu);
+    setIsDeleteHUOpen(true);
+  };
+
+  const handleOpenAddType = () => {
+    setBinTypeToEdit(null);
+    setIsFormModalOpen(true);
+  };
+
+  const handleOpenEditType = (bt: BinType, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setBinTypeToEdit(bt);
+    setIsFormModalOpen(true);
+  };
+
+  const handleOpenDeleteType = (bt: BinType, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setBinTypeToDelete(bt);
+    setIsDeleteModalOpen(true);
+  };
 
   const fetchBinTypes = async () => {
     try {
@@ -141,6 +188,12 @@ export default function BinsMasterPage() {
   };
 
   const handleSuccess = () => {
+    fetchHUs(page, storageFilter, huStatusFilter, searchQuery);
+    fetchBinTypes();
+  };
+
+  const handleBinTypeMutated = () => {
+    fetchBinTypes();
     fetchHUs(page, storageFilter, huStatusFilter, searchQuery);
   };
 
@@ -304,37 +357,278 @@ export default function BinsMasterPage() {
           box-shadow: 0 5px 16px rgba(37, 99, 235, 0.4);
         }
 
+        .btn-manage-types {
+          background: #ffffff;
+          border: 1.5px solid #cbd5e1;
+          color: #1e293b;
+          padding: 8px 14px;
+          border-radius: 10px;
+          font-size: 13px;
+          font-weight: 700;
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+
+        .btn-manage-types:hover {
+          background: #f8fafc;
+          border-color: #2563eb;
+          color: #2563eb;
+        }
+
+        .bintypes-badge {
+          background: #eff6ff;
+          color: #2563eb;
+          border: 1px solid #bfdbfe;
+          border-radius: 9999px;
+          padding: 1px 7px;
+          font-size: 11px;
+          font-weight: 800;
+        }
+
+        .btn-table-spec-action {
+          background: #ffffff;
+          border: 1px solid #cbd5e1;
+          color: #475569;
+          padding: 2px 5px;
+          border-radius: 5px;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.15s ease;
+          line-height: 1;
+        }
+
+        .btn-table-spec-action.btn-table-spec-edit:hover {
+          background: #eff6ff;
+          border-color: #93c5fd;
+          color: #2563eb;
+          transform: translateY(-1px);
+        }
+
+        .btn-table-spec-action.btn-table-spec-delete {
+          border-color: #fecaca;
+          color: #dc2626;
+        }
+
+        .btn-table-spec-action.btn-table-spec-delete:hover {
+          background: #fef2f2;
+          border-color: #f87171;
+          color: #b91c1c;
+          transform: translateY(-1px);
+        }
+
         /* Bin Specification Summary Pill Banner */
-        .specs-banner {
+        .specs-banner-card {
           background: #ffffff;
           border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          padding: 1rem 1.25rem;
+          border-radius: 14px;
+          padding: 1.15rem 1.35rem;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+          display: flex;
+          flex-direction: column;
+          gap: 0.85rem;
+        }
+
+        .specs-banner-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
           flex-wrap: wrap;
-          gap: 1rem;
+          gap: 10px;
         }
 
-        .specs-left {
+        .specs-banner-title {
+          font-size: 14px;
+          font-weight: 800;
+          color: #0f172a;
+          letter-spacing: -0.2px;
+        }
+
+        .specs-count-pill {
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          color: #475569;
+          font-size: 11.5px;
+          font-weight: 700;
+          padding: 2px 8px;
+          border-radius: 9999px;
+        }
+
+        .btn-banner-action {
+          background: #eff6ff;
+          border: 1px solid #bfdbfe;
+          color: #1d4ed8;
+          padding: 5px 12px;
+          border-radius: 7px;
+          font-size: 12px;
+          font-weight: 700;
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+
+        .btn-banner-action:hover {
+          background: #dbeafe;
+          transform: translateY(-1px);
+        }
+
+        .btn-banner-action-secondary {
+          background: #ffffff;
+          border: 1px solid #cbd5e1;
+          color: #475569;
+          padding: 5px 12px;
+          border-radius: 7px;
+          font-size: 12px;
+          font-weight: 600;
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+
+        .btn-banner-action-secondary:hover {
+          background: #f8fafc;
+          color: #0f172a;
+          border-color: #94a3b8;
+        }
+
+        .specs-chips-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+          gap: 0.75rem;
+        }
+
+        .spec-chip-card {
+          background: #f8fafc;
+          border: 1.5px solid #e2e8f0;
+          border-radius: 10px;
+          padding: 10px 12px;
           display: flex;
           align-items: center;
+          justify-content: space-between;
           gap: 10px;
+          transition: all 0.15s ease;
+        }
+
+        .spec-chip-card:hover {
+          background: #ffffff;
+          border-color: #cbd5e1;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+        }
+
+        .spec-chip-main {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          min-width: 0;
+          flex: 1;
+        }
+
+        .spec-chip-title-row {
+          display: flex;
+          align-items: center;
+          gap: 7px;
           flex-wrap: wrap;
         }
 
-        .spec-badge-chip {
-          background: #f1f5f9;
-          border: 1px solid #e2e8f0;
-          padding: 6px 12px;
-          border-radius: 8px;
-          font-size: 12.5px;
-          font-weight: 600;
-          color: #334155;
-          display: inline-flex;
+        .spec-chip-name {
+          font-size: 13px;
+          font-weight: 700;
+          color: #0f172a;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .spec-chip-pps {
+          background: #ffffff;
+          border: 1px solid #cbd5e1;
+          color: #0284c7;
+          font-size: 10.5px;
+          font-weight: 700;
+          padding: 1px 6px;
+          border-radius: 4px;
+        }
+
+        .spec-chip-meta {
+          display: flex;
           align-items: center;
           gap: 6px;
+          font-size: 11.5px;
+          color: #64748b;
+        }
+
+        .spec-slots-badge {
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          color: #334155;
+          font-weight: 700;
+          font-size: 10.5px;
+          padding: 1px 6px;
+          border-radius: 4px;
+        }
+
+        .spec-desc-text {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 160px;
+        }
+
+        .spec-chip-admin-actions {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          flex-shrink: 0;
+        }
+
+        .btn-spec-chip-edit {
+          background: #ffffff;
+          border: 1px solid #cbd5e1;
+          color: #2563eb;
+          padding: 4px 8px;
+          border-radius: 6px;
+          font-size: 11.5px;
+          font-weight: 700;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          cursor: pointer;
+          transition: all 0.12s ease;
+        }
+
+        .btn-spec-chip-edit:hover {
+          background: #eff6ff;
+          border-color: #93c5fd;
+          transform: translateY(-1px);
+        }
+
+        .btn-spec-chip-delete {
+          background: #ffffff;
+          border: 1px solid #fecaca;
+          color: #dc2626;
+          padding: 4px 8px;
+          border-radius: 6px;
+          font-size: 11.5px;
+          font-weight: 700;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          cursor: pointer;
+          transition: all 0.12s ease;
+        }
+
+        .btn-spec-chip-delete:hover {
+          background: #fef2f2;
+          border-color: #f87171;
+          transform: translateY(-1px);
         }
 
         /* 6 Interactive Stats Cards */
@@ -788,12 +1082,98 @@ export default function BinsMasterPage() {
             <RefreshCw size={14} className={loading ? 'spin-animation' : ''} />
             Refresh
           </button>
+          {isAdmin && (
+            <button
+              className="btn-manage-types"
+              onClick={() => setIsManageTypesOpen(true)}
+              title="Manage bin specifications and tray layouts"
+            >
+              <Sliders size={15} />
+              <span>Manage Bin Types</span>
+              <span className="bintypes-badge">{binTypes.length}</span>
+            </button>
+          )}
           {canPut && (
             <button className="btn-register-primary" onClick={() => setIsRegisterOpen(true)}>
               <PackagePlus size={16} /> Register New Bin
             </button>
           )}
         </div>
+      </div>
+
+      {/* Bin Specifications Banner */}
+      <div className="specs-banner-card">
+        <div className="specs-banner-header">
+          <div className="d-flex align-items-center gap-2">
+            <Layers size={17} className="text-primary" />
+            <span className="specs-banner-title">Configured Bin Specifications</span>
+            <span className="specs-count-pill">
+              {binTypes.filter((t) => t.bin_name === 'CON_BINC' || t.bin_name === 'CON_BIND').length} Active
+            </span>
+          </div>
+          {isAdmin && (
+            <div className="d-flex align-items-center gap-2">
+              <button
+                className="btn-banner-action-secondary"
+                onClick={() => setIsManageTypesOpen(true)}
+                title="Open full specifications manager"
+              >
+                <Sliders size={13} />
+                <span>Manage All</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {binTypes.filter((t) => t.bin_name === 'CON_BINC' || t.bin_name === 'CON_BIND').length === 0 ? (
+          <div style={{ padding: '0.85rem', color: '#64748b', fontSize: '13px', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+            No bin specifications configured yet.
+          </div>
+        ) : (
+          <div className="specs-chips-grid">
+            {binTypes
+              .filter((type) => type.bin_name === 'CON_BINC' || type.bin_name === 'CON_BIND')
+              .map((type) => (
+              <div key={type.id} className="spec-chip-card">
+                <div className="spec-chip-main">
+                  <div className="spec-chip-title-row">
+                    <span className="spec-chip-name">{type.name}</span>
+                    <span className="spec-chip-pps font-monospace">PPS: {type.bin_name}</span>
+                  </div>
+                  <div className="spec-chip-meta">
+                    <span className="spec-slots-badge">{type.compartment_count} Slots</span>
+                    {type.description && (
+                      <span className="spec-desc-text" title={type.description}>
+                        {type.description}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {isAdmin && (
+                  <div className="spec-chip-admin-actions">
+                    <button
+                      className="btn-spec-chip-edit"
+                      onClick={(e) => handleOpenEditType(type, e)}
+                      title={`Edit ${type.name}`}
+                    >
+                      <Edit2 size={12} />
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      className="btn-spec-chip-delete"
+                      onClick={(e) => handleOpenDeleteType(type, e)}
+                      title={`Delete ${type.name}`}
+                    >
+                      <Trash2 size={12} />
+                      <span>Delete</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Interactive Stats Cards */}
@@ -1037,9 +1417,39 @@ export default function BinsMasterPage() {
                       {/* Bin Specification */}
                       <td>
                         <div className="d-flex flex-column gap-1">
-                          <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
-                            {hu.bin_type?.name || `Type #${hu.bin_type_id}`}
-                          </span>
+                          <div className="d-flex align-items-center gap-1.5 flex-wrap">
+                            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
+                              {hu.bin_type?.name || `Type #${hu.bin_type_id}`}
+                            </span>
+                            {isAdmin && (
+                              <span className="d-inline-flex align-items-center gap-1">
+                                <button
+                                  type="button"
+                                  className="btn-table-spec-action btn-table-spec-edit"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenEditBinSpec(hu);
+                                  }}
+                                  title={`Edit specification for ${hu.hu_id}`}
+                                >
+                                  <Edit2 size={11} />
+                                </button>
+                                {occupied === 0 && (
+                                  <button
+                                    type="button"
+                                    className="btn-table-spec-action btn-table-spec-delete"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenDeleteBin(hu);
+                                    }}
+                                    title={`Delete empty bin ${hu.hu_id}`}
+                                  >
+                                    <Trash2 size={11} />
+                                  </button>
+                                )}
+                              </span>
+                            )}
+                          </div>
                           <span className="bin-name-badge">
                             PPS: {hu.bin_type?.bin_name || 'CON_BINC'}
                           </span>
@@ -1140,6 +1550,47 @@ export default function BinsMasterPage() {
           />
         </div>
       </div>
+
+      {/* Edit Bin Specification Modal (Handling Unit) */}
+      <EditBinSpecificationModal
+        isOpen={isEditSpecOpen}
+        onClose={() => setIsEditSpecOpen(false)}
+        onSuccess={handleBinTypeMutated}
+        hu={selectedHUForSpecEdit}
+        binTypes={binTypes}
+      />
+
+      {/* Delete Bin Modal (Handling Unit) */}
+      <DeleteBinModal
+        isOpen={isDeleteHUOpen}
+        onClose={() => setIsDeleteHUOpen(false)}
+        onSuccess={handleBinTypeMutated}
+        hu={selectedHUForDelete}
+      />
+
+      {/* Manage Bin Types Modal */}
+      <ManageBinTypesModal
+        isOpen={isManageTypesOpen}
+        onClose={() => setIsManageTypesOpen(false)}
+        binTypes={binTypes}
+        onRefresh={handleBinTypeMutated}
+      />
+
+      {/* Bin Type Form Modal (Add / Edit) */}
+      <BinTypeFormModal
+        isOpen={isFormModalOpen}
+        onClose={() => setIsFormModalOpen(false)}
+        onSuccess={handleBinTypeMutated}
+        binTypeToEdit={binTypeToEdit}
+      />
+
+      {/* Delete Bin Type Confirmation Modal */}
+      <DeleteBinTypeModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onSuccess={handleBinTypeMutated}
+        binType={binTypeToDelete}
+      />
 
       {/* Register New Bin Modal */}
       <RegisterBinModal

@@ -50,9 +50,9 @@ exports.registerHU = asyncHandler(async (req, res) => {
         return res.status(400).json({ error: "Bin ID must start with prefix 'BIN-' (e.g. BIN-00001)." });
     }
 
-    // Validation 2: Total length must be at least 9 characters
-    if (cleanHuId.length < 9) {
-        return res.status(400).json({ error: `Bin ID must be at least 9 characters long. You entered ${cleanHuId.length} characters (e.g. BIN-00001).` });
+    // Validation 2: Total length must be exactly 9 characters
+    if (cleanHuId.length !== 9) {
+        return res.status(400).json({ error: `Bin ID must be exactly 9 characters long. You entered ${cleanHuId.length} characters (e.g. BIN-00001).` });
     }
 
     if (!/^BIN-[A-Z0-9_\-]+$/.test(cleanHuId)) {
@@ -624,13 +624,14 @@ exports.sendToKardex = asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'No occupied compartments. Cannot send empty HU to Kardex.' });
     }
 
-    // Sequence number for this bin PUT order batch (starts at 1, 2, 3...)
+    // Sequence number for this bin PUT order batch
     const nextSeq = (hu.put_order_seq || 0) + 1;
-    const orderNumber = `${hu.hu_id}-PUT-${nextSeq}`;
+    const orderNumber = `${hu.hu_id}-PUT`;
+    const totalCount = occupiedCompartments.length;
 
-    // Build file content: all rows in this PUT batch share the same order number (<BIN>-PUT-1)
+    // Build file content: all rows in this PUT batch share <BIN>-PUT with total batch count
     const lines = occupiedCompartments.map((c) => {
-        return `${orderNumber}|${hu.hu_id}@${c.compartment_number}|${c.material_name || ''}|1|${hu.bin_type ? hu.bin_type.bin_name : ''}|${c.serial_number || ''}|${hu.hu_id}`;
+        return `${orderNumber}|${hu.hu_id}@${c.compartment_number}|${c.material_name || ''}|1|${hu.bin_type ? hu.bin_type.bin_name : ''}|${c.serial_number || ''}|${hu.hu_id}|${totalCount}`;
     });
     const fileContent = lines.join('\r\n');
     const timestamp = Date.now();
@@ -802,7 +803,21 @@ exports.createBinType = asyncHandler(async (req, res) => {
     if (!name || !compartment_count || !bin_name) {
         return res.status(400).json({ error: 'name, compartment_count, and bin_name are required.' });
     }
-    const binType = await db.bin_type.create({ name, compartment_count, bin_name, description });
+    const count = parseInt(compartment_count, 10);
+    if (isNaN(count) || count <= 0) {
+        return res.status(400).json({ error: 'compartment_count must be a positive integer.' });
+    }
+    const cleanBinName = bin_name.trim().toUpperCase();
+    const existing = await db.bin_type.findOne({ where: { bin_name: cleanBinName } });
+    if (existing) {
+        return res.status(400).json({ error: `Bin type with PPS code "${cleanBinName}" already exists.` });
+    }
+    const binType = await db.bin_type.create({
+        name: name.trim(),
+        compartment_count: count,
+        bin_name: cleanBinName,
+        description: description ? description.trim() : null
+    });
     return res.status(201).json(binType);
 });
 
@@ -814,7 +829,26 @@ exports.updateBinType = asyncHandler(async (req, res) => {
     const binType = await db.bin_type.findByPk(id);
     if (!binType) return res.status(404).json({ error: 'Bin type not found.' });
     const { name, compartment_count, bin_name, description } = req.body;
-    await binType.update({ name, compartment_count, bin_name, description });
+    if (!name || !compartment_count || !bin_name) {
+        return res.status(400).json({ error: 'name, compartment_count, and bin_name are required.' });
+    }
+    const count = parseInt(compartment_count, 10);
+    if (isNaN(count) || count <= 0) {
+        return res.status(400).json({ error: 'compartment_count must be a positive integer.' });
+    }
+    const cleanBinName = bin_name.trim().toUpperCase();
+    if (cleanBinName !== binType.bin_name) {
+        const existing = await db.bin_type.findOne({ where: { bin_name: cleanBinName } });
+        if (existing && existing.id !== binType.id) {
+            return res.status(400).json({ error: `Bin type with PPS code "${cleanBinName}" already exists.` });
+        }
+    }
+    await binType.update({
+        name: name.trim(),
+        compartment_count: count,
+        bin_name: cleanBinName,
+        description: description ? description.trim() : null
+    });
     return res.status(200).json(binType);
 });
 
@@ -825,7 +859,150 @@ exports.deleteBinType = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const binType = await db.bin_type.findByPk(id);
     if (!binType) return res.status(404).json({ error: 'Bin type not found.' });
+    
+    // Check if any handling units are currently using this bin type
+    const inUseCount = await db.handling_unit.count({ where: { bin_type_id: id } });
+    if (inUseCount > 0) {
+        return res.status(400).json({
+            error: `Cannot delete "${binType.name}". It is currently assigned to ${inUseCount} handling unit(s). Please reassign or remove those bins first.`
+        });
+    }
+
     await binType.destroy();
+    return res.status(204).send();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT /:huId/specification - Update handling unit's bin specification
+// ─────────────────────────────────────────────────────────────────────────────
+exports.updateHUSpecification = asyncHandler(async (req, res) => {
+    const { huId } = req.params;
+    const { bin_type_id, bin_name, new_hu_id, hu_id } = req.body;
+
+    const hu = await db.handling_unit.findOne({ where: { hu_id: huId } });
+    if (!hu) return res.status(404).json({ error: 'Handling Unit not found.' });
+
+    // Handle renaming bin (new_hu_id / hu_id)
+    const proposedHuId = (new_hu_id || hu_id)?.trim().toUpperCase();
+    if (proposedHuId && proposedHuId !== hu.hu_id) {
+        if (!proposedHuId.startsWith('BIN-')) {
+            return res.status(400).json({ error: "Bin ID must start with prefix 'BIN-' (e.g. BIN-00001)." });
+        }
+        if (proposedHuId.length !== 9) {
+            return res.status(400).json({ error: `Bin ID must be exactly 9 characters long. You entered ${proposedHuId.length} characters (e.g. BIN-00001).` });
+        }
+        if (!/^BIN-[A-Z0-9_\-]+$/.test(proposedHuId)) {
+            return res.status(400).json({ error: 'Invalid Bin ID format. Only alphanumeric characters, dashes, and underscores are allowed.' });
+        }
+        const existingWithId = await db.handling_unit.findOne({ where: { hu_id: proposedHuId } });
+        if (existingWithId && existingWithId.id !== hu.id) {
+            return res.status(409).json({ error: `Bin ID "${proposedHuId}" already exists. Please choose a different ID.` });
+        }
+        await hu.update({ hu_id: proposedHuId });
+    }
+
+    let binType = null;
+    if (bin_type_id) {
+        binType = await db.bin_type.findByPk(bin_type_id);
+    }
+    if (!binType && bin_name) {
+        binType = await db.bin_type.findOne({ where: { bin_name } });
+    }
+    if (!binType) {
+        binType = await db.bin_type.findByPk(hu.bin_type_id);
+    }
+
+    if (!binType) {
+        const result = await db.handling_unit.findByPk(hu.id, { include: huIncludes() });
+        return res.status(200).json(result);
+    }
+
+    if (hu.bin_type_id === binType.id) {
+        const result = await db.handling_unit.findByPk(hu.id, { include: huIncludes() });
+        return res.status(200).json(result);
+    }
+
+    // Check existing compartments
+    const currentComps = await db.compartment.findAll({
+        where: { handling_unit_id: hu.id },
+        order: [['compartment_number', 'ASC']]
+    });
+
+    const occupiedComps = currentComps.filter(c => c.status === 'OCCUPIED');
+    if (occupiedComps.length > binType.compartment_count) {
+        return res.status(400).json({
+            error: `Cannot change specification to "${binType.name}". Bin has ${occupiedComps.length} occupied slots, which exceeds new capacity of ${binType.compartment_count}.`
+        });
+    }
+
+    const currentCount = currentComps.length;
+    const newCount = binType.compartment_count;
+
+    if (newCount > currentCount) {
+        const newRows = [];
+        for (let i = currentCount + 1; i <= newCount; i++) {
+            newRows.push({
+                handling_unit_id: hu.id,
+                compartment_number: i,
+                status: 'EMPTY'
+            });
+        }
+        await db.compartment.bulkCreate(newRows);
+    } else if (newCount < currentCount) {
+        const toRemove = currentComps.filter(c => c.compartment_number > newCount);
+        const occupiedToRemove = toRemove.filter(c => c.status === 'OCCUPIED');
+        if (occupiedToRemove.length > 0) {
+            return res.status(400).json({
+                error: `Cannot reduce compartments to ${newCount}. Compartments beyond slot ${newCount} currently contain occupied parts.`
+            });
+        }
+        const idsToRemove = toRemove.map(c => c.id);
+        if (idsToRemove.length > 0) {
+            await db.put.update({ compartment_id: null }, { where: { compartment_id: { [Op.in]: idsToRemove } } }).catch(() => {});
+            await db.compartment.destroy({ where: { id: { [Op.in]: idsToRemove } } });
+        }
+    }
+
+    await hu.update({ bin_type_id: binType.id });
+    await recalcHUStatus(hu.id);
+
+    const result = await db.handling_unit.findByPk(hu.id, { include: huIncludes() });
+    return res.status(200).json(result);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE /:huId - Delete handling unit (Admin only)
+// ─────────────────────────────────────────────────────────────────────────────
+exports.deleteHU = asyncHandler(async (req, res) => {
+    const { huId } = req.params;
+    const hu = await db.handling_unit.findOne({ where: { hu_id: huId } });
+    if (!hu) return res.status(404).json({ error: 'Handling Unit not found.' });
+
+    if (hu.storage_status === 'IN_KARDEX') {
+        return res.status(400).json({ error: `Cannot delete ${hu.hu_id}. Bin is currently stored inside Kardex shuttle.` });
+    }
+
+    const occupiedCount = await db.compartment.count({
+        where: { handling_unit_id: hu.id, status: 'OCCUPIED' }
+    });
+    if (occupiedCount > 0) {
+        return res.status(400).json({
+            error: `Cannot delete ${hu.hu_id}. It currently contains ${occupiedCount} occupied part(s). Please pick or clear parts first.`
+        });
+    }
+
+    const comps = await db.compartment.findAll({
+        where: { handling_unit_id: hu.id },
+        attributes: ['id']
+    });
+    const compIds = comps.map(c => c.id);
+    if (compIds.length > 0) {
+        await db.put.update({ compartment_id: null }, { where: { compartment_id: { [Op.in]: compIds } } }).catch(() => {});
+        await db.compartment.destroy({ where: { handling_unit_id: hu.id } });
+    }
+    await db.put.update({ handling_unit_id: null }, { where: { handling_unit_id: hu.id } }).catch(() => {});
+    await hu.destroy();
+
     return res.status(204).send();
 });
 
@@ -920,7 +1097,7 @@ exports.pickCompartment = asyncHandler(async (req, res) => {
         where: { name: { [Op.like]: `PICK_${modelNumber}_%` } }
     });
     const pickSeq = String(existingPickCount + 1).padStart(2, '0');
-    const pickOrderNumber = `${modelNumber}-PICK-${pickSeq}`;
+    const pickOrderNumber = `${hu.hu_id}-PICK`;
     const genFileName = `PICK_${modelNumber}_${pickSeq}_${Date.now()}.txt`;
     const dirPath = process.env.Pick_Text_File_Path || path.join('uploads', 'files', 'pick');
     if (!fs.existsSync(dirPath)) {
@@ -932,7 +1109,7 @@ exports.pickCompartment = asyncHandler(async (req, res) => {
         fs.mkdirSync(uploadDir, { recursive: true });
     }
     const uploadFilePath = path.join(uploadDir, genFileName);
-    const content = `${pickOrderNumber}|${serialNumber}|${modelNumber}|1|${hu.hu_id}`;
+    const content = `${pickOrderNumber}|${serialNumber}|${modelNumber}|1|${hu.hu_id}|1`;
 
     fs.writeFileSync(filePath, content, 'ascii');
     fs.writeFileSync(uploadFilePath, content, 'ascii');
@@ -1193,14 +1370,14 @@ exports.pickScanGet = asyncHandler(async (req, res) => {
             }
         });
         const pickSeq = String(existingPickCount + 1).padStart(2, '0');
-        const pickOrderNumber = `${modelNumber}-PICK-${pickSeq}`;
+        const pickOrderNumber = `${hu.hu_id}-PICK`;
 
         // Generate Kardex pick order text file in model-centric format: <MODEL>-PICK-<01>|serial|model|1
         const genFileName = `PICK_${modelNumber}_${pickSeq}_${Date.now()}.txt`;
         const dirPath = process.env.Pick_Text_File_Path || path.join('uploads', 'files', 'pick');
         fs.mkdirSync(dirPath, { recursive: true });
         const filePath = path.join(dirPath, genFileName);
-        const fileContent = `${pickOrderNumber}|${serial_number}|${modelNumber}|1|${hu.hu_id}`;
+        const fileContent = `${pickOrderNumber}|${serial_number}|${modelNumber}|1|${hu.hu_id}|1`;
         fs.writeFileSync(filePath, fileContent, 'ascii');
 
         const uploadDir = path.join('uploads', 'files', 'pick');
@@ -1312,23 +1489,13 @@ exports.sendPickToKardex = asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'No picked parts found in this Handling Unit to send to Kardex.' });
     }
 
-    // Build Kardex Pick Order content: <MODEL>-PICK-<01>|serial|model|1
-    // Keep consistent order number per model in the HU batch so all items share the single pick order
-    const modelOrderMap = new Map();
+    // Build Kardex Pick Order content: <BIN_NAME>-PICK|serial|model|1|binName|totalCount
+    const pickOrderNumber = `${hu.hu_id}-PICK`;
+    const totalCount = pickedPuts.length;
     const lines = [];
     for (const pt of pickedPuts) {
         const mNum = pt.model_number || 'MODEL';
-        if (!modelOrderMap.has(mNum)) {
-            const existingPickCount = await db.files.count({
-                where: {
-                    name: { [Op.like]: `PICK_${mNum}_%` }
-                }
-            });
-            const pickSeq = String(existingPickCount + 1).padStart(2, '0');
-            modelOrderMap.set(mNum, `${mNum}-PICK-${pickSeq}`);
-        }
-        const pickOrderNumber = modelOrderMap.get(mNum);
-        lines.push(`${pickOrderNumber}|${pt.serial_number}|${mNum}|1|${hu.hu_id}`);
+        lines.push(`${pickOrderNumber}|${pt.serial_number}|${mNum}|1|${hu.hu_id}|${totalCount}`);
     }
     const fileContent = lines.join('\r\n');
     const timestamp = Date.now();

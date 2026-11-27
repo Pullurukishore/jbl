@@ -58,7 +58,7 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
 
   const cleanId = huId.trim().toUpperCase();
   const isPrefixValid = cleanId.startsWith('BIN-');
-  const isLengthValid = cleanId.length >= 9;
+  const isLengthValid = cleanId.length === 9;
   const isFormatValid = /^BIN-[A-Z0-9_\-]+$/.test(cleanId);
   const isBinValid = isPrefixValid && isLengthValid && isFormatValid;
 
@@ -70,7 +70,7 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
       return;
     }
     if (!isLengthValid) {
-      setError(`Bin ID must be at least 9 characters long (currently ${cleanId.length}/9, e.g. BIN-00001)`);
+      setError(`Bin ID must be exactly 9 characters long (currently ${cleanId.length}/9, e.g. BIN-00001)`);
       inputRef.current?.focus();
       return;
     }
@@ -452,6 +452,7 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
                   type="text"
                   className="input-clean-field"
                   placeholder="e.g. BIN-00001"
+                  maxLength={9}
                   value={huId}
                   onChange={(e) => {
                     setHuId(e.target.value.toUpperCase());
@@ -468,13 +469,13 @@ export const RegisterBinModal: React.FC<RegisterBinModalProps> = ({
                   <span>{isPrefixValid ? '✓' : '✗'}</span> Starts with BIN-
                 </span>
                 <span className={`d-inline-flex align-items-center gap-1 fw-bold ${isLengthValid ? 'text-success' : 'text-muted'}`}>
-                  <span>{isLengthValid ? '✓' : '○'}</span> Min 9 chars ({cleanId.length}/9)
+                  <span>{isLengthValid ? '✓' : '○'}</span> Fixed 9 chars ({cleanId.length}/9)
                 </span>
               </div>
 
               <span className="helper-text">
                 <Info size={12} className="text-muted" />
-                Prefix must be BIN- followed by at least 5 alphanumeric characters (e.g. BIN-00001).
+                Prefix must be BIN- followed by exactly 5 characters for a total of 9 characters (e.g. BIN-00001).
               </span>
             </div>
 

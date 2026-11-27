@@ -27,7 +27,6 @@ import {
   Layers,
   Barcode,
   PackagePlus,
-  PackageMinus,
   FileText,
   X,
 } from 'lucide-react';
@@ -61,8 +60,6 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
   const [isSendToKardexOpen, setIsSendToKardexOpen] = useState(false);
   const [isResendConfirmOpen, setIsResendConfirmOpen] = useState(false);
   const [resendAcknowledge, setResendAcknowledge] = useState(false);
-  const [pickCompartmentTarget, setPickCompartmentTarget] = useState<Compartment | null>(null);
-  const [pickingSlot, setPickingSlot] = useState(false);
   const [sendingPick, setSendingPick] = useState(false);
   const [pickSendSuccess, setPickSendSuccess] = useState<string | null>(null);
 
@@ -100,23 +97,6 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
       alert(err.message || 'Failed to send pick order to Kardex');
     } finally {
       setSendingPick(false);
-    }
-  };
-
-  const handlePickCompartment = async () => {
-    if (!hu || !pickCompartmentTarget) return;
-    try {
-      setPickingSlot(true);
-      const res = await apiPost<{ message: string; fileName?: string; pickId?: number }>(
-        `/hu/${encodeURIComponent(hu.hu_id)}/compartment/${pickCompartmentTarget.compartment_number}/pick`
-      );
-      setPickSendSuccess(res.message || `Part picked successfully.`);
-      setPickCompartmentTarget(null);
-      fetchLayout();
-    } catch (err: any) {
-      alert(err.message || 'Failed to pick part from compartment');
-    } finally {
-      setPickingSlot(false);
     }
   };
 
@@ -876,7 +856,6 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
               <CompartmentGrid
                 compartments={filteredCompartments}
                 onSelectEmpty={isLocked ? undefined : handleSelectEmpty}
-                onSelectOccupied={isLocked ? undefined : (comp) => setPickCompartmentTarget(comp)}
                 selectedCompartment={canPut && isScanModalOpen ? selectedCompartment : null}
                 huId={hu.hu_id}
                 binName={hu.bin_type?.bin_name || 'CON_BINC'}
@@ -1086,52 +1065,6 @@ export default function HUDetailPage({ params }: HUDetailPageProps) {
           isResend={isAlreadySent}
         />
       )}
-
-      {/* Single Compartment Pick Modal */}
-      {pickCompartmentTarget && (
-        <Modal
-          isOpen={!!pickCompartmentTarget}
-          onClose={() => setPickCompartmentTarget(null)}
-          title={`Pick Part from Compartment #${pickCompartmentTarget.compartment_number}`}
-          maxWidth="480px"
-        >
-          <div>
-            <p className="text-muted mb-3" style={{ fontSize: '13px' }}>
-              Execute pick order for this seated part. This will update MES Kanban board history to <strong>KANBAN-OUT</strong>, mark the serial as <strong>PICKED</strong>, and empty compartment #{pickCompartmentTarget.compartment_number}.
-            </p>
-            <div className="bg-light p-3 rounded-3 border mb-3">
-              <div className="d-flex justify-content-between mb-1" style={{ fontSize: '13px' }}>
-                <span className="text-muted">Serial Number:</span>
-                <strong className="font-monospace text-primary">{pickCompartmentTarget.serial_number}</strong>
-              </div>
-              <div className="d-flex justify-content-between" style={{ fontSize: '13px' }}>
-                <span className="text-muted">Model / Part:</span>
-                <strong>{pickCompartmentTarget.material_name || 'N/A'}</strong>
-              </div>
-            </div>
-            <div className="d-flex justify-content-end gap-2">
-              <button
-                type="button"
-                className="btn btn-outline-secondary"
-                onClick={() => setPickCompartmentTarget(null)}
-                disabled={pickingSlot}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-danger d-flex align-items-center gap-2"
-                onClick={handlePickCompartment}
-                disabled={pickingSlot}
-              >
-                {pickingSlot ? <Loader2 size={15} className="spin-animation" /> : <PackageMinus size={15} />}
-                {pickingSlot ? 'Picking...' : 'Confirm Pick Part'}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
     </div>
   );
 }
