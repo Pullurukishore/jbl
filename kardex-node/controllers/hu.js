@@ -379,15 +379,18 @@ exports.scanCompartment = asyncHandler(async (req, res) => {
 
         // ── 3. Check serial not already in another compartment ────────────
         const existingCompartment = await db.compartment.findOne({
-            where: { serial_number: serialNumber, status: 'OCCUPIED' }
+            where: {
+                serial_number: { [Op.iLike]: serialNumber },
+                status: 'OCCUPIED'
+            }
         });
         if (existingCompartment) {
-            sendEvent({ activity: 'VALIDATE', status: 'FAILED', message: 'Serial number is already allocated to another compartment.' });
+            sendEvent({ activity: 'VALIDATE', status: 'FAILED', message: `Serial number is already allocated to compartment #${existingCompartment.compartment_number}.` });
             return res.end();
         }
 
         const existingPut = await db.put.findOne({
-            where: { serial_number: serialNumber },
+            where: { serial_number: { [Op.iLike]: serialNumber } },
             order: [['id', 'DESC']]
         });
         if (existingPut && existingPut.pick_status === 'AVAILABLE') {
@@ -1144,7 +1147,7 @@ exports.pickCompartment = asyncHandler(async (req, res) => {
         where: { name: { [Op.like]: `PICK_${modelNumber}_%` } }
     });
     const pickSeq = String(existingPickCount + 1).padStart(2, '0');
-    const pickOrderNumber = `${hu.hu_id}-PICK`;
+    const pickOrderNumber = `${modelNumber}-PICK-${pickSeq}`;
     const genFileName = `PICK_${modelNumber}_${pickSeq}_${Date.now()}.txt`;
     const dirPath = process.env.Pick_Text_File_Path || path.join('uploads', 'files', 'pick');
     if (!fs.existsSync(dirPath)) {
@@ -1417,7 +1420,7 @@ exports.pickScanGet = asyncHandler(async (req, res) => {
             }
         });
         const pickSeq = String(existingPickCount + 1).padStart(2, '0');
-        const pickOrderNumber = `${hu.hu_id}-PICK`;
+        const pickOrderNumber = `${modelNumber}-PICK-${pickSeq}`;
 
         // Generate Kardex pick order text file in model-centric format: <MODEL>-PICK-<01>|serial|model|1
         const genFileName = `PICK_${modelNumber}_${pickSeq}_${Date.now()}.txt`;
@@ -1536,12 +1539,22 @@ exports.sendPickToKardex = asyncHandler(async (req, res) => {
         return res.status(400).json({ error: 'No picked parts found in this Handling Unit to send to Kardex.' });
     }
 
-    // Build Kardex Pick Order content: <BIN_NAME>-PICK|serial|model|1|binName|totalCount
-    const pickOrderNumber = `${hu.hu_id}-PICK`;
+    // Build Kardex Pick Order content: <MODEL>-PICK-<01>|serial|model|1|binName|totalCount
+    const modelOrderMap = new Map();
     const totalCount = pickedPuts.length;
     const lines = [];
     for (const pt of pickedPuts) {
         const mNum = pt.model_number || 'MODEL';
+        if (!modelOrderMap.has(mNum)) {
+            const existingPickCount = await db.files.count({
+                where: {
+                    name: { [Op.like]: `PICK_${mNum}_%` }
+                }
+            });
+            const pickSeq = String(existingPickCount + 1).padStart(2, '0');
+            modelOrderMap.set(mNum, `${mNum}-PICK-${pickSeq}`);
+        }
+        const pickOrderNumber = modelOrderMap.get(mNum);
         lines.push(`${pickOrderNumber}|${pt.serial_number}|${mNum}|1|${hu.hu_id}|${totalCount}`);
     }
     const fileContent = lines.join('\r\n');

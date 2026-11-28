@@ -188,7 +188,7 @@ exports.createPut = asyncHandler(async (req, res) => {
         }
 
         let existingPart = await db.put.findOne({
-            where: { serial_number: serialNumber },
+            where: { serial_number: { [Op.iLike]: serialNumber } },
             order: [['id', 'DESC']]
         });
         let testProcess = process.env.KanbanInProcessStep || 'KANBAN-IN';
@@ -299,6 +299,31 @@ exports.createPut = asyncHandler(async (req, res) => {
                 activity: 'CHECK_STATUS',
                 status: 'FAILED',
                 message: 'Serial number is already available in Kardex storage.',
+                logged_by: req.user?.id,
+                log_type: 'PUT_PROCESS',
+                user_first_name: req.user?.first_name,
+                user_last_name: req.user?.last_name,
+                user_id: req.user?.user_id,
+                process_id
+            }, res));
+            return res.end();
+        }
+
+        // Reject if serial number is already allocated to ANY occupied bin compartment
+        const existingCompartment = await db.compartment.findOne({
+            where: {
+                serial_number: { [Op.iLike]: serialNumber },
+                status: 'OCCUPIED'
+            },
+            include: [{ model: db.handling_unit }]
+        });
+        if (existingCompartment) {
+            const huName = existingCompartment.handling_unit?.hu_id || 'a bin';
+            logs.push(await createAndSendLog({
+                entity_number: serialNumber,
+                activity: 'CHECK_STATUS',
+                status: 'FAILED',
+                message: `Serial number is already allocated in ${huName} (Slot #${existingCompartment.compartment_number}).`,
                 logged_by: req.user?.id,
                 log_type: 'PUT_PROCESS',
                 user_first_name: req.user?.first_name,
@@ -780,6 +805,23 @@ exports.createPut = asyncHandler(async (req, res) => {
         // Link to Handling Unit & Compartment BEFORE sending completion event to eliminate race condition
         if (targetHU && targetComp) {
             try {
+                // Ensure no other compartment remains occupied with the same serial number
+                await db.compartment.update(
+                    {
+                        status: 'EMPTY',
+                        serial_number: null,
+                        material_name: null,
+                        allocated_at: null,
+                        allocated_by: null
+                    },
+                    {
+                        where: {
+                            serial_number: { [Op.iLike]: finalSerial },
+                            id: { [Op.ne]: targetComp.id }
+                        }
+                    }
+                );
+
                 await targetComp.update({
                     status: 'OCCUPIED',
                     serial_number: finalSerial,

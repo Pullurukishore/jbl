@@ -400,12 +400,12 @@ exports.createPick = asyncHandler(async (req, res) => {
         }
         const uploadFilePath = path.join(uploadDir, genFileName);
 
-        // Build Kardex Pick Order content: <BIN_NAME>-PICK|serial|model|1|binName|totalCount
+        // Build Kardex Pick Order content: <MODEL>-PICK-<01>|serial|model|1|binName|totalCount
+        const pickOrderNumber = `${resolvedModelNumber}-PICK-${pickSeq}`;
         const totalCount = updatedEntries.length;
         const content = updatedEntries.map((pt) => {
             const binName = pt?.handling_unit?.hu_id || '';
-            const orderNumber = binName ? `${binName}-PICK` : `${resolvedModelNumber}-PICK`;
-            return `${orderNumber}|${pt?.serial_number}|${pt?.model_number || resolvedModelNumber}|1|${binName}|${totalCount}`;
+            return `${pickOrderNumber}|${pt?.serial_number}|${pt?.model_number || resolvedModelNumber}|1|${binName}|${totalCount}`;
         }).join('\r\n');
 
         fs.writeFileSync(filePath, content, 'ascii');
@@ -848,11 +848,11 @@ exports.createBinPick = asyncHandler(async (req, res) => {
         }
         const uploadFilePath = path.join(uploadDir, genFileName);
 
+        const pickOrderNumber = `${resolvedModelNumber}-PICK-${pickSeq}`;
         const totalCount = updatedEntries.length;
         const content = updatedEntries.map((pt) => {
             const binName = targetHuId || pt?.handling_unit?.hu_id || '';
-            const orderNumber = binName ? `${binName}-PICK` : `${resolvedModelNumber}-PICK`;
-            return `${orderNumber}|${pt?.serial_number}|${pt?.model_number || resolvedModelNumber}|1|${binName}|${totalCount}`;
+            return `${pickOrderNumber}|${pt?.serial_number}|${pt?.model_number || resolvedModelNumber}|1|${binName}|${totalCount}`;
         }).join('\r\n');
 
         fs.writeFileSync(filePath, content, 'ascii');
@@ -1105,8 +1105,8 @@ exports.getUndownloadedPicks = asyncHandler(async (req, res) => {
             const m = pt?.model_number || 'MODEL';
             const s = String(pt.pick_id || puts[0]?.pick_id || 1).padStart(2, '0');
             const binName = pt?.handling_unit?.hu_id || '';
-            const orderNumber = binName ? `${binName}-PICK` : `${m}-PICK`;
-            return `${orderNumber}|${pt?.serial_number}|${m}|1|${binName}|${totalCount}`;
+            const pickOrderNumber = `${m}-PICK-${s}`;
+            return `${pickOrderNumber}|${pt?.serial_number}|${m}|1|${binName}|${totalCount}`;
         }).join('\r\n');
 
         res.setHeader('Content-Disposition', 'attachment; filename="orders.txt"');
