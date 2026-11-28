@@ -524,7 +524,7 @@ export default function DashboardPage() {
         }
         .all-metrics-one-line {
           display: grid;
-          grid-template-columns: repeat(8, minmax(0, 1fr));
+          grid-template-columns: repeat(7, minmax(0, 1fr));
           gap: 10px;
           margin-top: 4px;
           margin-bottom: 18px;
@@ -709,22 +709,25 @@ export default function DashboardPage() {
           {
             label: 'Total Bins',
             value: countsLoading ? '—' : counts?.totalHUs ?? 0,
-            sub: 'registered',
+            sub: countsLoading ? (
+              'registered'
+            ) : counts?.regularHUs !== undefined && counts?.verticalHUs !== undefined ? (
+              <span
+                className="d-inline-flex align-items-center gap-1"
+                title={`Regular: ${counts.regularHUs} | Vertical Side: ${counts.verticalHUs}`}
+              >
+                <span>Regular: <strong style={{ color: '#334155' }}>{counts.regularHUs}</strong></span>
+                <span style={{ opacity: 0.5 }}>•</span>
+                <span>Vertical: <strong style={{ color: '#334155' }}>{counts.verticalHUs}</strong></span>
+              </span>
+            ) : (
+              'registered'
+            ),
             color: '#0f172a',
             accent: 'linear-gradient(90deg, #334155, #64748b)',
             iconBg: '#f1f5f9',
             iconColor: '#334155',
             icon: <Layers size={14} />,
-          },
-          {
-            label: 'Draft',
-            value: countsLoading ? '—' : counts?.draftHUs ?? 0,
-            sub: 'on shop floor',
-            color: '#475569',
-            accent: 'linear-gradient(90deg, #64748b, #94a3b8)',
-            iconBg: '#f1f5f9',
-            iconColor: '#64748b',
-            icon: <FileText size={14} />,
           },
           {
             label: 'Empty',
@@ -886,6 +889,9 @@ export default function DashboardPage() {
 
             {/* Middle: Big Blue Count over the Map */}
             <div className="text-center my-auto">
+              <h4 className="text-dark mb-1" style={{ fontSize: '13px', fontWeight: 600 }}>
+                Picked Parts
+              </h4>
               <h3 className="text-primary fw-bold mb-0" style={{ fontSize: '36px', lineHeight: 1.1 }}>
                 {countsLoading ? '...' : counts?.pickedPartsCount || 0}
               </h3>

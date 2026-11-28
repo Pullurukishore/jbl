@@ -12,4 +12,6 @@ export interface DashboardCounts {
   partialHUs: number;
   fullHUs: number;
   draftHUs: number;
+  regularHUs?: number;
+  verticalHUs?: number;
 }

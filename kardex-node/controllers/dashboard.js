@@ -41,7 +41,8 @@ exports.getAllCounts = asyncHandler(async (req, res) => {
             emptyHUs,
             partialHUs,
             fullHUs,
-            draftHUs
+            draftHUs,
+            verticalHUs
         ] = await Promise.all([
             db.put.count({ where: dateFilter }),
             db.log.count({
@@ -67,15 +68,27 @@ exports.getAllCounts = asyncHandler(async (req, res) => {
             db.put.count({ where: { pick_status: 'HOLD', ...dateFilter } }),
             db.handling_unit.count(),
             db.handling_unit.count({ where: { storage_status: 'IN_KARDEX' } }),
-            db.handling_unit.count({ where: { hu_status: 'EMPTY', storage_status: 'IN_KARDEX' } }),
+            db.handling_unit.count({ where: { hu_status: 'EMPTY' } }),
             db.handling_unit.count({ where: { hu_status: 'PARTIALLY_FILLED' } }),
             db.handling_unit.count({ where: { hu_status: 'FULL' } }),
-            db.handling_unit.count({ where: { storage_status: 'DRAFT' } })
+            db.handling_unit.count({ where: { storage_status: 'DRAFT' } }),
+            db.handling_unit.count({
+                include: [{
+                    model: db.bin_type,
+                    where: {
+                        [Op.or]: [
+                            { bin_name: 'CON_BIND' },
+                            { name: { [Op.like]: '%Vertical%' } }
+                        ]
+                    }
+                }]
+            }).catch(() => 0)
         ]);
 
         // Valid scans: highest between actual recorded put operations and successful logs for this date range
         const validScanCount = Math.max(putValidScans, logValidScans);
         const totalPartsCount = availablePartsCount + pickedPartsCount + holdPartsCount;
+        const regularHUs = Math.max(0, totalHUs - verticalHUs);
 
         res.json({
             validScanCount,
@@ -89,7 +102,9 @@ exports.getAllCounts = asyncHandler(async (req, res) => {
             emptyHUs,
             partialHUs,
             fullHUs,
-            draftHUs
+            draftHUs,
+            regularHUs,
+            verticalHUs
         });
 
     } catch (err) {
