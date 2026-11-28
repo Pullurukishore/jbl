@@ -51,6 +51,8 @@ export const SendToKardexModal: React.FC<SendToKardexModalProps> = ({
 }) => {
   const [step, setStep] = useState<Step>('preview');
   const [sending, setSending] = useState(false);
+  const [sendingStep, setSendingStep] = useState<'idle' | 'generating' | 'waiting_kardex'>('idle');
+  const [isKardexRejected, setIsKardexRejected] = useState(false);
   const [error, setError] = useState('');
   const [copiedFile, setCopiedFile] = useState(false);
   const [sendResult, setSendResult] = useState<SendResult | null>(null);
@@ -58,6 +60,8 @@ export const SendToKardexModal: React.FC<SendToKardexModalProps> = ({
   const handleClose = () => {
     setStep('preview');
     setSending(false);
+    setSendingStep('idle');
+    setIsKardexRejected(false);
     setError('');
     setSendResult(null);
     setCopiedFile(false);
@@ -75,17 +79,36 @@ export const SendToKardexModal: React.FC<SendToKardexModalProps> = ({
   );
 
   const handleSendToKardex = async () => {
+    let timer: any = null;
     try {
       setSending(true);
+      setSendingStep('generating');
       setError('');
+      setIsKardexRejected(false);
+
+      // Transition to waiting for Kardex feedback after initial dispatch
+      timer = setTimeout(() => {
+        setSendingStep('waiting_kardex');
+      }, 1000);
+
       const res = await apiPost<SendResult>(`/hu/${encodeURIComponent(hu.hu_id)}/send-to-kardex`);
+      if (timer) clearTimeout(timer);
       setSendResult(res);
       setStep('sent');
       // Intentionally keep modal open on 'sent' step so operator clearly sees the success screen!
     } catch (err: any) {
-      setError(err.message || 'Failed to generate PUT file');
+      if (timer) clearTimeout(timer);
+      const isRejected = Boolean(
+        err.kardexRejected ||
+        err.message?.toLowerCase().includes('kardex rejected') ||
+        err.message?.toLowerCase().includes('previous order') ||
+        err.message?.toLowerCase().includes('not been processed')
+      );
+      setIsKardexRejected(isRejected);
+      setError(err.message || 'Failed to send PUT order to Kardex');
     } finally {
       setSending(false);
+      setSendingStep('idle');
     }
   };
 
@@ -271,6 +294,48 @@ export const SendToKardexModal: React.FC<SendToKardexModalProps> = ({
             display: flex;
             align-items: center;
             gap: 8px;
+          }
+
+          .waiting-banner {
+            background: #f0f9ff;
+            border: 1.5px solid #bae6fd;
+            border-radius: 10px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: pulse-border 2s infinite ease-in-out;
+          }
+
+          @keyframes pulse-border {
+            0% {
+              border-color: #bae6fd;
+            }
+            50% {
+              border-color: #38bdf8;
+            }
+            100% {
+              border-color: #bae6fd;
+            }
+          }
+
+          .rejected-box {
+            background: #fef2f2;
+            border: 1.5px solid #f87171;
+            border-radius: 10px;
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.08);
+          }
+
+          .rejected-steps {
+            margin-top: 8px;
+            background: #ffffff;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            padding: 10px 14px;
           }
 
           .btn-send-custom {
@@ -570,11 +635,56 @@ export const SendToKardexModal: React.FC<SendToKardexModalProps> = ({
               </div>
             )}
 
-            {error && (
-              <div className="error-box">
-                <AlertCircle size={16} />
-                <span>{error}</span>
+            {sending && (
+              <div className="waiting-banner">
+                <Loader2 size={22} className="spin-ani" style={{ color: '#0284c7', flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '13.5px', color: '#0369a1' }}>
+                    {sendingStep === 'waiting_kardex'
+                      ? 'Waiting for Kardex Response...'
+                      : 'Sending PUT File to Kardex...'}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#0284c7', marginTop: '2px' }}>
+                    {sendingStep === 'waiting_kardex'
+                      ? 'Monitoring IN and Error folders to verify machine acceptance.'
+                      : 'Writing order instruction file to network transmission directory.'}
+                  </div>
+                </div>
               </div>
+            )}
+
+            {error && (
+              isKardexRejected ? (
+                <div className="rejected-box">
+                  <div className="d-flex align-items-start gap-2">
+                    <AlertTriangle size={20} className="text-danger flex-shrink-0" style={{ marginTop: '2px' }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 800, fontSize: '14px', color: '#991b1b' }}>
+                        Previous Order Not Processed Yet in Kardex
+                      </div>
+                      <div style={{ fontSize: '12.5px', color: '#b91c1c', marginTop: '3px', lineHeight: 1.4 }}>
+                        Kardex rejected this order because order <strong>{resolvedOrderNumber}</strong> is still active or unprocessed in the Kardex machine.
+                      </div>
+                      <div className="rejected-steps">
+                        <div style={{ fontWeight: 700, fontSize: '12px', color: '#7f1d1d', marginBottom: '4px' }}>
+                          How to proceed:
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#991b1b', lineHeight: 1.5 }}>
+                          1. Go to the Kardex machine terminal.<br />
+                          2. Open the <strong>Order List</strong>.<br />
+                          3. Complete or <strong>Delete</strong> the previous order <code>{resolvedOrderNumber}</code>.<br />
+                          4. Click <strong>Try Again</strong> below.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="error-box">
+                  <AlertCircle size={16} />
+                  <span>{error}</span>
+                </div>
+              )
             )}
 
             <button
@@ -582,23 +692,33 @@ export const SendToKardexModal: React.FC<SendToKardexModalProps> = ({
               onClick={handleSendToKardex}
               disabled={sending || occupiedCompartments.length === 0}
               style={{
-                background: isResend
+                background: isKardexRejected
+                  ? 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)'
+                  : isResend
                   ? 'linear-gradient(135deg, #d97706 0%, #b45309 100%)'
                   : 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
-                boxShadow: isResend
+                boxShadow: isKardexRejected
+                  ? '0 4px 12px rgba(220, 38, 38, 0.28)'
+                  : isResend
                   ? '0 4px 12px rgba(217, 119, 6, 0.28)'
                   : '0 4px 12px rgba(22, 163, 74, 0.25)',
               }}
             >
               {sending ? (
                 <Loader2 size={17} className="spin-ani" />
+              ) : isKardexRejected ? (
+                <RotateCw size={17} />
               ) : isResend ? (
                 <RotateCw size={17} />
               ) : (
                 <Send size={17} />
               )}
               {sending
-                ? 'Generating PUT File...'
+                ? sendingStep === 'waiting_kardex'
+                  ? 'Waiting for Kardex Response...'
+                  : 'Generating PUT File...'
+                : isKardexRejected
+                ? `Try Again — Send to Kardex (${occupiedCompartments.length} Parts)`
                 : isResend
                 ? `Generate PUT File & Resend (${occupiedCompartments.length} Parts)`
                 : `Generate PUT File & Send (${occupiedCompartments.length} Parts)`}
@@ -614,9 +734,9 @@ export const SendToKardexModal: React.FC<SendToKardexModalProps> = ({
             </div>
 
             <div>
-              <h3 className="success-title">Transmitted to Kardex Successfully!</h3>
+              <h3 className="success-title">Transmitted & Accepted by Kardex!</h3>
               <p className="success-subtitle mt-1">
-                The machine PUT order file has been generated and placed into the Kardex PPS transmission queue.
+                The machine PUT order file was picked from the transmission queue and accepted by Kardex Remstar.
               </p>
             </div>
 

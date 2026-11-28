@@ -6,6 +6,7 @@ const { Op } = require('sequelize');
 const uuid4 = require('uuid4');
 const moment = require('moment');
 const { getBoardHistory, getPVStatusCheck, getWipBySerialNumber, updateBoardHistory } = require('../utils/api-call');
+const { waitForKardexResponse } = require('../utils/kardexWatcher');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: recalculate hu_status based on compartment states
@@ -643,13 +644,36 @@ exports.sendToKardex = asyncHandler(async (req, res) => {
     const uploadFilePath = path.join(uploadDir, fileName);
     fs.writeFileSync(uploadFilePath, fileContent, 'ascii');
 
+    let destinationInPath = null;
     // Also write to configured network drive path if available (with fallback protection)
     if (process.env.Put_Text_File_Path) {
         try {
             fs.mkdirSync(process.env.Put_Text_File_Path, { recursive: true });
-            fs.writeFileSync(path.join(process.env.Put_Text_File_Path, fileName), fileContent, 'ascii');
+            destinationInPath = path.join(process.env.Put_Text_File_Path, fileName);
+            fs.writeFileSync(destinationInPath, fileContent, 'ascii');
         } catch (netErr) {
             console.warn(`[KARDEX] Could not write to network Put_Text_File_Path: ${netErr.message}. Local copy preserved.`);
+        }
+    }
+
+    // Wait and verify Kardex machine pickup vs rejection in Error folder
+    if (destinationInPath) {
+        const watchResult = await waitForKardexResponse({
+            inFilePath: destinationInPath,
+            fileName,
+            timeoutMs: 6500,
+            pollIntervalMs: 500
+        });
+
+        if (watchResult.status === 'REJECTED') {
+            console.warn(`[KARDEX REJECTED] File ${fileName} was rejected by Kardex (moved to Error).`);
+            return res.status(400).json({
+                error: `Kardex rejected this order: The previous order for bin "${hu.hu_id}" has not been processed yet on the Kardex machine. Please complete or delete the old order in the Kardex Order List, then try again.`,
+                kardexRejected: true,
+                orderNumber,
+                fileName,
+                errorFile: watchResult.errorFile
+            });
         }
     }
     const fileStats = fs.statSync(uploadFilePath);
@@ -732,13 +756,36 @@ exports.generateHUPick = asyncHandler(async (req, res) => {
     const uploadFilePath = path.join(uploadDir, fileName);
     fs.writeFileSync(uploadFilePath, fileContent, 'ascii');
 
+    let destinationInPath = null;
     // Also write to configured network drive path if available (with fallback protection)
     if (process.env.Pick_Text_File_Path) {
         try {
             fs.mkdirSync(process.env.Pick_Text_File_Path, { recursive: true });
-            fs.writeFileSync(path.join(process.env.Pick_Text_File_Path, fileName), fileContent, 'ascii');
+            destinationInPath = path.join(process.env.Pick_Text_File_Path, fileName);
+            fs.writeFileSync(destinationInPath, fileContent, 'ascii');
         } catch (netErr) {
             console.warn(`[KARDEX] Could not write to network Pick_Text_File_Path: ${netErr.message}. Local copy preserved.`);
+        }
+    }
+
+    // Wait and verify Kardex machine pickup vs rejection in Error folder
+    if (destinationInPath) {
+        const watchResult = await waitForKardexResponse({
+            inFilePath: destinationInPath,
+            fileName,
+            timeoutMs: 6500,
+            pollIntervalMs: 500
+        });
+
+        if (watchResult.status === 'REJECTED') {
+            console.warn(`[KARDEX REJECTED] Pick file ${fileName} was rejected by Kardex (moved to Error).`);
+            return res.status(400).json({
+                error: `Kardex rejected this pick order: The previous pick order for bin "${hu.hu_id}" has not been processed yet on the Kardex machine. Please complete or delete the old order in the Kardex Order List, then try again.`,
+                kardexRejected: true,
+                orderNumber: pickOrderNumber,
+                fileName,
+                errorFile: watchResult.errorFile
+            });
         }
     }
     const fileStats = fs.statSync(uploadFilePath);
@@ -1507,13 +1554,36 @@ exports.sendPickToKardex = asyncHandler(async (req, res) => {
     const uploadFilePath = path.join(uploadDir, fileName);
     fs.writeFileSync(uploadFilePath, fileContent, 'ascii');
 
+    let destinationInPath = null;
     // Also write to configured network drive path if available (with fallback protection)
     if (process.env.Pick_Text_File_Path) {
         try {
             fs.mkdirSync(process.env.Pick_Text_File_Path, { recursive: true });
-            fs.writeFileSync(path.join(process.env.Pick_Text_File_Path, fileName), fileContent, 'ascii');
+            destinationInPath = path.join(process.env.Pick_Text_File_Path, fileName);
+            fs.writeFileSync(destinationInPath, fileContent, 'ascii');
         } catch (netErr) {
             console.warn(`[KARDEX] Could not write to network Pick_Text_File_Path: ${netErr.message}. Local copy preserved.`);
+        }
+    }
+
+    // Wait and verify Kardex machine pickup vs rejection in Error folder
+    if (destinationInPath) {
+        const watchResult = await waitForKardexResponse({
+            inFilePath: destinationInPath,
+            fileName,
+            timeoutMs: 6500,
+            pollIntervalMs: 500
+        });
+
+        if (watchResult.status === 'REJECTED') {
+            console.warn(`[KARDEX REJECTED] Pick file ${fileName} was rejected by Kardex (moved to Error).`);
+            return res.status(400).json({
+                error: `Kardex rejected this pick order: The previous pick order for bin "${hu.hu_id}" has not been processed yet on the Kardex machine. Please complete or delete the old order in the Kardex Order List, then try again.`,
+                kardexRejected: true,
+                orderNumber: pickOrderNumber,
+                fileName,
+                errorFile: watchResult.errorFile
+            });
         }
     }
     const fileStats = fs.statSync(uploadFilePath);
